@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Security
+
+## [0.1.5] - 2025-11-29
+
+### Added
+
 **Phase 1: Foundation - COMPLETE ✅ (2025-11-29):**
 
 #### Core Implementation (110 tests, ~3,500 lines of Rust)
@@ -622,5 +632,6 @@ Fixes applied:
 
 ---
 
-[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.0...v0.1.5
 [0.1.0]: https://github.com/doublegate/WRAITH-Protocol/releases/tag/v0.1.0

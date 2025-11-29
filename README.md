@@ -9,16 +9,16 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Current Status
 
-**Version:** 0.1.0 (Initial Release)
+**Version:** 0.1.5 (Phase 1 Foundation Complete)
 
-WRAITH Protocol has completed Phase 1 Foundation development with a fully functional core protocol implementation. The v0.1.0 release delivers production-ready frame encoding, session management, stream multiplexing, and congestion control.
+WRAITH Protocol has completed Phase 1 Foundation development with a fully functional core protocol implementation. The v0.1.5 release delivers production-ready frame encoding, session management, stream multiplexing, and congestion control.
 
 **Phase 1 Complete ✅ (89/789 story points, 11% overall progress)**
 

@@ -118,7 +118,7 @@ jobs:
       # Upload results as artifacts for review
       - name: Upload audit results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: security-audit-results
           path: |

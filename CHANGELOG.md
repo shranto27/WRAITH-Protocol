@@ -38,5 +38,5 @@ Initial development release. See [ROADMAP](to-dos/ROADMAP.md) for planned featur
 
 ---
 
-[Unreleased]: https://github.com/parobek/WRAITH-Protocol/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/parobek/WRAITH-Protocol/releases/tag/v0.1.0
+[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/doublegate/WRAITH-Protocol/releases/tag/v0.1.0

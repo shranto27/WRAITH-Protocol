@@ -7,7 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-*No unreleased changes yet. This section will track changes for the next release.*
+### Added
+
+**Python Tooling Documentation:**
+- Added `docs/engineering/python-tooling.md` - Comprehensive guide for Python auxiliary tooling
+  - Virtual environment setup and usage patterns
+  - Critical command chaining guidance for Claude Code Bash tool
+  - YAML linting with yamllint
+  - Alternative installation methods (system packages, pipx)
+  - Troubleshooting common venv issues
+  - CI/CD integration examples
+
+**Development Scripts:**
+- Added `scripts/venv-setup.sh` - Automated Python venv diagnostic and setup script
+  - Checks Python installation and venv module availability
+  - Creates or repairs virtual environment
+  - Installs required packages (yamllint)
+  - Validates installation with health checks
+  - 81 lines with comprehensive error handling
+
+**Project Organization:**
+- Established `/tmp/WRAITH-Protocol/` convention for temporary files
+- Updated project memory banks with tooling documentation references
+
+### Changed
+
+**Release Workflow Enhancement (Commit: c420428):**
+- Enhanced `.github/workflows/release.yml` to preserve existing release notes
+- Added check step to detect if release already has notes
+- Skip changelog extraction if existing notes are present
+- Use conditional steps to create new release with notes or only upload assets
+- Prevents overwriting manually-written comprehensive release notes (like v0.1.0)
+- Workflow now intelligently handles both new releases and asset updates
+
+### Fixed
+
+**GitHub Workflows YAML Linting (36 issues across 5 files):**
+
+Files updated:
+- `.github/ISSUE_TEMPLATE/config.yml`
+- `.github/dependabot.yml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/codeql.yml`
+- `.github/workflows/release.yml`
+
+Fixes applied:
+1. **Document Start Markers:** Added `---` to all YAML files for YAML 1.2 compliance
+2. **Truthy Values:** Fixed `on:` → `"on":` in workflow triggers (prevents ambiguity)
+3. **Line Length:** Broke long lines into multi-line format for readability
+   - Conditional expressions with `&&` operators
+   - Long command chains
+   - URL and path concatenations
+   - Comment text wrapping
+4. **String Formatting:** Used block scalars (`>-`) for multi-line descriptions
+5. **Variable Naming:** Improved variable names to avoid shell conflicts
+
+**Technical Details:**
+- All YAML files now pass `yamllint --strict` validation
+- Improved readability while maintaining identical functionality
+- Better compatibility with YAML parsers and GitHub Actions runner
+- Resolved document-start, truthy, and line-length warnings
+
+### Documentation
+
+**Engineering Documentation:**
+- Python tooling guide with critical Bash tool usage patterns
+- Virtual environment command chaining requirements
+- Common YAML linting workflows
+- Automated venv setup and diagnostics
+
+**Infrastructure:**
+- Release workflow logic improvements
+- GitHub Actions YAML best practices applied
+- Project temporary file organization conventions
 
 ## [0.1.0] - 2025-11-29
 

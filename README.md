@@ -277,6 +277,25 @@ cargo test --features proptest
 cargo tarpaulin --workspace --out Html
 ```
 
+### Python Tooling (Optional)
+
+WRAITH Protocol uses Python for auxiliary tasks like YAML linting. A Python virtual environment is provided:
+
+```bash
+# Quick health check (commands must be chained with &&)
+source .venv/bin/activate && yamllint --version
+
+# Lint GitHub Actions workflows
+source .venv/bin/activate && yamllint .github/
+
+# Automated venv setup/repair
+bash scripts/venv-setup.sh
+```
+
+See [Python Tooling Guide](docs/engineering/python-tooling.md) for detailed documentation.
+
+**Note:** Due to Claude Code's shell behavior, always chain commands with `&&` when using the venv.
+
 ## Documentation
 
 ### Architecture & Design
@@ -291,6 +310,7 @@ cargo tarpaulin --workspace --out Html
 - [Coding Standards](docs/engineering/coding-standards.md)
 - [API Reference](docs/engineering/api-reference.md)
 - [Dependency Management](docs/engineering/dependency-management.md)
+- [Python Tooling Guide](docs/engineering/python-tooling.md)
 
 ### Integration
 - [Embedding Guide](docs/integration/embedding-guide.md)

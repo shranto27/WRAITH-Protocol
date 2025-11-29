@@ -1,7 +1,9 @@
+---
 # WRAITH Protocol Release Workflow
 #
-# This workflow handles automated release builds and GitHub Release creation.
-# It builds cross-platform release binaries, generates checksums, and publishes artifacts.
+# This workflow handles automated release builds and
+# GitHub Release creation. It builds cross-platform release binaries,
+# generates checksums, and publishes artifacts.
 #
 # Triggered by:
 # 1. Pushing semantic version tags (v*.*.*)
@@ -16,7 +18,7 @@
 
 name: Release
 
-on:
+"on":
   # Trigger on semantic version tags (v0.1.0, v1.2.3, v2.0.0-beta.1, etc.)
   push:
     tags:
@@ -76,8 +78,9 @@ jobs:
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          # Check if this is a pre-release (contains alpha, beta, rc, or manual flag)
-          if [[ "$VERSION" =~ (alpha|beta|rc) ]] || [ "$INPUT_PRERELEASE" = "true" ]; then
+          # Check if pre-release (alpha, beta, rc, or manual flag)
+          if [[ "$VERSION" =~ (alpha|beta|rc) ]] || \
+             [ "$INPUT_PRERELEASE" = "true" ]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
             echo "✓ Pre-release detected: $VERSION"
           else
@@ -89,8 +92,9 @@ jobs:
         env:
           VERSION: ${{ steps.extract.outputs.version }}
         run: |
-          # Validate semantic version format (vX.Y.Z or vX.Y.Z-prerelease)
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+          # Validate semantic version (vX.Y.Z or vX.Y.Z-prerelease)
+          if [[ ! "$VERSION" =~ \
+                ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
             echo "❌ Invalid version format: $VERSION"
             echo "Expected format: vX.Y.Z or vX.Y.Z-prerelease"
             exit 1
@@ -104,8 +108,9 @@ jobs:
         run: |
           VERSION_NO_V="${VERSION#v}"  # Remove leading 'v'
 
-          # Check if CHANGELOG.md contains an entry for this version
-          if grep -q "\[${VERSION_NO_V}\]" CHANGELOG.md || grep -q "## ${VERSION}" CHANGELOG.md; then
+          # Check if CHANGELOG.md contains entry for this version
+          if grep -q "\[${VERSION_NO_V}\]" CHANGELOG.md || \
+             grep -q "## ${VERSION}" CHANGELOG.md; then
             echo "✓ CHANGELOG.md entry found for version $VERSION"
           else
             echo "⚠️  WARNING: No CHANGELOG.md entry found for version $VERSION"
@@ -228,7 +233,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          key: >-
+            ${{ runner.os }}-cargo-release-${{ matrix.target }}-
+            ${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-${{ matrix.target }}-
             ${{ runner.os }}-cargo-release-
@@ -286,10 +293,12 @@ jobs:
           cd "target/$TARGET/release"
           if [ "$OS_TYPE" = "windows-latest" ]; then
             7z a "${ARTIFACT_NAME}.zip" "$BINARY_NAME"
-            echo "ASSET_PATH=target/$TARGET/release/${ARTIFACT_NAME}.zip" >> $GITHUB_ENV
+            ASSET="target/$TARGET/release/${ARTIFACT_NAME}.zip"
+            echo "ASSET_PATH=$ASSET" >> $GITHUB_ENV
           else
             tar czf "${ARTIFACT_NAME}.tar.gz" "$BINARY_NAME"
-            echo "ASSET_PATH=target/$TARGET/release/${ARTIFACT_NAME}.tar.gz" >> $GITHUB_ENV
+            ASSET="target/$TARGET/release/${ARTIFACT_NAME}.tar.gz"
+            echo "ASSET_PATH=$ASSET" >> $GITHUB_ENV
           fi
         shell: bash
 
@@ -299,7 +308,9 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: |
             ${{ env.ASSET_PATH }}
-            target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.sha256
+            target/${{ matrix.target }}/release/${{
+              matrix.artifact_name
+            }}.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -329,7 +340,10 @@ jobs:
           mkdir -p release-assets
 
           # Move all archives and checksums to release-assets directory
-          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec mv {} release-assets/ \;
+          find artifacts -type f \
+            \( -name "*.tar.gz" -o -name "*.zip" \
+               -o -name "*.sha256" \) \
+            -exec mv {} release-assets/ \;
 
           # Create combined checksums file
           cd release-assets
@@ -349,13 +363,19 @@ jobs:
             echo "✓ Release $VERSION already exists"
 
             # Get the release body
-            RELEASE_BODY=$(gh release view "$VERSION" --json body --jq '.body')
+            RELEASE_BODY=$(gh release view "$VERSION" \
+              --json body --jq '.body')
 
             # Check if body is non-empty (more than just whitespace)
-            if [ -n "$RELEASE_BODY" ] && [ "$(echo "$RELEASE_BODY" | tr -d '[:space:]')" != "" ]; then
-              echo "✓ Release already has notes ($(echo "$RELEASE_BODY" | wc -c) characters)"
+            RELEASE_BODY_STRIPPED=$(echo "$RELEASE_BODY" | \
+              tr -d '[:space:]')
+            if [ -n "$RELEASE_BODY" ] && \
+               [ "$RELEASE_BODY_STRIPPED" != "" ]; then
+              CHAR_COUNT=$(echo "$RELEASE_BODY" | wc -c)
+              echo "✓ Release already has notes ($CHAR_COUNT chars)"
               echo "use_existing_notes=true" >> $GITHUB_OUTPUT
-              echo "⚠️  SKIPPING automatic note generation to preserve existing content"
+              MSG="⚠️  SKIPPING automatic note generation"
+              echo "$MSG to preserve existing content"
             else
               echo "⚠️  Release exists but has no body"
               echo "use_existing_notes=false" >> $GITHUB_OUTPUT
@@ -376,17 +396,23 @@ jobs:
           # Extract changelog section for this version
           # This is a simple extraction - enhance as needed
           if grep -q "\[${VERSION_NO_V}\]" CHANGELOG.md; then
-            # Extract from version header to next version header or end
-            CHANGELOG_BODY=$(sed -n "/\[${VERSION_NO_V}\]/,/^## \[/p" CHANGELOG.md | sed '$d' | tail -n +2)
+            # Extract from version header to next version or end
+            CHANGELOG_BODY=$(sed -n \
+              "/\[${VERSION_NO_V}\]/,/^## \[/p" CHANGELOG.md | \
+              sed '$d' | tail -n +2)
 
             # Save to file for release notes
             echo "$CHANGELOG_BODY" > release-notes.md
             echo "✓ Extracted changelog for version $VERSION"
           else
-            echo "⚠️  No specific changelog entry found, using generic notes"
+            echo "⚠️  No specific changelog entry found," \
+              "using generic notes"
             echo "Release $VERSION" > release-notes.md
             echo "" >> release-notes.md
-            echo "See [CHANGELOG.md](https://github.com/doublegate/WRAITH-Protocol/blob/main/CHANGELOG.md) for details." >> release-notes.md
+            REPO="https://github.com/doublegate"
+            CHANGELOG_URL="$REPO/WRAITH-Protocol/blob/main/CHANGELOG.md"
+            echo "See [CHANGELOG.md]($CHANGELOG_URL)" \
+              "for details." >> release-notes.md
           fi
 
       - name: Create GitHub Release (with auto-generated notes)
@@ -404,7 +430,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update GitHub Release (preserve existing notes, upload assets only)
+      - name: Update GitHub Release (preserve notes, upload assets)
         if: steps.check_release.outputs.use_existing_notes == 'true'
         env:
           VERSION: ${{ needs.validate.outputs.version }}
@@ -434,18 +460,20 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Release Assets" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Artifact |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux x86_64 (glibc) | wraith-x86_64-linux-gnu.tar.gz |" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux x86_64 (musl) | wraith-x86_64-linux-musl.tar.gz |" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux aarch64 | wraith-aarch64-linux-gnu.tar.gz |" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS x86_64 | wraith-x86_64-macos.tar.gz |" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS Apple Silicon | wraith-aarch64-macos.tar.gz |" >> $GITHUB_STEP_SUMMARY
-          echo "| Windows x86_64 | wraith-x86_64-windows.zip |" >> $GITHUB_STEP_SUMMARY
+          S=$GITHUB_STEP_SUMMARY
+          echo "| Platform | Artifact |" >> $S
+          echo "|----------|----------|" >> $S
+          echo "| Linux x86_64 (glibc) | wraith-x86_64-linux-gnu.tar.gz |" >> $S
+          echo "| Linux x86_64 (musl) | wraith-x86_64-linux-musl.tar.gz |" >> $S
+          echo "| Linux aarch64 | wraith-aarch64-linux-gnu.tar.gz |" >> $S
+          echo "| macOS x86_64 | wraith-x86_64-macos.tar.gz |" >> $S
+          echo "| macOS Apple Silicon | wraith-aarch64-macos.tar.gz |" >> $S
+          echo "| Windows x86_64 | wraith-x86_64-windows.zip |" >> $S
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Checksums" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All artifacts include SHA256 checksums. See SHA256SUMS.txt for combined checksums." >> $GITHUB_STEP_SUMMARY
+          MSG="All artifacts include SHA256 checksums."
+          echo "$MSG See SHA256SUMS.txt for combined checksums." >> $S
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Installation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -456,6 +484,6 @@ jobs:
           echo "./wraith --version" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Windows (PowerShell)" >> $GITHUB_STEP_SUMMARY
-          echo "Expand-Archive wraith-x86_64-windows.zip" >> $GITHUB_STEP_SUMMARY
+          echo "Expand-Archive wraith-x86_64-windows.zip" >> $S
           echo ".\\wraith.exe --version" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

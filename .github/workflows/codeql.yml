@@ -1,10 +1,11 @@
+---
 # CodeQL Security Scanning Workflow for WRAITH Protocol
 # Analyzes code for security vulnerabilities and code quality issues
 # Documentation: https://docs.github.com/en/code-security/code-scanning
 
 name: "CodeQL Security Scan"
 
-on:
+"on":
   push:
     branches: [main, develop]
   pull_request:
@@ -59,7 +60,7 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          # Use security-extended query suite for comprehensive security analysis
+          # Use security-extended query suite for comprehensive analysis
           queries: security-extended
           # Optional: Add custom queries
           # config-file: ./.github/codeql/codeql-config.yml
@@ -113,7 +114,8 @@ jobs:
         continue-on-error: true
         run: |
           cargo install cargo-outdated --locked
-          cargo outdated --root-deps-only --format json > outdated-deps.json || true
+          cargo outdated --root-deps-only \
+            --format json > outdated-deps.json || true
 
       # Upload results as artifacts for review
       - name: Upload audit results

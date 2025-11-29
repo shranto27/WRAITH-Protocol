@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### [2025-11-29] - GitHub Security Scanning Configuration
+
+#### Added
+
+**Dependabot Configuration (.github/dependabot.yml):**
+- Automated dependency update monitoring for Cargo (Rust) ecosystem
+- GitHub Actions version update monitoring
+- Weekly update schedule (Mondays at 09:00 UTC)
+- Grouped updates by dependency category:
+  - Cryptographic dependencies (chacha20poly1305, x25519-dalek, blake3, snow)
+  - Async runtime dependencies (tokio, io-uring, futures)
+  - Development dependencies (separate group)
+- Conventional commit message prefixes (deps:, ci:)
+- Auto-assignment to repository maintainers
+- Pull request limits (10 for cargo, 5 for github-actions)
+
+**CodeQL Security Scanning (.github/workflows/codeql.yml):**
+- Automated security vulnerability scanning using GitHub CodeQL
+- Rust language analysis with security-extended query suite
+- Triggered on: push to main/develop, pull requests, weekly schedule, manual dispatch
+- Two-job workflow:
+  1. CodeQL Analysis: Comprehensive code scanning with security-extended queries
+  2. Rust Security Audit: cargo-audit for RustSec advisory database scanning
+- Security results uploaded to GitHub Security tab
+- Artifact retention for audit results (30 days)
+- cargo-audit integration for Rust-specific vulnerability detection
+- cargo-outdated checks for dependency freshness
+- Caching strategy for faster builds
+
+**Security Scanning Features:**
+- RustSec advisory database integration via cargo-audit
+- Automated weekly security scans
+- Pull request security validation
+- Cryptographic dependency prioritization
+- GitHub Security tab integration for centralized vulnerability tracking
+
+#### Technical Details
+
+**Dependabot Groups:**
+- crypto: Critical cryptographic libraries (minor/patch updates)
+- async-runtime: Tokio and async I/O dependencies (minor/patch updates)
+- dev-dependencies: Development-only dependencies (minor/patch updates)
+
+**CodeQL Configuration:**
+- Language: Rust (experimental support)
+- Query Suite: security-extended (comprehensive security analysis)
+- Timeout: 30 minutes for analysis, 15 minutes for cargo-audit
+- Permissions: actions:read, contents:read, security-events:write
+- Build Strategy: Full workspace release build for accurate analysis
+
+**Rust Security Tools:**
+- cargo-audit: Scans Cargo.lock against RustSec advisory database
+- cargo-outdated: Identifies outdated dependencies with security implications
+- CodeQL: Static analysis for common vulnerability patterns
+
+---
+
 ### [2025-11-29] - Rust 2024 Edition Upgrade
 
 #### Changed

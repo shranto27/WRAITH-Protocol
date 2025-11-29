@@ -3,8 +3,8 @@
 //! Cryptographic primitives for the WRAITH protocol.
 //!
 //! This crate provides:
-//! - Noise_XX handshake for mutual authentication
-//! - XChaCha20-Poly1305 AEAD encryption
+//! - `Noise_XX` handshake for mutual authentication
+//! - `XChaCha20-Poly1305` AEAD encryption
 //! - Elligator2 encoding for key indistinguishability
 //! - Forward secrecy key ratcheting
 //! - Secure random number generation
@@ -25,11 +25,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod aead;
+pub mod constant_time;
 pub mod elligator;
 pub mod error;
+pub mod hash;
 pub mod noise;
 pub mod random;
 pub mod ratchet;
+pub mod x25519;
 
 pub use error::CryptoError;
 

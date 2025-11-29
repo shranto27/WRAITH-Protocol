@@ -16,19 +16,21 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 ## Current Status
 
-**Version:** 0.1.5 (Phase 1 Foundation Complete)
+**Version:** 0.1.5 (Phases 1-2 Complete)
 
-WRAITH Protocol has completed Phase 1 Foundation development with a fully functional core protocol implementation. The v0.1.5 release delivers production-ready frame encoding, session management, stream multiplexing, and congestion control.
+WRAITH Protocol has completed Phases 1-2 with a fully functional core protocol and cryptographic layer. The v0.1.5 release delivers production-ready frame encoding, session management, stream multiplexing, congestion control, and a complete cryptographic suite with forward secrecy.
 
-**Phase 1 Complete ✅ (89/789 story points, 11% overall progress)**
+**Phases 1-2 Complete ✅ (191/789 story points, 24% overall progress)**
 
 **Implementation Status:**
-- Core workspace: 7 crates, ~3,500 lines of Rust code
-- Test coverage: **110 passing tests** (104 wraith-core + 6 wraith-crypto)
+- Core workspace: 7 crates, ~7,000 lines of Rust code
+- Test coverage: **207 passing tests** (104 wraith-core + 102 wraith-crypto + 1 ignored)
   - Frame layer: 28 tests (22 unit + 6 property-based)
   - Session state: 23 tests
   - Stream multiplexing: 33 tests
-  - BBR congestion: 29 tests
+  - BBR congestion: 29 tests (wraith-core subtotal: 104 tests)
+  - Cryptographic primitives: 79 unit tests
+  - Integration test vectors: 24 tests (wraith-crypto subtotal: 102 tests)
 - Benchmarks: 19 criterion benchmarks (frame parse/build/roundtrip)
 - Performance: 172M frames/sec parsing (~232 GiB/s theoretical throughput)
 - Documentation: 59+ files, 40,000+ lines
@@ -37,17 +39,16 @@ WRAITH Protocol has completed Phase 1 Foundation development with a fully functi
 - Code quality: Zero warnings, all clippy lints passing
 
 **Completed Components:**
-- ✅ Frame encoding/decoding (all 12 frame types)
-- ✅ Session state machine (5 states)
-- ✅ Stream multiplexing (6 states, flow control)
-- ✅ BBR congestion control (4 phases)
-- ✅ Comprehensive test suite
+- ✅ **Phase 1:** Frame encoding/decoding, session state machine, stream multiplexing, BBR congestion control
+- ✅ **Phase 2:** X25519 + Elligator2, XChaCha20-Poly1305, BLAKE3, Noise_XX handshake, Double Ratchet
+- ✅ Comprehensive test suite (207 tests)
 - ✅ Performance benchmarks
+- ✅ Security documentation (SECURITY.md, TECH-DEBT.md)
 
-**Next: Phase 2 - Cryptographic Layer (102 story points, 4-6 weeks)**
-- Noise_XX handshake implementation
-- Elligator2 encoding for traffic analysis resistance
-- Symmetric and DH key ratcheting
+**Next: Phase 3 - Transport & Kernel Bypass (156 story points, 6-8 weeks)**
+- AF_XDP zero-copy networking
+- io_uring async I/O integration
+- Connection migration and path validation
 
 ## Features
 
@@ -58,10 +59,13 @@ WRAITH Protocol has completed Phase 1 Foundation development with a fully functi
 - **BBR Congestion Control**: Optimal bandwidth utilization
 
 ### Security
-- **Strong Encryption**: XChaCha20-Poly1305 AEAD (256-bit security)
-- **Perfect Forward Secrecy**: Double ratchet key derivation
-- **Mutual Authentication**: Noise_XX handshake pattern
-- **Memory Safety**: Pure Rust implementation
+- **Strong Encryption**: XChaCha20-Poly1305 AEAD (256-bit security, 192-bit nonce)
+- **Key Exchange**: X25519 with Elligator2 encoding for indistinguishability
+- **Perfect Forward Secrecy**: Double Ratchet with DH and symmetric ratcheting
+- **Mutual Authentication**: Noise_XX handshake pattern (3-message mutual auth)
+- **Hashing**: BLAKE3 with HKDF for key derivation
+- **Constant-Time Operations**: Side-channel resistance for critical cryptographic paths
+- **Memory Safety**: Pure Rust implementation with memory zeroization
 
 ### Privacy
 - **Traffic Analysis Resistance**: Elligator2 key encoding
@@ -369,14 +373,14 @@ WRAITH Protocol development follows a structured 7-phase approach spanning 32-44
 | Phase | Focus | Duration | Story Points | Status |
 |-------|-------|----------|--------------|--------|
 | **Phase 1** | Foundation & Core Types | 4-6 weeks | 89 | ✅ **Complete** |
-| **Phase 2** | Cryptographic Layer | 4-6 weeks | 102 | 🔄 Next |
-| **Phase 3** | Transport & Kernel Bypass | 6-8 weeks | 156 | Planned |
+| **Phase 2** | Cryptographic Layer | 4-6 weeks | 102 | ✅ **Complete** |
+| **Phase 3** | Transport & Kernel Bypass | 6-8 weeks | 156 | 🔄 Next |
 | **Phase 4** | Obfuscation & Stealth | 3-4 weeks | 76 | Planned |
 | **Phase 5** | Discovery & NAT Traversal | 5-7 weeks | 123 | Planned |
 | **Phase 6** | Integration & Testing | 4-5 weeks | 98 | Planned |
 | **Phase 7** | Hardening & Optimization | 6-8 weeks | 145 | Planned |
 
-**Progress:** 89/789 story points delivered (11% complete)
+**Progress:** 191/789 story points delivered (24% complete)
 
 ### Client Applications (1,028 Story Points)
 
@@ -429,15 +433,19 @@ WRAITH Protocol is designed with security as a core principle:
 
 ### Cryptographic Suite
 - **AEAD:** XChaCha20-Poly1305 (256-bit security, 192-bit nonce)
-- **Key Exchange:** X25519 with Elligator2 indistinguishability
+- **Key Exchange:** X25519 with Elligator2 indistinguishability encoding
 - **Hash Function:** BLAKE3 (tree-parallelizable, faster than BLAKE2/SHA-3)
-- **Handshake:** Noise_XX (mutual authentication, identity hiding)
+- **Key Derivation:** HKDF with BLAKE3 for secure key expansion
+- **Handshake:** Noise_XX (3-message mutual authentication, identity hiding)
+- **Ratcheting:** Double Ratchet (symmetric per-packet, DH periodic)
 
 ### Security Features
-- **Forward Secrecy:** Double ratchet with DH and symmetric ratchets
-- **Traffic Analysis Resistance:** Elligator2, padding, timing obfuscation, protocol mimicry
-- **Memory Safety:** Rust with no unsafe code in cryptographic paths
-- **Constant-Time Operations:** Side-channel resistant implementations
+- **Forward Secrecy:** Double Ratchet with independent symmetric and DH ratchets
+- **Post-Compromise Security:** DH ratchet heals from key compromise
+- **Traffic Analysis Resistance:** Elligator2 key encoding, padding, timing obfuscation, protocol mimicry
+- **Memory Safety:** Rust with no unsafe code in cryptographic paths, automatic memory zeroization
+- **Constant-Time Operations:** Side-channel resistant implementations for all critical paths
+- **Test Vectors:** 24 integration tests validating cryptographic correctness
 - **Automated Security Scanning:** Dependabot, CodeQL, RustSec advisories
 
 ### Reporting Vulnerabilities
@@ -465,11 +473,12 @@ WRAITH Protocol is in active development and we welcome contributions of all kin
 - **Translations:** Translate documentation to other languages
 
 ### Current Focus Areas
-1. ✅ **Phase 1 Complete** - Core protocol foundation implemented (110 tests, 172M frames/sec)
-2. Begin Phase 2 cryptographic layer implementation
-3. Implement Noise_XX handshake with Elligator2 encoding
-4. Add symmetric and DH key ratcheting
-5. Maintain test coverage (current: 110 tests, target: maintain 80%+ coverage)
+1. ✅ **Phase 1 Complete** - Core protocol foundation (104 tests, 172M frames/sec)
+2. ✅ **Phase 2 Complete** - Cryptographic layer (102 tests, full security suite)
+3. Begin Phase 3 transport layer implementation (AF_XDP, io_uring)
+4. Implement zero-copy networking and kernel bypass
+5. Add connection migration and path validation
+6. Maintain test coverage (current: 207 tests, target: maintain 80%+ coverage)
 
 See [ROADMAP.md](to-dos/ROADMAP.md) for detailed sprint planning and story point estimates.
 

@@ -132,7 +132,8 @@ Before submitting changes, ensure:
 4. **Tests pass:** `cargo test --workspace`
 5. **Documentation builds:** `cargo doc --workspace --no-deps`
 
-Or run all at once: `cargo run -p xtask -- ci`
+Or run most checks at once: `cargo run -p xtask -- ci`
+_(Note: This does **not** run documentation build (`cargo doc --workspace --no-deps`) and may not use `--all-features` for clippy. Run those separately as needed.)_
 
 ## Common Issues
 

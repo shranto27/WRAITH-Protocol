@@ -51,6 +51,7 @@ pub struct Stream {
 
 impl Stream {
     /// Create a new stream with the given ID and initial window
+    #[must_use]
     pub fn new(id: u16, initial_window: u64) -> Self {
         Self {
             id,
@@ -68,41 +69,49 @@ impl Stream {
     }
 
     /// Get the stream ID
+    #[must_use]
     pub fn id(&self) -> u16 {
         self.id
     }
 
     /// Get current stream state
+    #[must_use]
     pub fn state(&self) -> StreamState {
         self.state
     }
 
     /// Get the current send window size
+    #[must_use]
     pub fn send_window(&self) -> u64 {
         self.send_window
     }
 
     /// Get the current receive window size
+    #[must_use]
     pub fn recv_window(&self) -> u64 {
         self.recv_window
     }
 
     /// Get bytes sent
+    #[must_use]
     pub fn bytes_sent(&self) -> u64 {
         self.bytes_sent
     }
 
     /// Get bytes received
+    #[must_use]
     pub fn bytes_received(&self) -> u64 {
         self.bytes_received
     }
 
     /// Check if this is a client-initiated stream (odd ID)
+    #[must_use]
     pub fn is_client_initiated(&self) -> bool {
         self.id % 2 == 1
     }
 
     /// Check if stream can transition to new state
+    #[must_use]
     pub fn can_transition(&self, to: StreamState) -> bool {
         use StreamState::*;
 
@@ -132,6 +141,11 @@ impl Stream {
     }
 
     /// Transition to new state
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the transition is not allowed
+    /// from the current state.
     pub fn transition_to(&mut self, new_state: StreamState) -> Result<(), SessionError> {
         if !self.can_transition(new_state) {
             return Err(SessionError::InvalidState);
@@ -149,16 +163,29 @@ impl Stream {
     }
 
     /// Open the stream
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the stream is not in Idle state.
     pub fn open(&mut self) -> Result<(), SessionError> {
         self.transition_to(StreamState::Open)
     }
 
     /// Close the stream
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the stream cannot be closed from
+    /// its current state.
     pub fn close(&mut self) -> Result<(), SessionError> {
         self.transition_to(StreamState::Closed)
     }
 
     /// Reset the stream (abrupt termination)
+    ///
+    /// # Errors
+    ///
+    /// This function is infallible but returns `Result` for API consistency.
     pub fn reset(&mut self) -> Result<(), SessionError> {
         self.state = StreamState::Closed;
         self.send_buffer.clear();
@@ -167,6 +194,11 @@ impl Stream {
     }
 
     /// Write data to send buffer
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the stream is not open for writing
+    /// (must be in Open or HalfClosedRemote state).
     pub fn write(&mut self, data: Vec<u8>) -> Result<(), SessionError> {
         if self.state != StreamState::Open && self.state != StreamState::HalfClosedRemote {
             return Err(SessionError::InvalidState);
@@ -177,36 +209,47 @@ impl Stream {
     }
 
     /// Read data from receive buffer
+    #[must_use]
     pub fn read(&mut self) -> Option<Vec<u8>> {
         self.recv_buffer.pop_front()
     }
 
     /// Peek at receive buffer without removing
+    #[must_use]
     pub fn peek(&self) -> Option<&Vec<u8>> {
         self.recv_buffer.front()
     }
 
     /// Check if send buffer has data
+    #[must_use]
     pub fn has_data_to_send(&self) -> bool {
         !self.send_buffer.is_empty()
     }
 
     /// Check if receive buffer has data
+    #[must_use]
     pub fn has_received_data(&self) -> bool {
         !self.recv_buffer.is_empty()
     }
 
     /// Get send buffer size
+    #[must_use]
     pub fn send_buffer_size(&self) -> usize {
         self.send_buffer.iter().map(|v| v.len()).sum()
     }
 
     /// Get receive buffer size
+    #[must_use]
     pub fn recv_buffer_size(&self) -> usize {
         self.recv_buffer.iter().map(|v| v.len()).sum()
     }
 
     /// Consume send window (when sending data)
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the requested bytes exceed
+    /// the available send window.
     pub fn consume_send_window(&mut self, bytes: u64) -> Result<(), SessionError> {
         if bytes > self.send_window {
             return Err(SessionError::InvalidState);
@@ -223,6 +266,11 @@ impl Stream {
     }
 
     /// Consume receive window (when receiving data)
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the requested bytes exceed
+    /// the available receive window.
     pub fn consume_recv_window(&mut self, bytes: u64) -> Result<(), SessionError> {
         if bytes > self.recv_window {
             return Err(SessionError::InvalidState);
@@ -257,11 +305,13 @@ impl Stream {
     }
 
     /// Check if both FINs exchanged
+    #[must_use]
     pub fn is_fully_closed(&self) -> bool {
         self.fin_sent && self.fin_received
     }
 
     /// Check if stream can send data
+    #[must_use]
     pub fn can_send(&self) -> bool {
         matches!(
             self.state,
@@ -271,6 +321,7 @@ impl Stream {
     }
 
     /// Check if stream can receive data
+    #[must_use]
     pub fn can_receive(&self) -> bool {
         matches!(self.state, StreamState::Open | StreamState::HalfClosedLocal)
             && !self.fin_received

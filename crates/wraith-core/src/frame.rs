@@ -89,38 +89,45 @@ impl FrameFlags {
     pub const CMP: u8 = 0b0001_0000;
 
     /// Create new empty flags
+    #[must_use]
     pub fn new() -> Self {
         Self(0)
     }
 
     /// Add SYN flag
+    #[must_use]
     pub fn with_syn(mut self) -> Self {
         self.0 |= Self::SYN;
         self
     }
 
     /// Add FIN flag
+    #[must_use]
     pub fn with_fin(mut self) -> Self {
         self.0 |= Self::FIN;
         self
     }
 
     /// Check if SYN is set
+    #[must_use]
     pub fn is_syn(&self) -> bool {
         self.0 & Self::SYN != 0
     }
 
     /// Check if FIN is set
+    #[must_use]
     pub fn is_fin(&self) -> bool {
         self.0 & Self::FIN != 0
     }
 
     /// Check if payload is compressed
+    #[must_use]
     pub fn is_compressed(&self) -> bool {
         self.0 & Self::CMP != 0
     }
 
     /// Get raw byte value
+    #[must_use]
     pub fn as_u8(&self) -> u8 {
         self.0
     }
@@ -140,6 +147,13 @@ pub struct Frame<'a> {
 
 impl<'a> Frame<'a> {
     /// Parse a frame from raw bytes (zero-copy)
+    ///
+    /// # Errors
+    ///
+    /// Returns `FrameError::TooShort` if data is smaller than the minimum header size.
+    /// Returns `FrameError::ReservedFrameType` if the frame type is in the reserved range.
+    /// Returns `FrameError::InvalidFrameType` if the frame type byte is unrecognized.
+    /// Returns `FrameError::PayloadOverflow` if the declared payload length exceeds available data.
     pub fn parse(data: &'a [u8]) -> Result<Self, FrameError> {
         if data.len() < FRAME_HEADER_SIZE {
             return Err(FrameError::TooShort {
@@ -173,36 +187,43 @@ impl<'a> Frame<'a> {
     }
 
     /// Get the frame type
+    #[must_use]
     pub fn frame_type(&self) -> FrameType {
         self.frame_type
     }
 
     /// Get the frame flags
+    #[must_use]
     pub fn flags(&self) -> FrameFlags {
         self.flags
     }
 
     /// Get the stream ID
+    #[must_use]
     pub fn stream_id(&self) -> u16 {
         self.stream_id
     }
 
     /// Get the sequence number
+    #[must_use]
     pub fn sequence(&self) -> u32 {
         self.sequence
     }
 
     /// Get the file offset
+    #[must_use]
     pub fn offset(&self) -> u64 {
         self.offset
     }
 
     /// Get the nonce bytes
+    #[must_use]
     pub fn nonce(&self) -> &[u8] {
         &self.raw[0..8]
     }
 
     /// Get the payload slice (zero-copy)
+    #[must_use]
     pub fn payload(&self) -> &[u8] {
         &self.raw[FRAME_HEADER_SIZE..FRAME_HEADER_SIZE + self.payload_len as usize]
     }
@@ -222,53 +243,69 @@ pub struct FrameBuilder {
 
 impl FrameBuilder {
     /// Create a new frame builder
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Set the frame type
+    #[must_use]
     pub fn frame_type(mut self, ft: FrameType) -> Self {
         self.frame_type = Some(ft);
         self
     }
 
     /// Set the flags
+    #[must_use]
     pub fn flags(mut self, flags: FrameFlags) -> Self {
         self.flags = flags;
         self
     }
 
     /// Set the stream ID
+    #[must_use]
     pub fn stream_id(mut self, id: u16) -> Self {
         self.stream_id = id;
         self
     }
 
     /// Set the sequence number
+    #[must_use]
     pub fn sequence(mut self, seq: u32) -> Self {
         self.sequence = seq;
         self
     }
 
     /// Set the file offset
+    #[must_use]
     pub fn offset(mut self, off: u64) -> Self {
         self.offset = off;
         self
     }
 
     /// Set the payload
+    #[must_use]
     pub fn payload(mut self, data: &[u8]) -> Self {
         self.payload = data.to_vec();
         self
     }
 
     /// Set the nonce
+    #[must_use]
     pub fn nonce(mut self, n: [u8; 8]) -> Self {
         self.nonce = n;
         self
     }
 
     /// Build the frame into a byte buffer
+    ///
+    /// # Errors
+    ///
+    /// Returns `FrameError::PayloadOverflow` if total_size is too small for header + payload.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the CSPRNG fails to generate random padding bytes (extremely unlikely).
     pub fn build(self, total_size: usize) -> Result<Vec<u8>, FrameError> {
         let frame_type = self.frame_type.unwrap_or(FrameType::Data);
         let payload_len = self.payload.len();

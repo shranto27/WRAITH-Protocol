@@ -37,21 +37,25 @@ impl ConnectionId {
     pub const STATELESS_RESET: Self = Self(0xFFFFFFFFFFFFFFFD);
 
     /// Create a new connection ID from raw value
+    #[must_use]
     pub fn from_bytes(bytes: [u8; 8]) -> Self {
         Self(u64::from_be_bytes(bytes))
     }
 
     /// Convert to raw bytes
+    #[must_use]
     pub fn to_bytes(self) -> [u8; 8] {
         self.0.to_be_bytes()
     }
 
     /// Get the raw u64 value
+    #[must_use]
     pub fn as_u64(self) -> u64 {
         self.0
     }
 
     /// Create a rotating connection ID from initial CID and sequence number
+    #[must_use]
     pub fn rotate(self, seq_num: u32) -> Self {
         let base = (self.0 >> 32) as u32;
         let rotated = (self.0 as u32) ^ seq_num;
@@ -59,6 +63,7 @@ impl ConnectionId {
     }
 
     /// Check if this is a special connection ID
+    #[must_use]
     pub fn is_special(self) -> bool {
         matches!(
             self,
@@ -67,6 +72,7 @@ impl ConnectionId {
     }
 
     /// Check if this is a valid connection ID
+    #[must_use]
     pub fn is_valid(self) -> bool {
         self != Self::INVALID && !self.is_special()
     }
@@ -162,11 +168,13 @@ pub struct Session {
 
 impl Session {
     /// Create a new session with default configuration
+    #[must_use]
     pub fn new() -> Self {
         Self::with_config(SessionConfig::default())
     }
 
     /// Create a new session with custom configuration
+    #[must_use]
     pub fn with_config(config: SessionConfig) -> Self {
         Self {
             state: SessionState::Closed,
@@ -186,6 +194,7 @@ impl Session {
     }
 
     /// Create a new session as initiator (client)
+    #[must_use]
     pub fn new_initiator(config: SessionConfig) -> Self {
         let mut session = Self::with_config(config);
         session.next_stream_id = 1; // Odd stream IDs
@@ -193,6 +202,7 @@ impl Session {
     }
 
     /// Create a new session as responder (server)
+    #[must_use]
     pub fn new_responder(config: SessionConfig) -> Self {
         let mut session = Self::with_config(config);
         session.next_stream_id = 2; // Even stream IDs
@@ -200,16 +210,19 @@ impl Session {
     }
 
     /// Get current session state
+    #[must_use]
     pub fn state(&self) -> SessionState {
         self.state
     }
 
     /// Get session configuration
+    #[must_use]
     pub fn config(&self) -> &SessionConfig {
         &self.config
     }
 
     /// Get connection ID
+    #[must_use]
     pub fn connection_id(&self) -> ConnectionId {
         self.connection_id
     }
@@ -220,6 +233,7 @@ impl Session {
     }
 
     /// Check if a state transition is valid
+    #[must_use]
     pub fn can_transition(&self, to: SessionState) -> bool {
         use SessionState::*;
 
@@ -261,6 +275,11 @@ impl Session {
     }
 
     /// Transition to a new state
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the transition is not allowed
+    /// from the current state.
     pub fn transition_to(&mut self, new_state: SessionState) -> Result<(), SessionError> {
         if !self.can_transition(new_state) {
             return Err(SessionError::InvalidState);
@@ -296,6 +315,11 @@ impl Session {
     }
 
     /// Allocate a new stream ID
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::TooManyStreams` if the maximum number of concurrent
+    /// streams has been reached.
     pub fn allocate_stream_id(&mut self) -> Result<u16, SessionError> {
         if self.streams.len() >= self.config.max_streams as usize {
             return Err(SessionError::TooManyStreams);
@@ -308,6 +332,11 @@ impl Session {
     }
 
     /// Create a new stream
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::TooManyStreams` if the maximum number of concurrent
+    /// streams has been reached.
     pub fn create_stream(&mut self) -> Result<u16, SessionError> {
         let stream_id = self.allocate_stream_id()?;
         let stream = Stream::new(stream_id, self.config.initial_window);
@@ -316,31 +345,37 @@ impl Session {
     }
 
     /// Get a stream by ID
+    #[must_use]
     pub fn get_stream(&self, stream_id: u16) -> Option<&Stream> {
         self.streams.get(&stream_id)
     }
 
     /// Get a mutable stream by ID
+    #[must_use]
     pub fn get_stream_mut(&mut self, stream_id: u16) -> Option<&mut Stream> {
         self.streams.get_mut(&stream_id)
     }
 
     /// Remove a stream
+    #[must_use]
     pub fn remove_stream(&mut self, stream_id: u16) -> Option<Stream> {
         self.streams.remove(&stream_id)
     }
 
     /// Get number of active streams
+    #[must_use]
     pub fn stream_count(&self) -> usize {
         self.streams.len()
     }
 
     /// Check if session is idle (no activity for idle_timeout duration)
+    #[must_use]
     pub fn is_idle(&self) -> bool {
         self.last_activity.elapsed() >= self.config.idle_timeout
     }
 
     /// Check if rekey is needed
+    #[must_use]
     pub fn needs_rekey(&self) -> bool {
         // Rekey if time interval exceeded
         if let Some(last_rekey) = self.last_rekey {
@@ -368,6 +403,7 @@ impl Session {
     }
 
     /// Increment packet counter and return current value
+    #[must_use]
     pub fn next_packet_counter(&mut self) -> u64 {
         let counter = self.packet_counter;
         self.packet_counter += 1;
@@ -389,6 +425,7 @@ impl Session {
     }
 
     /// Get session statistics
+    #[must_use]
     pub fn stats(&self) -> SessionStats {
         SessionStats {
             state: self.state,
@@ -611,7 +648,7 @@ mod tests {
 
         // Send packets
         for _ in 0..5 {
-            session.next_packet_counter();
+            let _ = session.next_packet_counter();
         }
 
         assert!(session.needs_rekey());

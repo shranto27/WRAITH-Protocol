@@ -1,6 +1,6 @@
-//! `Noise_XX` handshake protocol for mutual authentication with identity hiding.
+//! Noise\_XX handshake protocol for mutual authentication with identity hiding.
 //!
-//! Implements the `Noise_XX` pattern using the snow library:
+//! Implements the Noise\_XX pattern using the snow library:
 //! - Pattern: `XX` (mutual authentication, identity hiding)
 //! - DH: `25519` (Curve25519)
 //! - Cipher: `ChaChaPoly` (ChaCha20-Poly1305)
@@ -83,7 +83,7 @@ impl std::fmt::Display for NoiseError {
             NoiseError::InvalidMessage => write!(f, "Invalid handshake message"),
             NoiseError::DecryptionFailed => write!(f, "Decryption failed"),
             NoiseError::KeyDerivationFailed => write!(f, "Key derivation failed"),
-            NoiseError::SnowError(e) => write!(f, "Snow error: {}", e),
+            NoiseError::SnowError(e) => write!(f, "Snow error: {e}"),
         }
     }
 }
@@ -112,16 +112,22 @@ pub struct NoiseKeypair {
 
 impl NoiseKeypair {
     /// Generate a new random keypair.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoiseError::SnowError` if:
+    /// - The Noise pattern string fails to parse (should not happen with valid constant)
+    /// - Keypair generation fails due to RNG issues
     pub fn generate() -> Result<Self, NoiseError> {
         let builder = Builder::new(
             NOISE_PATTERN
                 .parse()
-                .map_err(|e| NoiseError::SnowError(format!("Pattern parse error: {:?}", e)))?,
+                .map_err(|e| NoiseError::SnowError(format!("Pattern parse error: {e:?}")))?,
         );
 
         let keypair = builder
             .generate_keypair()
-            .map_err(|e| NoiseError::SnowError(format!("Keypair generation error: {:?}", e)))?;
+            .map_err(|e| NoiseError::SnowError(format!("Keypair generation error: {e:?}")))?;
 
         let mut public = [0u8; 32];
         public.copy_from_slice(&keypair.public);
@@ -133,6 +139,11 @@ impl NoiseKeypair {
     }
 
     /// Create from existing key bytes.
+    ///
+    /// # Errors
+    ///
+    /// This function is infallible for valid 32-byte input but returns `Result`
+    /// for API consistency with `generate()`.
     pub fn from_bytes(private: [u8; 32]) -> Result<Self, NoiseError> {
         // Derive public key from private using X25519
         // The public key is private * basepoint on Curve25519
@@ -148,6 +159,7 @@ impl NoiseKeypair {
     }
 
     /// Get the public key bytes.
+    #[must_use]
     pub fn public_key(&self) -> &[u8; 32] {
         &self.public
     }
@@ -157,6 +169,7 @@ impl NoiseKeypair {
     /// # Security
     ///
     /// Handle with extreme care - this is the long-term identity key.
+    #[must_use]
     pub fn private_key(&self) -> &[u8] {
         &self.private
     }
@@ -190,18 +203,25 @@ impl NoiseHandshake {
     /// Create a new handshake as the initiator.
     ///
     /// The initiator sends the first message and must know their own static key.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoiseError::SnowError` if:
+    /// - The Noise pattern string fails to parse
+    /// - The local private key is invalid
+    /// - Handshake state initialization fails
     pub fn new_initiator(local_keypair: &NoiseKeypair) -> Result<Self, NoiseError> {
         let builder = Builder::new(
             NOISE_PATTERN
                 .parse()
-                .map_err(|e| NoiseError::SnowError(format!("Pattern parse error: {:?}", e)))?,
+                .map_err(|e| NoiseError::SnowError(format!("Pattern parse error: {e:?}")))?,
         );
 
         let state = builder
             .local_private_key(&local_keypair.private)
-            .map_err(|e| NoiseError::SnowError(format!("Key error: {:?}", e)))?
+            .map_err(|e| NoiseError::SnowError(format!("Key error: {e:?}")))?
             .build_initiator()
-            .map_err(|e| NoiseError::SnowError(format!("Build error: {:?}", e)))?;
+            .map_err(|e| NoiseError::SnowError(format!("Build error: {e:?}")))?;
 
         Ok(Self {
             state,
@@ -213,18 +233,25 @@ impl NoiseHandshake {
     /// Create a new handshake as the responder.
     ///
     /// The responder waits for the first message and must know their own static key.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoiseError::SnowError` if:
+    /// - The Noise pattern string fails to parse
+    /// - The local private key is invalid
+    /// - Handshake state initialization fails
     pub fn new_responder(local_keypair: &NoiseKeypair) -> Result<Self, NoiseError> {
         let builder = Builder::new(
             NOISE_PATTERN
                 .parse()
-                .map_err(|e| NoiseError::SnowError(format!("Pattern parse error: {:?}", e)))?,
+                .map_err(|e| NoiseError::SnowError(format!("Pattern parse error: {e:?}")))?,
         );
 
         let state = builder
             .local_private_key(&local_keypair.private)
-            .map_err(|e| NoiseError::SnowError(format!("Key error: {:?}", e)))?
+            .map_err(|e| NoiseError::SnowError(format!("Key error: {e:?}")))?
             .build_responder()
-            .map_err(|e| NoiseError::SnowError(format!("Build error: {:?}", e)))?;
+            .map_err(|e| NoiseError::SnowError(format!("Build error: {e:?}")))?;
 
         Ok(Self {
             state,
@@ -234,16 +261,19 @@ impl NoiseHandshake {
     }
 
     /// Get the current handshake phase.
+    #[must_use]
     pub fn phase(&self) -> HandshakePhase {
         self.phase
     }
 
     /// Get the role of this handshake.
+    #[must_use]
     pub fn role(&self) -> Role {
         self.role
     }
 
     /// Check if the handshake is complete.
+    #[must_use]
     pub fn is_complete(&self) -> bool {
         self.phase == HandshakePhase::Complete
     }
@@ -252,6 +282,11 @@ impl NoiseHandshake {
     ///
     /// Returns the message bytes to send to the peer.
     /// Optionally includes a payload (typically empty during handshake).
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoiseError::InvalidState` if called in the wrong phase for the current role.
+    /// Returns `NoiseError::SnowError` if the underlying snow library fails.
     pub fn write_message(&mut self, payload: &[u8]) -> Result<Vec<u8>, NoiseError> {
         // Validate state
         match (self.role, self.phase) {
@@ -268,8 +303,7 @@ impl NoiseHandshake {
         self.phase = match self.phase {
             HandshakePhase::Initial => HandshakePhase::Message1Complete,
             HandshakePhase::Message1Complete => HandshakePhase::Message2Complete,
-            HandshakePhase::Message2Complete => HandshakePhase::Complete,
-            HandshakePhase::Complete => HandshakePhase::Complete,
+            HandshakePhase::Message2Complete | HandshakePhase::Complete => HandshakePhase::Complete,
         };
 
         Ok(message)
@@ -278,6 +312,11 @@ impl NoiseHandshake {
     /// Read a handshake message from the peer.
     ///
     /// Returns any payload included in the message.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoiseError::InvalidState` if called in the wrong phase for the current role.
+    /// Returns `NoiseError::SnowError` if decryption or verification fails.
     pub fn read_message(&mut self, message: &[u8]) -> Result<Vec<u8>, NoiseError> {
         // Validate state
         match (self.role, self.phase) {
@@ -294,14 +333,14 @@ impl NoiseHandshake {
         self.phase = match self.phase {
             HandshakePhase::Initial => HandshakePhase::Message1Complete,
             HandshakePhase::Message1Complete => HandshakePhase::Message2Complete,
-            HandshakePhase::Message2Complete => HandshakePhase::Complete,
-            HandshakePhase::Complete => HandshakePhase::Complete,
+            HandshakePhase::Message2Complete | HandshakePhase::Complete => HandshakePhase::Complete,
         };
 
         Ok(payload)
     }
 
     /// Get the remote peer's static public key (available after message 2/3).
+    #[must_use]
     pub fn get_remote_static(&self) -> Option<[u8; 32]> {
         self.state.get_remote_static().map(|key| {
             let mut arr = [0u8; 32];
@@ -313,6 +352,11 @@ impl NoiseHandshake {
     /// Complete the handshake and transition to transport mode.
     ///
     /// Returns the transport state for encrypted communication.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoiseError::InvalidState` if the handshake is not yet complete.
+    /// Returns `NoiseError::SnowError` if transport mode initialization fails.
     pub fn into_transport(self) -> Result<NoiseTransport, NoiseError> {
         if self.phase != HandshakePhase::Complete {
             return Err(NoiseError::InvalidState);
@@ -328,6 +372,10 @@ impl NoiseHandshake {
     /// Complete the handshake and extract session keys.
     ///
     /// This extracts the symmetric keys for use with custom AEAD.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoiseError::InvalidState` if the handshake is not yet complete.
     pub fn into_session_keys(self) -> Result<SessionKeys, NoiseError> {
         if self.phase != HandshakePhase::Complete {
             return Err(NoiseError::InvalidState);
@@ -404,6 +452,7 @@ impl NoiseTransport {
     }
 
     /// Get the role this transport was created with.
+    #[must_use]
     pub fn role(&self) -> Role {
         self.role
     }

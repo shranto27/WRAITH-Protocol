@@ -76,6 +76,7 @@ pub enum BbrPhase {
 
 impl BbrState {
     /// Create new BBR state
+    #[must_use]
     pub fn new() -> Self {
         let now = Instant::now();
         Self {
@@ -136,6 +137,7 @@ impl BbrState {
     }
 
     /// Get current pacing rate (bytes/sec)
+    #[must_use]
     pub fn pacing_rate(&self) -> u64 {
         if self.btl_bw == 0 {
             // Initial rate: 10 Mbps
@@ -145,6 +147,7 @@ impl BbrState {
     }
 
     /// Get current congestion window
+    #[must_use]
     pub fn cwnd(&self) -> u64 {
         if self.bdp == 0 {
             // Initial window: 10 packets
@@ -165,11 +168,13 @@ impl BbrState {
     }
 
     /// Check if we can send more data
+    #[must_use]
     pub fn can_send(&self, bytes: u64) -> bool {
         self.bytes_in_flight + bytes <= self.cwnd()
     }
 
     /// Get current phase
+    #[must_use]
     pub fn phase(&self) -> BbrPhase {
         self.phase
     }
@@ -313,21 +318,25 @@ impl BbrState {
     }
 
     /// Get minimum RTT
+    #[must_use]
     pub fn min_rtt(&self) -> Duration {
         self.min_rtt
     }
 
     /// Get bottleneck bandwidth
+    #[must_use]
     pub fn btl_bw(&self) -> u64 {
         self.btl_bw
     }
 
     /// Get BDP
+    #[must_use]
     pub fn bdp(&self) -> u64 {
         self.bdp
     }
 
     /// Get bytes in flight
+    #[must_use]
     pub fn bytes_in_flight(&self) -> u64 {
         self.bytes_in_flight
     }
@@ -712,5 +721,149 @@ mod tests {
         assert_eq!(bbr.min_rtt(), Duration::from_millis(50));
         assert!(bbr.bdp() > 0);
         assert_eq!(bbr.bytes_in_flight(), 0);
+    }
+
+    // ========================================================================
+    // Additional Phase Transition Tests (Tier 4 - Technical Debt Remediation)
+    // ========================================================================
+
+    #[test]
+    fn test_bbr_complete_phase_cycle() {
+        // Test a complete cycle through all phases
+        let mut bbr = BbrState::new();
+
+        // 1. Start in Startup
+        assert_eq!(bbr.phase(), BbrPhase::Startup);
+
+        // 2. Transition to Drain
+        bbr.enter_drain();
+        assert_eq!(bbr.phase(), BbrPhase::Drain);
+        // Verify Drain pacing gain is inverse of Startup
+        assert!((bbr.pacing_gain - (1.0 / 2.89)).abs() < 0.01);
+
+        // 3. Transition to ProbeBw
+        bbr.enter_probe_bw();
+        assert_eq!(bbr.phase(), BbrPhase::ProbeBw);
+        // First cycle index should be 0 with gain 1.25
+        assert_eq!(bbr.pacing_gain, 1.25);
+
+        // 4. Transition to ProbeRtt
+        bbr.enter_probe_rtt();
+        assert_eq!(bbr.phase(), BbrPhase::ProbeRtt);
+        assert_eq!(bbr.pacing_gain, 1.0);
+        assert_eq!(bbr.cwnd_gain, 1.0);
+
+        // 5. Exit back to ProbeBw
+        bbr.exit_probe_rtt();
+        assert_eq!(bbr.phase(), BbrPhase::ProbeBw);
+    }
+
+    #[test]
+    fn test_bbr_startup_continuous_growth() {
+        // Verify Startup doesn't exit when bandwidth keeps growing
+        let mut bbr = BbrState::new();
+
+        // Simulate continuous bandwidth growth (>25% per round)
+        let mut bandwidth = 1_000_000u64;
+        for _ in 0..10 {
+            bandwidth = (bandwidth as f64 * 1.3) as u64; // 30% growth
+            bbr.update_bandwidth(bandwidth, Duration::from_secs(1));
+            bbr.update();
+        }
+
+        // Should still be in Startup
+        assert_eq!(bbr.phase(), BbrPhase::Startup);
+    }
+
+    #[test]
+    fn test_bbr_bandwidth_estimation_accuracy() {
+        let mut bbr = BbrState::new();
+
+        // Simulate consistent bandwidth
+        let target_bw = 100_000_000u64; // 100 MB/s
+        for _ in 0..5 {
+            bbr.update_bandwidth(target_bw, Duration::from_secs(1));
+        }
+
+        // Bandwidth estimate should match
+        assert_eq!(bbr.btl_bw(), target_bw);
+    }
+
+    #[test]
+    fn test_bbr_rtt_measurement_accuracy() {
+        let mut bbr = BbrState::new();
+
+        // Add RTT samples with some variance
+        let rtts = [
+            Duration::from_millis(50),
+            Duration::from_millis(52),
+            Duration::from_millis(48),
+            Duration::from_millis(55),
+            Duration::from_millis(45),
+        ];
+
+        for rtt in &rtts {
+            bbr.update_rtt(*rtt);
+        }
+
+        // min_rtt should be the minimum (45ms)
+        assert_eq!(bbr.min_rtt(), Duration::from_millis(45));
+    }
+
+    #[test]
+    fn test_bbr_probe_bw_full_cycle() {
+        let mut bbr = BbrState::new();
+        bbr.enter_probe_bw();
+
+        // Expected gains for full cycle: [1.25, 0.75, 1, 1, 1, 1, 1, 1]
+        let expected_gains = [1.25, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+
+        for (idx, expected_gain) in expected_gains.iter().enumerate() {
+            assert!(
+                (bbr.pacing_gain - expected_gain).abs() < 0.01,
+                "Cycle {} expected gain {}, got {}",
+                idx,
+                expected_gain,
+                bbr.pacing_gain
+            );
+
+            // Advance 8 rounds to move to next cycle
+            for _ in 0..8 {
+                bbr.advance_probe_bw_cycle();
+            }
+        }
+    }
+
+    #[test]
+    fn test_bbr_inflight_never_negative() {
+        let mut bbr = BbrState::new();
+
+        // Send some data
+        bbr.on_packet_sent(1500);
+        bbr.on_packet_sent(1500);
+
+        // Lose more than in flight (should saturate at 0)
+        bbr.on_packet_lost(5000);
+
+        assert_eq!(bbr.bytes_in_flight(), 0);
+    }
+
+    #[test]
+    fn test_bbr_cwnd_minimum() {
+        let bbr = BbrState::new();
+
+        // With zero BDP, cwnd should be at minimum
+        assert!(bbr.cwnd() >= 4 * 1500); // At least 4 packets
+    }
+
+    #[test]
+    fn test_bbr_default_impl() {
+        let bbr1 = BbrState::new();
+        let bbr2 = BbrState::default();
+
+        // Both should start in same state
+        assert_eq!(bbr1.phase(), bbr2.phase());
+        assert_eq!(bbr1.btl_bw(), bbr2.btl_bw());
+        assert_eq!(bbr1.bytes_in_flight(), bbr2.bytes_in_flight());
     }
 }

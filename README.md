@@ -24,24 +24,24 @@ WRAITH Protocol has completed Phases 1-2 with a fully functional core protocol a
 
 **Implementation Status:**
 - Core workspace: 7 crates, ~7,000 lines of Rust code
-- Test coverage: **207 passing tests** (104 wraith-core + 102 wraith-crypto + 1 ignored)
+- Test coverage: **214 passing tests** (112 wraith-core + 78 wraith-crypto + 24 integration vectors)
   - Frame layer: 28 tests (22 unit + 6 property-based)
   - Session state: 23 tests
   - Stream multiplexing: 33 tests
-  - BBR congestion: 29 tests (wraith-core subtotal: 104 tests)
-  - Cryptographic primitives: 79 unit tests
+  - BBR congestion: 28 tests (wraith-core subtotal: 112 tests)
+  - Cryptographic primitives: 78 unit tests
   - Integration test vectors: 24 tests (wraith-crypto subtotal: 102 tests)
 - Benchmarks: 19 criterion benchmarks (frame parse/build/roundtrip)
 - Performance: 172M frames/sec parsing (~232 GiB/s theoretical throughput)
 - Documentation: 59+ files, 40,000+ lines
 - CI/CD: GitHub Actions workflows for testing, security scanning, multi-platform releases
 - Security: Dependabot and CodeQL integration, weekly vulnerability scans
-- Code quality: Zero warnings, all clippy lints passing
+- Code quality: Zero clippy errors, pedantic warnings reduced 53% (263 to 123)
 
 **Completed Components:**
 - ✅ **Phase 1:** Frame encoding/decoding, session state machine, stream multiplexing, BBR congestion control
 - ✅ **Phase 2:** X25519 + Elligator2, XChaCha20-Poly1305, BLAKE3, Noise_XX handshake, Double Ratchet
-- ✅ Comprehensive test suite (207 tests)
+- ✅ Comprehensive test suite (214 tests)
 - ✅ Performance benchmarks
 - ✅ Security documentation (SECURITY.md, TECH-DEBT.md)
 
@@ -473,12 +473,13 @@ WRAITH Protocol is in active development and we welcome contributions of all kin
 - **Translations:** Translate documentation to other languages
 
 ### Current Focus Areas
-1. ✅ **Phase 1 Complete** - Core protocol foundation (104 tests, 172M frames/sec)
+1. ✅ **Phase 1 Complete** - Core protocol foundation (112 tests, 172M frames/sec)
 2. ✅ **Phase 2 Complete** - Cryptographic layer (102 tests, full security suite)
-3. Begin Phase 3 transport layer implementation (AF_XDP, io_uring)
-4. Implement zero-copy networking and kernel bypass
-5. Add connection migration and path validation
-6. Maintain test coverage (current: 207 tests, target: maintain 80%+ coverage)
+3. ✅ **Technical Debt Remediation** - 90/100 quality score, 53% warning reduction
+4. Begin Phase 3 transport layer implementation (AF_XDP, io_uring)
+5. Implement zero-copy networking and kernel bypass
+6. Add connection migration and path validation
+7. Maintain test coverage (current: 214 tests, target: maintain 80%+ coverage)
 
 See [ROADMAP.md](to-dos/ROADMAP.md) for detailed sprint planning and story point estimates.
 
@@ -542,4 +543,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** Early Development (v0.1.0) | **License:** MIT | **Language:** Rust 2024
+**Status:** Phase 1-2 Complete (v0.1.5) | **License:** MIT | **Language:** Rust 2024 | **Tests:** 214 | **Quality:** 90/100

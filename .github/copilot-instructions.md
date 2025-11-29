@@ -55,8 +55,15 @@ The GitHub Actions CI (.github/workflows/ci.yml) runs these jobs:
 5. **docs** - `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS=-Dwarnings`
 6. **msrv** - `cargo check --workspace` with Rust 1.85
 
-To replicate CI locally, run: `cargo run -p xtask -- ci`
+To run the main CI checks locally, use: `cargo run -p xtask -- ci`
 
+**Note:** The `xtask ci` command does **not** fully replicate the CI workflow above. It omits:
+- The initial `cargo check --workspace --all-features` step
+- Running clippy with `--all-features`
+- Building docs with `RUSTDOCFLAGS=-Dwarnings`
+- The MSRV (minimum supported Rust version) check
+
+For a full CI replication, run these steps manually as described above.
 ## Repository Structure
 
 ```

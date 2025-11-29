@@ -89,6 +89,157 @@ graph TD
 
 ---
 
+## 3. WRAITH Protocol Integration
+
+### 3.1 Cryptographic Transport Layer
+
+WRAITH-Recon leverages the full WRAITH cryptographic suite for secure reconnaissance operations:
+
+**Algorithm Suite:**
+| Function | Algorithm | Security Level | Application |
+|----------|-----------|----------------|-------------|
+| Key Exchange | X25519 | 128-bit | Secure channel establishment |
+| Key Encoding | Elligator2 | N/A | Traffic indistinguishability |
+| AEAD | XChaCha20-Poly1305 | 256-bit key, 128-bit auth | Frame encryption |
+| Hash | BLAKE3 | 128-bit collision resistance | Integrity verification |
+| KDF | HKDF-BLAKE3 | 128-bit | Session key derivation |
+
+**Noise_XX Handshake:**
+- **Phase 1:** Initiator sends Elligator2-encoded ephemeral key (96 bytes)
+- **Phase 2:** Responder sends ephemeral + encrypted static key (128 bytes)
+- **Phase 3:** Initiator sends encrypted static key (80 bytes)
+- **Result:** Mutually authenticated, forward-secret session
+
+**Session Key Derivation:**
+```rust
+// After handshake, derive transport keys
+let prk = HKDF_Extract(salt: "wraith-v1", ikm: DH_outputs);
+let tx_key = HKDF_Expand(prk, "recon-tx", 32);
+let rx_key = HKDF_Expand(prk, "recon-rx", 32);
+let conn_id = HKDF_Expand(prk, "connection-id", 8);
+```
+
+### 3.2 Wire Protocol Details
+
+**Outer Packet Structure (Before Decryption):**
+```
+├─ Connection ID (8 bytes) - Derived during handshake
+├─ Encrypted Payload (variable) - AEAD ciphertext
+└─ Authentication Tag (16 bytes) - Poly1305 MAC
+Total overhead: 24 bytes minimum
+```
+
+**Inner Frame Structure (Post-Decryption):**
+```
+├─ Nonce (8 bytes) - Session salt || Packet counter
+├─ Frame Type (1 byte) - See frame types below
+├─ Flags (1 byte) - SYN, FIN, ACK, PRI, CMP
+├─ Stream ID (2 bytes) - Logical channel identifier
+├─ Sequence Number (4 bytes) - Per-stream ordering
+├─ File Offset (8 bytes) - For data frames
+├─ Payload Length (2 bytes) - Actual payload size
+├─ Reserved (2 bytes) - Future use
+├─ Payload Data (variable) - Recon data
+└─ Padding (variable) - Random obfuscation
+Header size: 28 bytes fixed
+```
+
+**Frame Types Used in Reconnaissance:**
+| Type | Value | Usage |
+|------|-------|-------|
+| DATA | 0x01 | Asset discovery data |
+| ACK | 0x02 | Acknowledge scanned hosts |
+| CONTROL | 0x03 | Scan configuration |
+| PING/PONG | 0x05/0x06 | RTT measurement |
+| PAD | 0x08 | Cover traffic |
+| PATH_CHALLENGE | 0x0E | NAT traversal probes |
+
+### 3.3 Transport Layer Integration
+
+**wraith-transport Crate Integration:**
+```rust
+use wraith_transport::{Transport, TransportConfig};
+use wraith_crypto::{NoiseSession, HandshakePattern};
+
+// Configure kernel-bypass transport
+let config = TransportConfig {
+    mode: TransportMode::AfXdp,
+    bind_addr: "0.0.0.0:0".parse().unwrap(),
+    buffer_size: 8192,
+    xdp_flags: XdpFlags::SKB_MODE,
+};
+
+let transport = Transport::new(config)?;
+```
+
+**AF_XDP Configuration for High-Speed Scanning:**
+- **UMEM Size:** 64MB (32,768 frames @ 2048 bytes)
+- **Ring Sizes:** Fill: 4096, RX: 4096, TX: 4096, Completion: 4096
+- **Zero-Copy:** Direct NIC-to-userspace via DMA
+- **Batch Processing:** Process up to 64 packets per poll
+
+**io_uring Integration for Asset Data:**
+```rust
+use io_uring::{opcode, types};
+
+// Async write discovered assets
+let write_op = opcode::Write::new(
+    types::Fd(db_file.as_raw_fd()),
+    asset_buffer.as_ptr(),
+    asset_size
+).build();
+
+ring.submission().push(&write_op)?;
+ring.submit()?;
+```
+
+### 3.4 Obfuscation Layer Integration
+
+**Elligator2 Key Encoding:**
+- All ephemeral keys during scans appear as uniform random 32-byte strings
+- ~50% of generated keys are encodable (acceptable retry rate)
+- High bit randomized for additional entropy
+
+**Packet Padding Strategy:**
+```rust
+pub enum PaddingMode {
+    Performance,  // Minimal (next size class)
+    Privacy,      // Random selection
+    Stealth,      // Match HTTPS distribution
+}
+
+// Padding classes: 64B, 256B, 512B, 1024B, 1472B, 8960B
+```
+
+**Timing Obfuscation for Scans:**
+```rust
+// Exponential distribution for stealth scanning
+let delay_ms = -5.0 * random::<f64>().ln();
+sleep(Duration::from_millis(delay_ms as u64)).await;
+```
+
+**Protocol Mimicry Profiles:**
+- **TLS Wrapper:** WRAITH frames wrapped in valid TLS 1.3 Application Data records
+- **WebSocket:** Binary WebSocket frames with proper masking
+- **DNS-over-HTTPS:** Recon queries encoded as DoH TXT record lookups
+
+### 3.5 Ratcheting Schedule
+
+**Symmetric Ratchet (Every Packet):**
+```rust
+// After each scan packet
+chain_key_next = BLAKE3(chain_key_current || 0x01);
+message_key = BLAKE3(chain_key_current || 0x02);
+// Immediate zeroization
+zeroize(chain_key_current);
+zeroize(message_key);
+```
+
+**DH Ratchet (Time/Volume Triggered):**
+- Trigger: Every 2 minutes OR 1,000,000 packets
+- Action: Generate new ephemeral key, perform DH, derive new chain key
+- Security: Forward secrecy for long-duration reconnaissance
+
 ## 3. Operational Workflow
 
 ```

@@ -6,14 +6,50 @@
 
 ---
 
+## Protocol Foundation
+
+WRAITH-RedOps C2 infrastructure is built on the WRAITH protocol's 6-layer architecture:
+
+**Layer Stack for C2:**
+1. **Network Layer** - UDP sockets, AF_XDP for high-throughput exfiltration
+2. **Kernel Acceleration** - io_uring async I/O, zero-copy DMA for file transfers
+3. **Obfuscation Layer** - Elligator2 key hiding, beaconing jitter, TLS/DNS/ICMP mimicry
+4. **Crypto Transport** - Noise_XX mutual auth, XChaCha20-Poly1305 AEAD, BLAKE3 integrity
+5. **Session Layer** - Stream multiplexing (1 task = 1 stream), BBR congestion control
+6. **Application Layer** - C2 protocol (Protobuf), task execution, file transfer
+
+**Performance Targets:**
+- **Command Latency:** <100ms (UDP), <500ms (HTTPS fallback)
+- **File Transfer:** 300+ Mbps (UDP), 10-40 Gbps (AF_XDP for bulk exfiltration)
+- **Overhead:** 24 bytes/packet minimum (8B CID + 16B auth tag)
+- **Ratcheting:** Every 2 minutes or 1M packets for forward secrecy
+
+---
+
 ## 1. WRAITH-Native C2 Channels
 
 **Description:** Use the WRAITH protocol as the primary or fallback command channel for resilient, unblockable communications.
 
 **Channel Types:**
-*   **Direct UDP:** Standard WRAITH encrypted transport (Noise_XX handshake, Chacha20-Poly1305).
-*   **Covert:** DNS/ICMP/HTTPS mimicry (via `wraith-obfuscation`).
-*   **P2P:** SMB (Named Pipes) or WRAITH-over-TCP for internal peer-to-peer chaining (lateral movement).
+*   **Direct UDP:** Standard WRAITH encrypted transport
+    - Noise_XX 3-phase handshake (mutual authentication)
+    - XChaCha20-Poly1305 AEAD (256-bit key, 192-bit nonce)
+    - BLAKE3 hashing for integrity verification
+    - DH ratchet every 2 minutes or 1M packets
+    - Performance: 300+ Mbps, <100ms latency
+
+*   **Covert Channels:** Protocol mimicry via `wraith-obfuscation`
+    - **TLS 1.3 Wrapper:** WRAITH frames in Application Data records
+    - **DNS Tunneling:** Base32-encoded in TXT records (253 bytes max)
+    - **DNS-over-HTTPS:** Encrypted C2 as DoH queries
+    - **ICMP:** Payload in Echo Request/Reply padding
+    - **WebSocket:** Binary frames with proper masking
+
+*   **P2P Lateral Movement:** Internal beacon mesh
+    - **SMB Named Pipes:** WRAITH-over-SMB for domain environments
+    - **WRAITH-over-TCP:** Direct peer-to-peer on port 445/135
+    - **Encryption:** Same Noise_XX + AEAD as UDP
+    - **Topology:** Tree structure (parent → children beacons)
 
 **User Stories:**
 - As an operator, I can maintain control of an implant even if TCP/443 is blocked, using WRAITH's UDP/covert modes.

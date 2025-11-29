@@ -135,6 +135,203 @@ graph TD
 
 ---
 
+## 4. WRAITH Protocol Integration
+
+### 4.1 C2 Channel Cryptography
+
+**Algorithm Suite (Same as Core Protocol):**
+| Function | Algorithm | Security Level | C2 Application |
+|----------|-----------|----------------|----------------|
+| Key Exchange | X25519 | 128-bit | Beacon-to-Server authentication |
+| Key Encoding | Elligator2 | N/A | Traffic indistinguishability |
+| AEAD | XChaCha20-Poly1305 | 256-bit key, 128-bit auth | Command/response encryption |
+| Hash | BLAKE3 | 128-bit collision resistance | Integrity, fingerprinting |
+| KDF | HKDF-BLAKE3 | 128-bit | Session key derivation |
+
+**Noise_XX Handshake for C2:**
+```
+Beacon (Initiator)         Team Server (Responder)
+    |                              |
+    |  -> e (96 bytes)             |  Phase 1: Ephemeral key (Elligator2)
+    |                              |
+    |  <- e, ee, s, es (128 bytes) |  Phase 2: Server static key revealed
+    |                              |
+    |  -> s, se (80 bytes)         |  Phase 3: Beacon static key revealed
+    |                              |
+    |  [Mutually Authenticated]    |  Result: Forward-secret C2 channel
+```
+
+**Session Key Derivation:**
+```rust
+// After Noise handshake
+let handshake_hash = noise_state.get_handshake_hash();
+let prk = HKDF_Extract(salt: "wraith-c2-v1", ikm: DH_outputs);
+
+// Derive separate keys for each direction
+let beacon_tx_key = HKDF_Expand(prk, "beacon-tx", 32);
+let beacon_rx_key = HKDF_Expand(prk, "beacon-rx", 32);
+let conn_id = HKDF_Expand(prk, "c2-conn-id", 8);
+```
+
+### 4.2 Wire Protocol Details
+
+**Outer WRAITH Packet (Network Layer):**
+```
+├─ Connection ID (8 bytes) - Stable identifier for C2 session
+├─ Encrypted C2 Payload (variable) - XChaCha20-Poly1305 ciphertext
+└─ Authentication Tag (16 bytes) - Poly1305 MAC
+Total overhead: 24 bytes minimum
+```
+
+**Inner WRAITH Frame (After AEAD Decryption):**
+```
+├─ Nonce (8 bytes) - Session salt || Packet counter
+├─ Frame Type (1 byte) - DATA for C2 messages
+├─ Flags (1 byte) - SYN (initial check-in), ACK, FIN (beacon exit)
+├─ Stream ID (2 bytes) - Multiplexed task channels
+├─ Sequence Number (4 bytes) - Per-task ordering
+├─ File Offset (8 bytes) - For file uploads/downloads
+├─ Payload Length (2 bytes) - C2 message size
+├─ Reserved (2 bytes) - Future protocol extensions
+├─ C2 Message (variable) - Nested RedOps protocol
+└─ Padding (variable) - Traffic shaping
+Header size: 28 bytes fixed
+```
+
+**Frame Types Used in C2:**
+| Type | Value | C2 Usage |
+|------|-------|----------|
+| DATA | 0x01 | Task commands, beacon responses |
+| ACK | 0x02 | Task acknowledgment |
+| CONTROL | 0x03 | Session management (sleep, exit) |
+| REKEY | 0x04 | Initiate DH ratchet |
+| PING/PONG | 0x05/0x06 | Keepalive, latency measurement |
+| PAD | 0x08 | Cover traffic during idle |
+| STREAM_OPEN | 0x09 | New task stream |
+| STREAM_CLOSE | 0x0A | Task completion |
+| PATH_CHALLENGE | 0x0E | Connection migration probe |
+
+### 4.3 Transport Layer Options
+
+**Primary Transport (WRAITH/UDP):**
+```rust
+use wraith_transport::{Transport, TransportConfig};
+
+let config = TransportConfig {
+    mode: TransportMode::Udp {
+        bind_addr: "0.0.0.0:0".parse().unwrap(),
+    },
+    buffer_size: 65536,
+    timeout: Duration::from_secs(30),
+};
+
+let transport = Transport::new(config)?;
+```
+
+**Fallback Transports:**
+- **HTTPS:** WRAITH frames wrapped in TLS 1.3, HTTP/2 POST requests
+- **DNS:** Tunneled via TXT records (Base32-encoded WRAITH frames)
+- **SMB:** Named pipes for peer-to-peer lateral movement
+- **ICMP:** Echo Request/Reply padding field
+
+**Transport Selection Logic:**
+```rust
+match beacon_config.channel_priority {
+    vec!["wraith-udp", "https", "dns"] => {
+        // Try WRAITH UDP first
+        if let Ok(conn) = try_wraith_udp().await {
+            return conn;
+        }
+        // Fall back to HTTPS
+        if let Ok(conn) = try_https().await {
+            return conn;
+        }
+        // Last resort: DNS tunneling
+        try_dns_tunnel().await?
+    }
+}
+```
+
+### 4.4 Obfuscation for C2 Traffic
+
+**Elligator2 Key Encoding:**
+- All beacon ephemeral keys appear as random bytes
+- Prevents DPI from identifying X25519 key exchanges
+- ~50% encoding success rate (acceptable for beaconing)
+
+**Beaconing Obfuscation:**
+```rust
+// Exponential jitter for check-in intervals
+let base_interval = 60; // seconds
+let jitter_percent = 20;
+let delay = base_interval as f64 * (1.0 + (random::<f64>() - 0.5) * (jitter_percent as f64 / 100.0));
+
+sleep(Duration::from_secs_f64(delay)).await;
+```
+
+**Packet Padding for C2:**
+- **Performance Mode:** Minimal padding (next size class)
+- **Stealth Mode:** Match HTTPS distribution (64B, 256B, 512B, 1024B, 1472B)
+- **Bandwidth:** ~5-15% overhead depending on mode
+
+**Protocol Mimicry:**
+```rust
+use wraith_obfuscation::mimicry::{MimicryProfile, TlsWrapper};
+
+// Wrap C2 traffic in TLS 1.3
+let wrapper = TlsWrapper::new(MimicryProfile::Tls13 {
+    ja3_fingerprint: "771,4865-4866-4867,0-23-65281,29-23-24,0", // Chrome
+    sni: "c2.legitimate-cdn.com",
+    alpn: vec!["h2".to_string()],
+});
+
+let disguised_c2 = wrapper.wrap_frame(&c2_frame)?;
+```
+
+### 4.5 Ratcheting for Long-Duration Operations
+
+**Symmetric Ratchet (Per-Packet):**
+```rust
+// After sending/receiving each C2 message
+chain_key_next = BLAKE3(chain_key_current || 0x01);
+message_key = BLAKE3(chain_key_current || 0x02);
+
+// Immediate zeroization to prevent memory forensics
+zeroize(&mut chain_key_current);
+zeroize(&mut message_key);
+```
+
+**DH Ratchet (Periodic):**
+- **Trigger:** Every 2 minutes OR 1,000,000 packets
+- **Beacon:** Generates new ephemeral key, sends REKEY frame
+- **Server:** Responds with new ephemeral, performs DH
+- **Result:** New chain key derived, forward secrecy restored
+
+**Post-Compromise Security:**
+```
+T=0:     Adversary compromises current session keys
+T=1min:  Normal beacon check-in (adversary can decrypt)
+T=2min:  DH ratchet triggered
+T=2min+: Adversary loses decryption capability (new DH secret)
+```
+
+### 4.6 Performance Characteristics
+
+**Transport Modes:**
+| Mode | Throughput | Latency | Overhead |
+|------|------------|---------|----------|
+| WRAITH/UDP | 300+ Mbps | 10-50ms | 24 bytes/packet |
+| WRAITH/AF_XDP | 10-40 Gbps | <1ms | 24 bytes/packet |
+| HTTPS Wrapper | 200+ Mbps | 20-100ms | 5% bandwidth |
+| DNS Tunnel | 10-50 Kbps | 100-500ms | 80% bandwidth |
+
+**Thread Model:**
+- Thread-per-beacon architecture
+- Lock-free task queue
+- NUMA-aware allocation for multi-socket servers
+
+---
+
 ## 4. C2 Protocol Specification
 
 ### 4.1 Transport Layer

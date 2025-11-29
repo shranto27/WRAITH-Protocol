@@ -4,10 +4,31 @@
 **Tier:** 3 (Advanced)
 **Timeline:** 12 weeks (3 sprints × 4 weeks)
 **Total Story Points:** 180
+**Protocol Alignment:** Synchronized with core protocol development (Phases 1-5)
+**Governance:** [Security Testing Parameters](../../ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md)
+
+**WRAITH Protocol Stack Dependencies:**
+| Crate | Purpose | Integration Phase |
+|-------|---------|-------------------|
+| wraith-core | Frame construction, session management | Phase 1 (Weeks 40-43) |
+| wraith-crypto | Noise_XX handshake, AEAD encryption, Elligator2 | Phase 2 (Weeks 44-47) |
+| wraith-transport | AF_XDP, io_uring, UDP/TCP transports | Phase 1-2 (Weeks 40-47) |
+| wraith-obfuscation | Padding, timing jitter, protocol mimicry | Phase 2 (Weeks 44-47) |
+| wraith-discovery | DHT integration, relay coordination | Phase 3 (Weeks 48-51) |
+| wraith-files | Chunking, BLAKE3 integrity, compression | Phase 3 (Weeks 48-51) |
+
+**Protocol Milestones:**
+- ✓ Core frame encoding complete (wraith-core v0.1.0)
+- ✓ Basic UDP transport functional (wraith-transport v0.1.0)
+- ⏳ Noise_XX handshake implementation (wraith-crypto v0.2.0)
+- ⏳ AF_XDP kernel bypass (wraith-transport v0.2.0)
+- ⏳ Protocol mimicry profiles (wraith-obfuscation v0.1.0)
+- ⏳ Multi-path exfiltration (wraith-files v0.1.0)
 
 ---
 
 ## Phase 1: Foundation & Passive Visibility (Weeks 40-43)
+**Protocol Dependencies:** wraith-core v0.1.0, wraith-transport v0.1.0 (UDP), wraith-crypto v0.1.0 (basic AEAD)
 
 ### S1.1: Governance & Safety Core (15 pts)
 *   [ ] **Task:** Define `RoE` Struct and Serde serialization.
@@ -46,6 +67,9 @@
 ---
 
 ## Phase 2: Active Stealth & Mimicry (Weeks 44-47)
+**Protocol Dependencies:** wraith-crypto v0.2.0 (Noise_XX, Elligator2), wraith-obfuscation v0.1.0 (mimicry profiles), wraith-transport v0.2.0 (AF_XDP)
+
+**Testing Milestone:** Cryptographic verification (Noise handshake correctness, Elligator2 encoding success rate ~50%, nonce uniqueness)
 
 ### S2.1: Active Probing Engine (25 pts)
 *   [ ] **Task:** Implement raw packet construction (SYN, ACK, UDP).
@@ -72,6 +96,9 @@
 ---
 
 ## Phase 3: Exfiltration & Reporting (Weeks 48-51)
+**Protocol Dependencies:** wraith-files v0.1.0 (chunking, integrity), wraith-discovery v0.1.0 (relay coordination), all prior crates integrated
+
+**Testing Milestone:** End-to-end exfiltration reliability (multi-path validation, BLAKE3 integrity verification, protocol mimicry effectiveness)
 
 ### S3.1: Exfiltration Logic (25 pts)
 *   [ ] **Task:** Create `SyntheticDataGen` (Luhn algorithm for CCs).

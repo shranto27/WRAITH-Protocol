@@ -7,6 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### [2025-11-29] - Security Testing Client Documentation
+
+#### Added
+
+**Security Testing Client Documentation (15+ files, ~3,500 lines):**
+- **WRAITH-Recon Documentation** (6 files):
+  - Reference architecture with protocol integration details
+  - Features documentation (governance, reconnaissance, exfiltration assessment)
+  - Implementation guide with wraith-* crate usage patterns
+  - Integration documentation (API examples, error handling)
+  - Testing documentation (20+ test cases, compliance verification)
+  - Usage documentation (operator workflows, audit procedures)
+
+- **WRAITH-RedOps Documentation** (6 files):
+  - Reference architecture (Team Server, Operator Client, Spectre Implant)
+  - Features documentation (C2 infrastructure, adversary emulation)
+  - Implementation guide with protocol-accurate technical details
+  - Integration documentation (gRPC API, multi-transport support)
+  - Testing documentation (evasion validation, MITRE ATT&CK mapping)
+  - Usage documentation (engagement workflows, purple team collaboration)
+
+- **Sprint Planning Documentation**:
+  - WRAITH-Recon sprint plan (12 weeks, 55 story points)
+  - WRAITH-RedOps sprint plan (14 weeks, 89 story points)
+  - Protocol dependency tracking for security testing clients
+
+- **Comprehensive Client Roadmap**:
+  - ROADMAP-clients.md (1,500+ lines)
+  - Complete development planning for all 10 clients
+  - Tier classification (Tier 1: Core, Tier 2: Specialized, Tier 3: Advanced + Security Testing)
+  - Story point estimates (1,028 total across all clients)
+  - Integration timeline with protocol development phases
+  - Cross-client dependencies and shared components
+  - MITRE ATT&CK technique mapping (51+ techniques for RedOps)
+
+#### Enhanced
+
+**Client Overview Documentation:**
+- Added Tier 3 Security Testing section
+- Updated client ecosystem overview with all 10 clients
+- Protocol-aligned reference architectures for security testing clients
+- Governance framework compliance documentation
+
+**Project Roadmap (ROADMAP.md):**
+- Security testing clients timeline (Weeks 44-70)
+- WRAITH-Recon development milestones
+- WRAITH-RedOps development milestones with MITRE ATT&CK integration
+- Performance targets for security testing clients
+- Combined ecosystem timeline spanning 70 weeks
+
+**README.md:**
+- Updated Client Applications section with 3-tier classification
+- Added security testing clients with governance notice
+- Updated project structure documentation
+- Enhanced documentation section with file counts
+- Added Security Testing documentation references
+- Total ecosystem: 10 clients, 1,028 story points
+
+**CHANGELOG.md:**
+- This comprehensive update entry
+- Documentation statistics and file counts
+- Technical details of security testing integration
+
+#### Technical Details
+
+**Protocol Integration:**
+- Complete cryptographic suite integration (X25519, Elligator2, XChaCha20-Poly1305, BLAKE3)
+- Noise_XX handshake implementation patterns for C2 channels
+- Wire protocol specifications (outer packet + inner frame structures)
+- AF_XDP kernel bypass configuration for high-speed operations
+- io_uring integration for async I/O operations
+- Obfuscation layer integration (padding modes, timing obfuscation, protocol mimicry)
+- Ratcheting schedules (symmetric per-packet, DH periodic)
+
+**wraith-* Crate Integration Examples:**
+- `wraith-core`: Frame encoding, session management, BBR congestion control
+- `wraith-crypto`: Full cryptographic suite, Elligator2 encoding, key ratcheting
+- `wraith-transport`: AF_XDP configuration, UDP fallback, connection migration
+- `wraith-obfuscation`: Protocol mimicry profiles (TLS, WebSocket, DNS-over-HTTPS)
+- `wraith-discovery`: DHT integration, NAT traversal, relay support
+- `wraith-files`: Chunking strategies, BLAKE3 tree hashing, integrity verification
+
+**Governance & Compliance:**
+- Security Testing Parameters framework referenced
+- Signed Rules of Engagement (RoE) validation
+- Scope enforcement mechanisms (CIDR/domain whitelisting)
+- Kill switch architecture (emergency shutdown)
+- Tamper-evident audit logging
+- Chain of custody preservation
+- Multi-operator accountability (RedOps)
+
+**Testing & Validation:**
+- 20+ protocol verification test cases (Recon)
+- Evasion technique validation (RedOps)
+- MITRE ATT&CK technique mapping (51+ techniques across 12 tactics)
+- Detection engineering support documentation
+- Purple team collaboration workflows
+- Compliance verification procedures
+
+**Documentation Statistics:**
+- **Files Enhanced:** 15+ files (architecture, features, implementation, integration, testing, usage)
+- **Lines Added:** ~3,500 lines of technical documentation
+- **Code Examples:** Rust, SQL, Protobuf, JSON, Mermaid diagrams
+- **API Integration Patterns:** Complete wraith-* crate usage examples
+- **Test Cases:** 20+ functional, performance, security, and compliance tests
+
+**Client Ecosystem Metrics:**
+- **Total Clients:** 10 (8 standard + 2 security testing)
+- **Total Story Points:** 1,028
+- **Development Timeline:** ~70 weeks (parallel development)
+- **Documentation Files:** 37 client docs (previously 25)
+- **Sprint Planning:** 10 client sprint files
+
+---
+
 ### Added
 
 #### Rust Workspace (7 crates, 8,732 lines)

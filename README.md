@@ -79,31 +79,66 @@ WRAITH-Protocol/
 │   ├── integration/            # Embedding & platform support (3 docs)
 │   ├── testing/                # Testing strategies (3 docs)
 │   ├── operations/             # Deployment & monitoring (3 docs)
-│   └── clients/                # Client application docs (25 docs)
+│   └── clients/                # Client application docs (37 docs)
+│       ├── overview.md         # Client ecosystem overview
+│       ├── wraith-transfer/    # P2P file transfer (3 docs)
+│       ├── wraith-chat/        # E2EE messaging (3 docs)
+│       ├── wraith-sync/        # Backup sync (3 docs)
+│       ├── wraith-share/       # File sharing (3 docs)
+│       ├── wraith-stream/      # Media streaming (3 docs)
+│       ├── wraith-mesh/        # IoT networking (3 docs)
+│       ├── wraith-publish/     # Publishing (3 docs)
+│       ├── wraith-vault/       # Secret storage (3 docs)
+│       ├── wraith-recon/       # Security testing (6 docs)
+│       └── wraith-redops/      # Red team ops (6 docs)
 ├── to-dos/                      # Sprint planning
 │   ├── protocol/               # 7 implementation phases
-│   ├── clients/                # 8 client application sprints
-│   └── ROADMAP.md              # Project roadmap
+│   ├── clients/                # 10 client application sprints
+│   ├── ROADMAP.md              # Project roadmap
+│   └── ROADMAP-clients.md      # Comprehensive client roadmap
 ├── ref-docs/                    # Technical specifications
 └── xtask/                       # Build automation
 ```
 
 ## Client Applications
 
-WRAITH Protocol powers a suite of secure applications:
+WRAITH Protocol powers a comprehensive ecosystem of secure applications across 3 priority tiers:
 
-| Client | Description | Status |
-|--------|-------------|--------|
-| **WRAITH-Transfer** | Direct P2P file transfer with drag-and-drop | Tier 1 |
-| **WRAITH-Chat** | E2EE messaging with Double Ratchet | Tier 1 |
-| **WRAITH-Sync** | Serverless backup synchronization | Tier 2 |
-| **WRAITH-Share** | Distributed anonymous file sharing | Tier 2 |
-| **WRAITH-Stream** | Secure media streaming (AV1/Opus) | Tier 3 |
-| **WRAITH-Mesh** | IoT mesh networking | Tier 3 |
-| **WRAITH-Publish** | Censorship-resistant publishing | Tier 3 |
-| **WRAITH-Vault** | Distributed secret storage (Shamir SSS) | Tier 3 |
+### Tier 1: Core Applications (High Priority)
 
-See [Client Documentation](docs/clients/overview.md) for details.
+| Client | Description | Status | Story Points |
+|--------|-------------|--------|--------------|
+| **WRAITH-Transfer** | Direct P2P file transfer with drag-and-drop GUI | Planned | 102 |
+| **WRAITH-Chat** | E2EE messaging with Double Ratchet algorithm | Planned | 162 |
+
+### Tier 2: Specialized Applications (Medium Priority)
+
+| Client | Description | Status | Story Points |
+|--------|-------------|--------|--------------|
+| **WRAITH-Sync** | Decentralized backup synchronization (Dropbox alternative) | Planned | 136 |
+| **WRAITH-Share** | Distributed anonymous file sharing (BitTorrent-like) | Planned | 123 |
+
+### Tier 3: Advanced Applications (Lower Priority)
+
+| Client | Description | Status | Story Points |
+|--------|-------------|--------|--------------|
+| **WRAITH-Stream** | Secure media streaming with live/VOD support (AV1/Opus) | Planned | 71 |
+| **WRAITH-Mesh** | IoT mesh networking for decentralized device communication | Planned | 60 |
+| **WRAITH-Publish** | Censorship-resistant publishing platform (blogs, wikis) | Planned | 76 |
+| **WRAITH-Vault** | Distributed secret storage using Shamir Secret Sharing | Planned | 94 |
+
+### Tier 3: Security Testing (Specialized - Authorized Use Only)
+
+| Client | Description | Status | Story Points |
+|--------|-------------|--------|--------------|
+| **WRAITH-Recon** | Network reconnaissance & data exfiltration assessment | Planned | 55 |
+| **WRAITH-RedOps** | Red team operations platform with C2 infrastructure | Planned | 89 |
+
+**Total Ecosystem:** 10 clients, 1,028 story points, ~70 weeks development timeline.
+
+**Security Testing Notice:** WRAITH-Recon and WRAITH-RedOps require signed authorization and governance compliance. See [Security Testing Parameters](ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md) for authorized use requirements.
+
+See [Client Documentation](docs/clients/overview.md) and [Client Roadmap](to-dos/ROADMAP-clients.md) for comprehensive details.
 
 ## Development
 
@@ -188,9 +223,20 @@ cargo tarpaulin --workspace --out Html
 - [Protocol Technical Details](ref-docs/protocol_technical_details.md)
 - [Implementation Guide](ref-docs/protocol_implementation_guide.md)
 
+### Client Applications
+- [Client Overview](docs/clients/overview.md)
+- [Client Roadmap](to-dos/ROADMAP-clients.md)
+- Individual client documentation (architecture, features, implementation, integration, testing, usage)
+
 ### Project Planning
 - [Project Roadmap](to-dos/ROADMAP.md)
+- [Client Roadmap](to-dos/ROADMAP-clients.md)
 - [Documentation Status](docs/DOCUMENTATION_STATUS.md)
+
+### Security Testing
+- [Security Testing Parameters](ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md)
+- [WRAITH-Recon Documentation](docs/clients/wraith-recon/)
+- [WRAITH-RedOps Documentation](docs/clients/wraith-redops/)
 
 ## Performance Targets
 

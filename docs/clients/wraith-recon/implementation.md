@@ -5,6 +5,42 @@
 
 ---
 
+## WRAITH Crate Dependencies
+
+WRAITH-Recon builds on the core WRAITH protocol crates:
+
+**Direct Dependencies:**
+| Crate | Version | Usage |
+|-------|---------|-------|
+| `wraith-core` | 0.1.0 | Frame encoding/decoding, session management |
+| `wraith-crypto` | 0.1.0 | Noise handshake, AEAD, Elligator2, ratcheting |
+| `wraith-transport` | 0.1.0 | AF_XDP, io_uring, UDP fallback |
+| `wraith-obfuscation` | 0.1.0 | Padding, timing jitter, protocol mimicry |
+| `wraith-discovery` | 0.1.0 | DHT integration, NAT traversal |
+| `wraith-files` | 0.1.0 | Chunking, integrity verification |
+
+**Module Structure:**
+```
+wraith-recon/
+├── src/
+│   ├── main.rs - CLI entry point
+│   ├── governance/ - SafetyController, RoE enforcement
+│   │   ├── enforcement.rs - CIDR validation, kill switch
+│   │   └── audit.rs - Tamper-evident logging
+│   ├── recon/ - Reconnaissance engines
+│   │   ├── passive.rs - AF_XDP capture, BPF filtering
+│   │   ├── active.rs - Stateless scanning, jitter
+│   │   └── asset_db.rs - Graph-based asset tracking
+│   ├── exfil/ - Data exfiltration testing
+│   │   ├── mimicry.rs - Protocol wrappers
+│   │   └── shaper.rs - Traffic pattern matching
+│   └── xdp/ - eBPF programs (Linux-only)
+│       ├── loader.rs - BPF object loading
+│       └── filter.c - XDP filter logic
+```
+
+---
+
 ## 1. Capture Engine (Passive)
 
 ### 1.1 AF_XDP Integration (Kernel Bypass)

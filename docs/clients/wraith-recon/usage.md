@@ -22,6 +22,127 @@ Before deploying WRAITH-Recon, you **MUST** generate a signed governance file.
 
 ---
 
+## 2. Protocol Configuration
+
+### 2.1 Transport Mode Selection
+
+WRAITH-Recon supports multiple transport modes with different performance characteristics:
+
+**AF_XDP Mode (Maximum Performance):**
+```bash
+sudo wraith-recon --config scope.sig \
+    --transport afxdp \
+    --interface eth0 \
+    --xdp-mode native \
+    --umem-size 67108864
+```
+- Requires: Linux 6.2+, AF_XDP-capable NIC
+- Performance: 10-40 Gbps throughput
+- Latency: Sub-millisecond
+
+**io_uring Mode (High Performance):**
+```bash
+sudo wraith-recon --config scope.sig \
+    --transport iouring \
+    --ring-size 4096 \
+    --sqpoll
+```
+- Requires: Linux 5.19+
+- Performance: 1-5 Gbps throughput
+- Latency: 1-5 milliseconds
+
+**UDP Fallback (Compatible):**
+```bash
+wraith-recon --config scope.sig \
+    --transport udp \
+    --bind-addr 0.0.0.0:0
+```
+- Requires: Any Linux/BSD/macOS
+- Performance: 300+ Mbps throughput
+- Latency: 10-50 milliseconds
+
+### 2.2 Cryptographic Configuration
+
+**Noise Protocol Selection:**
+```bash
+wraith-recon --config scope.sig \
+    --noise-pattern XX \
+    --static-key /path/to/private_key.pem \
+    --peer-static-key /path/to/peer_public_key.pem
+```
+
+**Key Ratcheting Parameters:**
+```bash
+wraith-recon --config scope.sig \
+    --ratchet-time 120 \     # DH ratchet every 2 minutes
+    --ratchet-packets 1000000  # or after 1M packets
+```
+
+**Elligator2 Encoding:**
+```bash
+wraith-recon --config scope.sig \
+    --elligator2 enable \
+    --key-retry-limit 10  # Max retries for encodable key
+```
+
+### 2.3 Obfuscation Configuration
+
+**Padding Mode:**
+```bash
+wraith-recon --config scope.sig \
+    --padding-mode stealth \
+    --padding-distribution 64:0.10,256:0.15,512:0.20,1024:0.25,1472:0.20,8960:0.10
+```
+
+**Timing Obfuscation:**
+```bash
+wraith-recon --config scope.sig \
+    --timing-profile exponential \
+    --mean-delay-ms 5.0 \
+    --jitter-percent 50
+```
+
+**Protocol Mimicry:**
+```bash
+# TLS 1.3 Mimicry
+wraith-recon --config scope.sig \
+    --mimicry tls13 \
+    --ja3-fingerprint "771,4865-4866-4867,0-23-65281,29-23-24,0" \
+    --sni cdn.example.com
+
+# DNS-over-HTTPS
+wraith-recon --config scope.sig \
+    --mimicry doh \
+    --doh-server https://dns.google/dns-query
+
+# WebSocket
+wraith-recon --config scope.sig \
+    --mimicry websocket \
+    --ws-path /api/v1/stream
+```
+
+### 2.4 Performance Tuning
+
+**Thread-per-Core:**
+```bash
+wraith-recon --config scope.sig \
+    --cores 0,1,2,3 \         # Pin to specific cores
+    --numa-node 0             # NUMA-aware allocation
+```
+
+**Zero-Copy Buffer Configuration:**
+```bash
+wraith-recon --config scope.sig \
+    --umem-size 67108864 \    # 64MB UMEM
+    --frame-size 2048 \        # 2KB frames
+    --fill-queue-size 4096 \
+    --rx-queue-size 4096 \
+    --tx-queue-size 4096 \
+    --comp-queue-size 4096
+```
+
+---
+
 ## 2. Deployment Modes
 
 ### 2.1 Mode: Passive Scout (Silent)

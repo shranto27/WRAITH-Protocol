@@ -6,6 +6,26 @@
 
 ---
 
+## Protocol Foundation
+
+WRAITH-Recon testing capabilities are built on the WRAITH protocol's 6-layer architecture:
+
+**Layer Stack Integration:**
+1. **Network Layer** - UDP sockets, AF_XDP kernel bypass, raw packet handling
+2. **Kernel Acceleration** - io_uring async I/O, zero-copy DMA, thread-per-core model
+3. **Obfuscation Layer** - Elligator2 key hiding, padding (constant/random/traffic-shaped), timing jitter
+4. **Crypto Transport** - Noise_XX handshake, XChaCha20-Poly1305 AEAD, BLAKE3 integrity
+5. **Session Layer** - Stream multiplexing, BBR congestion control, connection migration
+6. **Application Layer** - Reconnaissance data, asset enumeration, exfiltration simulation
+
+**Performance Targets:**
+- **Baseline (UDP):** 300+ Mbps throughput
+- **AF_XDP Mode:** 10-40 Gbps throughput
+- **Latency:** Sub-millisecond with kernel bypass
+- **Overhead:** 24-byte minimum per packet (8B CID + 16B auth tag)
+
+---
+
 ## 1. Advanced Network Enumeration
 
 ### 1.1 Passive Reconnaissance (Silent Mode)
@@ -51,15 +71,38 @@ decoy_ips = ["192.168.1.50", "192.168.1.51"]
 
 ### 2.1 Protocol Mimicry Engine
 
-**Description:** Test egress filtering by mimicking various legitimate protocols and traffic patterns.
+**Description:** Test egress filtering by mimicking various legitimate protocols and traffic patterns using wraith-obfuscation crate integration.
 
 **Supported Mimicry Profiles:**
 *   **DNS Tunneling:** `A`, `TXT`, `CNAME` record tunneling with Base32 encoding.
+    - Inner WRAITH frame encrypted with XChaCha20-Poly1305
+    - Outer DNS query appears as legitimate lookup
+    - Maximum payload: 253 bytes per TXT record (after Base32 encoding)
+
 *   **ICMP Tunneling:** Hiding encrypted payloads in the padding area of ICMP Echo Requests/Replies.
+    - WRAITH frame embedded in ICMP padding field
+    - Valid ICMP checksum maintained
+    - Type 8 (Echo Request) / Type 0 (Echo Reply)
+
 *   **HTTPS/TLS Mimicry:**
     *   **JA3 Mimicry:** Matches Chrome, Firefox, or Safari TLS handshake fingerprints.
     *   **Traffic Shaping:** Fits Packet Size Distribution (PSD) to legitimate profiles (e.g., YouTube stream, Azure Update).
+    *   **TLS Wrapper:** WRAITH frames wrapped in valid TLS 1.3 Application Data records
+        - TLS version field: 0x0303 (TLS 1.2) or 0x0304 (TLS 1.3)
+        - Cipher suites: Common values (e.g., TLS_CHACHA20_POLY1305_SHA256)
+        - Entropy: ~7.99 bits/byte (close to 8.0 for encrypted data)
     *   Supports Domain Fronting (sending Host header different from SNI).
+
+*   **WebSocket Mimicry:**
+    - Binary WebSocket frames with proper masking
+    - Valid HTTP/1.1 Upgrade handshake
+    - Opcode 0x02 (Binary Frame)
+
+*   **DNS-over-HTTPS (DoH):**
+    - WRAITH reconnaissance encoded as DoH queries
+    - Content-Type: application/dns-message
+    - Very high DPI resistance, 10-20% bandwidth efficiency
+
 *   **SMB/CIFS:** Emulation for internal lateral movement testing.
 
 **User Stories:**

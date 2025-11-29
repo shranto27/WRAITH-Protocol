@@ -190,6 +190,163 @@ WRAITH Protocol provides a suite of client applications built on the core protoc
 
 ---
 
+## Security Testing Clients (Tier 3)
+
+**GOVERNANCE NOTICE:** The following clients are specialized security testing tools subject to strict authorization requirements. See [WRAITH Security Testing Parameters](../ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md) for complete governance framework.
+
+**Authorized Use Cases Only:**
+- Contracted penetration testing engagements
+- Executive-authorized red team exercises
+- Controlled security research in isolated laboratory environments
+- CTF competitions with explicit tool authorization
+
+**Prohibited Uses:** Unauthorized access to any system, indiscriminate scanning, attacks against critical infrastructure, or any use outside documented authorization frameworks.
+
+---
+
+### 9. WRAITH-Recon
+
+**Purpose:** Network reconnaissance and data exfiltration assessment platform for authorized security testing
+
+**Classification:** Tier 3 - Security Testing Tool
+
+**Governance:** Requires signed Rules of Engagement (RoE), scope enforcement, audit logging
+
+**Use Cases (Authorized Only):**
+- Network asset discovery without IDS/IPS triggering
+- Egress filtering and DLP control validation
+- Data exfiltration path mapping
+- Network defense capability assessment
+
+**Key Features:**
+- **Kernel-Bypass Networking:** AF_XDP for wire-speed reconnaissance (10-40 Gbps, <1ms latency)
+- **WRAITH Protocol Integration:** Full cryptographic suite (Noise_XX, XChaCha20-Poly1305, Elligator2)
+- **Protocol Mimicry:** TLS 1.3, DNS-over-HTTPS, WebSocket, ICMP traffic patterns
+- **Adaptive Obfuscation:** Padding classes (64B-8960B), exponential timing jitter
+- **Multi-Path Exfiltration:** Simultaneous data channels via UDP/TCP/HTTPS/DNS/ICMP
+- **Passive & Active Scanning:** Zero-touch traffic analysis, stateless connection probing
+- **Tamper-Evident Audit Logging:** Cryptographically signed operation logs
+
+**Protocol Stack:**
+- **wraith-core:** Session management, stream multiplexing (command/file/SOCKS channels)
+- **wraith-crypto:** Noise_XX handshake, BLAKE3 hashing, continuous key ratcheting
+- **wraith-transport:** AF_XDP, io_uring, UDP/TCP standard sockets
+- **wraith-obfuscation:** Elligator2 encoding, adaptive padding, timing jitter
+- **wraith-discovery:** DHT-based relay discovery, multi-hop routing
+- **wraith-files:** BLAKE3 chunking, integrity verification, compression
+
+**Safety Controls:**
+- Target whitelist enforcement (CIDR/domain restrictions)
+- Time-bounded execution (engagement window enforcement)
+- Kill switch mechanism (signed halt signal)
+- Comprehensive audit trail (all operations logged)
+
+**Target Users:** Authorized penetration testers, red team operators, security researchers
+
+**Documentation:**
+- [Architecture](wraith-recon/architecture.md) - Technical deep dive, protocol integration
+- [Features](wraith-recon/features.md) - Reconnaissance and exfiltration capabilities
+- [Implementation](wraith-recon/implementation.md) - Reference implementation guidance
+- [Integration](wraith-recon/integration.md) - Tool compatibility, MITRE ATT&CK mapping
+- [Testing](wraith-recon/testing.md) - Protocol verification, evasion effectiveness tests
+- [Usage](wraith-recon/usage.md) - Operator workflows, configuration examples
+
+---
+
+### 10. WRAITH-RedOps
+
+**Purpose:** Comprehensive Command & Control (C2) platform for adversary emulation and red team operations
+
+**Classification:** Tier 3 - Security Testing Tool
+
+**Governance:** Requires executive authorization, legal review, incident response coordination
+
+**Use Cases (Authorized Only):**
+- Red team exercises simulating advanced threat actors
+- Purple team collaborative security assessments
+- MITRE ATT&CK technique validation
+- EDR/XDR evasion capability testing
+- Post-exploitation simulation
+
+**Key Features:**
+- **Team Server:** Multi-user collaboration hub (PostgreSQL backend, gRPC API)
+- **Operator Console:** Cross-platform GUI (Tauri + React)
+- **Spectre Implant:** Memory-resident agent (no_std Rust, zero runtime dependencies)
+  - Position Independent Code (PIC) - injectable as shellcode/DLL/EXE
+  - Sleep mask obfuscation during idle periods
+  - Stack spoofing for call stack legitimacy
+  - Indirect syscalls to bypass EDR user-mode hooks
+- **WRAITH Protocol C2 Channels:** All transport modes (AF_XDP, UDP, TCP, HTTPS, DNS, ICMP, WebSocket)
+- **P2P Beacon Mesh:** Internal lateral movement via SMB pipes, TCP sockets
+- **Relay Network:** Multi-hop routing for deep NAT traversal
+- **BOF Compatibility:** Run Beacon Object Files from Cobalt Strike ecosystem
+- **Multi-Path Data Exfiltration:** Automatic chunking across HTTPS/DNS/ICMP channels
+
+**Protocol Integration:**
+- **Noise_XX Handshake:** Mutual authentication, identity hiding (3-phase)
+- **XChaCha20-Poly1305 AEAD:** All C2 traffic encrypted (256-bit keys, 192-bit nonces)
+- **Elligator2 Encoding:** Handshake keys appear as uniform random bytes
+- **Continuous Ratcheting:** Symmetric (per-packet) + DH (2min/1M packets)
+- **BBRv2 Congestion Control:** Optimized for C2 performance vs. stealth trade-offs
+- **Protocol Mimicry Profiles:** TLS 1.3 (JA3 fingerprinting), DNS-over-HTTPS, WebSocket
+
+**MITRE ATT&CK Coverage:**
+- **Initial Access:** Phishing, external remote services
+- **Execution:** PowerShell, WMI, scheduled tasks
+- **Persistence:** Registry run keys, services, WMI subscriptions
+- **Privilege Escalation:** Token manipulation, UAC bypass
+- **Defense Evasion:** Obfuscation, process injection, rootkit techniques
+- **Credential Access:** LSASS dumping, DCSync, Kerberoasting
+- **Discovery:** Network/domain enumeration, user/group discovery
+- **Lateral Movement:** SMB/WMI, pass-the-hash/ticket
+- **Collection:** Keylogging, screenshot capture, clipboard monitoring
+- **Command & Control:** Application layer protocols, encrypted channels
+- **Exfiltration:** Over C2 channel, multi-path exfiltration
+
+**Safety Controls:**
+- Scope enforcement (target whitelist/blacklist, kernel-side checks)
+- Time-to-Live (TTL) - implants self-destruct after engagement end date
+- Immutable audit logging (every command, file transfer, lateral movement)
+- Emergency kill switch (team server-triggered implant termination)
+
+**Target Users:** Authorized red team operators, purple team assessors, adversary emulation specialists
+
+**Documentation:**
+- [Architecture](wraith-redops/architecture.md) - C2 infrastructure, implant design
+- [Features](wraith-redops/features.md) - Post-exploitation capabilities
+- [Implementation](wraith-redops/implementation.md) - Team server, beacon, operator client
+- [Integration](wraith-redops/integration.md) - Protocol stack, external tool compatibility
+- [Testing](wraith-redops/testing.md) - Cryptographic verification, evasion testing
+- [Usage](wraith-redops/usage.md) - Operator workflows, protocol configuration
+
+---
+
+### Security Testing Parameters Summary
+
+All WRAITH security testing clients are governed by comprehensive authorization and accountability frameworks:
+
+**Authorization Requirements:**
+- Written Rules of Engagement (RoE) with explicit scope definition
+- Signed authorization from legal system owner
+- Liability and indemnification provisions
+- Emergency contact procedures
+
+**Technical Safeguards:**
+- Cryptographic target whitelisting
+- Time-bounded execution windows
+- Real-time audit logging with tamper-evident signatures
+- Kill switch mechanisms
+
+**Legal Compliance:**
+- CFAA (Computer Fraud and Abuse Act) compliance
+- Sector-specific regulations (PCI-DSS, HIPAA, GDPR where applicable)
+- Coordinated disclosure for discovered vulnerabilities
+- Incident response provisions
+
+**For Complete Governance Documentation:** See [WRAITH Security Testing Parameters v1.0](../ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md)
+
+---
+
 ## Architecture Overview
 
 ### Shared Components
@@ -412,6 +569,10 @@ For detailed information about each client, see:
 - **WRAITH-Mesh:** [architecture](wraith-mesh/architecture.md) | [features](wraith-mesh/features.md) | [implementation](wraith-mesh/implementation.md)
 - **WRAITH-Publish:** [architecture](wraith-publish/architecture.md) | [features](wraith-publish/features.md) | [implementation](wraith-publish/implementation.md)
 - **WRAITH-Vault:** [architecture](wraith-vault/architecture.md) | [features](wraith-vault/features.md) | [implementation](wraith-vault/implementation.md)
+
+**Security Testing Clients (Tier 3 - Authorized Use Only):**
+- **WRAITH-Recon:** [architecture](wraith-recon/architecture.md) | [features](wraith-recon/features.md) | [implementation](wraith-recon/implementation.md) | [integration](wraith-recon/integration.md) | [testing](wraith-recon/testing.md) | [usage](wraith-recon/usage.md)
+- **WRAITH-RedOps:** [architecture](wraith-redops/architecture.md) | [features](wraith-redops/features.md) | [implementation](wraith-redops/implementation.md) | [integration](wraith-redops/integration.md) | [testing](wraith-redops/testing.md) | [usage](wraith-redops/usage.md)
 
 ---
 

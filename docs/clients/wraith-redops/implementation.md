@@ -5,6 +5,59 @@
 
 ---
 
+## WRAITH Crate Dependencies
+
+WRAITH-RedOps builds on the core WRAITH protocol crates for C2 communications:
+
+**Direct Dependencies:**
+| Crate | Version | Usage |
+|-------|---------|-------|
+| `wraith-core` | 0.1.0 | Frame encoding, session management, stream multiplexing |
+| `wraith-crypto` | 0.1.0 | Noise_XX handshake, XChaCha20-Poly1305, Elligator2, ratcheting |
+| `wraith-transport` | 0.1.0 | UDP sockets, AF_XDP for bulk exfiltration |
+| `wraith-obfuscation` | 0.1.0 | Padding, beaconing jitter, protocol mimicry |
+| `wraith-discovery` | 0.1.0 | NAT traversal for beacon check-in |
+| `wraith-files` | 0.1.0 | Chunking for file uploads/downloads |
+
+**Module Structure:**
+```
+wraith-redops/
+├── team-server/
+│   ├── src/
+│   │   ├── main.rs - Server entry point
+│   │   ├── listener/ - C2 listener management
+│   │   │   ├── manager.rs - Listener lifecycle
+│   │   │   └── session.rs - Per-beacon session handler
+│   │   ├── builder/ - Implant artifact generation
+│   │   │   ├── compiler.rs - Dynamic compilation
+│   │   │   └── obfuscator.rs - LLVM-Obfuscator integration
+│   │   ├── db/ - PostgreSQL integration
+│   │   │   ├── schema.rs - Database models
+│   │   │   └── queries.rs - CRUD operations
+│   │   └── api/ - gRPC service
+│   │       └── controller.rs - Operator API
+│   └── Cargo.toml
+├── spectre-implant/
+│   ├── src/
+│   │   ├── main.rs - no_std entry point
+│   │   ├── c2/ - WRAITH C2 integration
+│   │   │   ├── session.rs - Session management
+│   │   │   └── tasks.rs - Task execution
+│   │   ├── evasion/ - Anti-forensics
+│   │   │   ├── sleep_mask.rs - Memory obfuscation
+│   │   │   ├── syscalls.rs - Hell's Gate/Halo's Gate
+│   │   │   └── stack_spoof.rs - Call stack manipulation
+│   │   └── modules/ - Capability modules
+│   │       ├── bof_loader.rs - COFF execution
+│   │       └── injection.rs - Process injection
+│   └── Cargo.toml (no_std)
+└── operator-client/
+    ├── src-tauri/ - Rust backend
+    └── src/ - React frontend
+```
+
+---
+
 ## 1. Spectre Implant Internals (Rust `no_std`)
 
 ### 1.1 Design Philosophy & Entry Point

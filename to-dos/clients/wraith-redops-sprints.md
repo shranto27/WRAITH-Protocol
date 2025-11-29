@@ -4,10 +4,40 @@
 **Tier:** 3 (Advanced)
 **Timeline:** 16 weeks (4 sprints × 4 weeks)
 **Total Story Points:** 240
+**Protocol Alignment:** Synchronized with core protocol development (Phases 1-5)
+**Governance:** [Security Testing Parameters](../../ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md)
+
+**WRAITH Protocol Stack Dependencies:**
+| Crate | Purpose | Integration Phase |
+|-------|---------|-------------------|
+| wraith-core | C2 session management, stream multiplexing (cmd/file/SOCKS) | Phase 1 (Weeks 40-43) |
+| wraith-crypto | Noise_XX C2 handshake, XChaCha20-Poly1305, key ratcheting | Phase 2 (Weeks 44-47) |
+| wraith-transport | AF_XDP (Linux beacons), UDP/TCP/HTTPS/DNS transports | Phase 1-2 (Weeks 40-47) |
+| wraith-obfuscation | C2 traffic obfuscation (padding, timing, TLS/DNS mimicry) | Phase 2-3 (Weeks 44-51) |
+| wraith-discovery | P2P beacon mesh (DHT), relay coordination, NAT traversal | Phase 3 (Weeks 48-51) |
+| wraith-files | Data exfiltration chunking, BLAKE3 integrity, multi-path | Phase 3-4 (Weeks 48-55) |
+
+**Protocol Milestones:**
+- ✓ Core frame encoding complete (wraith-core v0.1.0)
+- ✓ Basic UDP transport functional (wraith-transport v0.1.0)
+- ⏳ Noise_XX C2 handshake (wraith-crypto v0.2.0) - **Critical for Beacon-Server auth**
+- ⏳ AF_XDP kernel bypass (wraith-transport v0.2.0) - **Linux beacon performance**
+- ⏳ Protocol mimicry (wraith-obfuscation v0.1.0) - **C2 stealth (TLS/DNS/ICMP)**
+- ⏳ P2P beacon mesh (wraith-discovery v0.1.0) - **Lateral movement support**
+- ⏳ Multi-path exfiltration (wraith-files v0.1.0) - **Data exfil resilience**
+
+**MITRE ATT&CK Technique Integration:**
+- T1071 (Application Layer Protocol) - HTTPS/DNS C2 channels
+- T1041 (Exfiltration Over C2 Channel) - Multi-path data exfiltration
+- T1090 (Proxy: Multi-hop Proxy) - P2P beacon mesh, relay network
+- T1055 (Process Injection) - BOF loader, shellcode execution
+- T1027 (Obfuscated Files or Information) - Elligator2, protocol mimicry
 
 ---
 
 ## Phase 1: Command Infrastructure (Weeks 40-43)
+**Protocol Dependencies:** wraith-core v0.1.0, wraith-transport v0.1.0 (UDP), wraith-crypto v0.1.0 (basic AEAD)
+**ATT&CK Focus:** T1071 (C2 Protocol), T1132 (Data Encoding)
 
 ### S1.1: Team Server Core (25 pts)
 *   [ ] **Task:** Setup Async Rust Project (Axum/Tokio).
@@ -36,6 +66,9 @@
 ---
 
 ## Phase 2: The "Spectre" Implant - Core (Weeks 44-47)
+**Protocol Dependencies:** wraith-crypto v0.2.0 (Noise_XX, Elligator2, ratcheting), wraith-obfuscation v0.1.0 (padding, timing), wraith-transport v0.2.0 (multi-transport)
+**ATT&CK Focus:** T1071.001 (Web Protocols), T1573 (Encrypted Channel), T1027.002 (Software Packing)
+**Testing Milestone:** Cryptographic C2 channel (Noise handshake, AEAD encryption, nonce uniqueness, key ratcheting)
 
 ### S2.1: `no_std` Foundation (30 pts)
 *   [ ] **Task:** Create `no_std` crate layout.
@@ -62,6 +95,9 @@
 ---
 
 ## Phase 3: Tradecraft & Evasion (Weeks 48-51)
+**Protocol Dependencies:** wraith-discovery v0.1.0 (P2P mesh, relay), wraith-files v0.1.0 (exfiltration), all prior crates integrated
+**ATT&CK Focus:** T1055 (Process Injection), T1090 (Multi-hop Proxy), T1041 (Exfiltration Over C2), T1027.005 (Indicator Removal)
+**Testing Milestone:** Evasion effectiveness (EDR bypass validation, network stealth testing, protocol mimicry verification)
 
 ### S3.1: Advanced Loader (35 pts)
 *   [ ] **Task:** Implement Hell's Gate Syscall resolver.
@@ -86,6 +122,9 @@
 ---
 
 ## Phase 4: Lateral Movement & Polish (Weeks 52-55)
+**Protocol Dependencies:** All WRAITH crates integrated and tested, focus on P2P mesh optimization and multi-path exfiltration
+**ATT&CK Focus:** T1021 (Remote Services), T1090.001 (Internal Proxy), T1105 (Ingress Tool Transfer), T1567 (Exfiltration Over Web Service)
+**Testing Milestone:** End-to-end C2 reliability (P2P mesh routing, multi-transport failover, data exfiltration integrity, MITRE ATT&CK technique validation)
 
 ### S4.1: Peer-to-Peer C2 (30 pts)
 *   [ ] **Task:** Implement Named Pipe Server/Client.

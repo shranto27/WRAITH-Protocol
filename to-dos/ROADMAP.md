@@ -265,6 +265,12 @@ Phase 7 (Hardening)
 - WRAITH-Publish (censorship-resistant publishing)
 - WRAITH-Vault (distributed secret storage)
 
+**Tier 3 (Security Testing - Specialized):** Weeks 44-70 (post-protocol hardening)
+- WRAITH-Recon (reconnaissance & data transfer assessment)
+- WRAITH-RedOps (red team operations platform)
+
+**Note:** Security testing clients require completed protocol (Phase 7) and governance framework. See [Security Testing Parameters](../ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md) for authorized use requirements.
+
 ### Client Development Phases
 
 Each client follows 4-phase development:
@@ -272,6 +278,49 @@ Each client follows 4-phase development:
 2. **Implementation** (3-6 weeks): Core functionality
 3. **Testing** (2-3 weeks): Integration, UX testing
 4. **Polish** (1-2 weeks): Documentation, packaging
+
+### Security Testing Clients Detail
+
+**WRAITH-Recon: Reconnaissance & Data Transfer Assessment**
+
+**Purpose:** Authorized network reconnaissance and data exfiltration assessment platform.
+
+**Governance Framework:** Requires signed Rules of Engagement (RoE), scope enforcement, kill switch capability, and tamper-evident audit logging.
+
+**Development Timeline:** Weeks 44-56 (post-Phase 7)
+- **Prerequisites:** Complete protocol implementation, wraith-crypto, wraith-transport, wraith-obfuscation
+- **Duration:** 12 weeks (~55 story points)
+- **Key Dependencies:** AF_XDP kernel bypass, protocol mimicry, governance controls
+
+**Key Milestones:**
+1. Governance & Safety Controller (cryptographic authorization, scope enforcement)
+2. Reconnaissance Module (passive/active scanning, asset enumeration)
+3. Transfer & Exfiltration Module (protocol mimicry, traffic shaping)
+4. Audit & Reporting System (tamper-evident logs, compliance reporting)
+
+**WRAITH-RedOps: Red Team Operations Platform**
+
+**Purpose:** Comprehensive adversary emulation platform for authorized red team engagements.
+
+**Governance Framework:** Executive authorization required, scope configuration, multi-operator audit trails, emergency kill switch.
+
+**Development Timeline:** Weeks 56-70 (follows WRAITH-Recon)
+- **Prerequisites:** Complete protocol + WRAITH-Recon governance patterns
+- **Duration:** 14 weeks (~89 story points)
+- **Key Dependencies:** Noise_XX handshake, multi-transport support, MITRE ATT&CK mapping
+
+**Key Milestones:**
+1. Team Server (multi-user C2, PostgreSQL state management, listener bus)
+2. Operator Client (Tauri GUI, real-time session management, campaign tracking)
+3. Spectre Implant (memory-resident agent, evasion techniques, P2P chaining)
+4. Governance & Audit System (chain of custody, operations logging, reporting)
+
+**MITRE ATT&CK Integration:** RedOps includes comprehensive technique mapping for:
+- Initial Access, Execution, Persistence, Privilege Escalation
+- Defense Evasion, Credential Access, Discovery, Lateral Movement
+- Collection, Command and Control, Exfiltration, Impact
+
+**Combined Timeline:** 26 weeks total for both security testing clients (Weeks 44-70)
 
 ---
 
@@ -300,6 +349,8 @@ Each client follows 4-phase development:
 | Mesh | <100 ms | 100 Mbps | 1000 devices |
 | Publish | <1 sec (propagation) | N/A | 10K reads/sec |
 | Vault | <500 ms | N/A | 1000 secrets |
+| **Recon** | <10 ms (scan) | 300+ Mbps | 10K hosts/sec |
+| **RedOps** | <50 ms (C2) | 300+ Mbps | 1000 beacons |
 
 ---
 

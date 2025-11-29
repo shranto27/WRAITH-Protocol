@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WRAITH - Animated Banner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0f;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        .banner-container {
+            position: relative;
+            width: 100%;
+            max-width: 1000px;
+            height: 400px;
+            background: linear-gradient(135deg, #0a0a0f 0%, #12121a 50%, #0a0a0f 100%);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Animated grid background */
+        .grid-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+
+        /* Floating network nodes */
+        .node {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #00ffff;
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: nodePulse 3s ease-in-out infinite;
+            box-shadow: 0 0 10px #00ffff, 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .node:nth-child(1) { top: 15%; left: 5%; animation-delay: 0s; }
+        .node:nth-child(2) { top: 25%; left: 12%; animation-delay: 0.5s; }
+        .node:nth-child(3) { top: 60%; left: 8%; animation-delay: 1s; }
+        .node:nth-child(4) { top: 80%; left: 15%; animation-delay: 1.5s; }
+        .node:nth-child(5) { top: 15%; right: 5%; animation-delay: 0.3s; }
+        .node:nth-child(6) { top: 30%; right: 10%; animation-delay: 0.8s; }
+        .node:nth-child(7) { top: 55%; right: 6%; animation-delay: 1.3s; }
+        .node:nth-child(8) { top: 75%; right: 12%; animation-delay: 1.8s; }
+
+        @keyframes nodePulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.3); }
+        }
+
+        /* Binary streams */
+        .binary-stream {
+            position: absolute;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            color: #00ffff;
+            opacity: 0.15;
+            white-space: nowrap;
+            animation: streamFlow 8s linear infinite;
+        }
+
+        .binary-stream.left { left: 20px; }
+        .binary-stream.right { right: 20px; text-align: right; }
+
+        .binary-stream:nth-child(9) { top: 50px; animation-delay: 0s; }
+        .binary-stream:nth-child(10) { top: 100px; animation-delay: 1s; }
+        .binary-stream:nth-child(11) { top: 150px; animation-delay: 2s; }
+        .binary-stream:nth-child(12) { top: 200px; animation-delay: 3s; }
+        .binary-stream:nth-child(13) { top: 250px; animation-delay: 4s; }
+        .binary-stream:nth-child(14) { top: 300px; animation-delay: 5s; }
+
+        @keyframes streamFlow {
+            0% { opacity: 0; transform: translateY(-10px); }
+            10% { opacity: 0.2; }
+            90% { opacity: 0.2; }
+            100% { opacity: 0; transform: translateY(10px); }
+        }
+
+        /* Main content */
+        .content {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 40px;
+        }
+
+        /* Wraith icon */
+        .wraith-icon {
+            width: 120px;
+            height: 150px;
+            position: relative;
+            margin-bottom: 20px;
+            animation: wraithFloat 4s ease-in-out infinite;
+        }
+
+        @keyframes wraithFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .wraith-icon::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100px;
+            height: 130px;
+            background: radial-gradient(ellipse, rgba(0, 255, 255, 0.2) 0%, transparent 70%);
+            transform: translate(-50%, -50%);
+            animation: auraPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes auraPulse {
+            0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        .wraith-body {
+            position: absolute;
+            width: 80px;
+            height: 120px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(to bottom, 
+                rgba(200, 200, 200, 0.9) 0%,
+                rgba(120, 120, 140, 0.6) 40%,
+                rgba(60, 60, 80, 0.3) 70%,
+                transparent 100%);
+            border-radius: 40px 40px 20px 20px;
+            clip-path: ellipse(50% 50% at 50% 40%);
+        }
+
+        .wraith-hood {
+            position: absolute;
+            width: 50px;
+            height: 55px;
+            left: 50%;
+            top: 25%;
+            transform: translateX(-50%);
+            background: #050508;
+            border-radius: 50%;
+        }
+
+        .wraith-eyes {
+            position: absolute;
+            top: 38%;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+
+        .eye {
+            width: 14px;
+            height: 8px;
+            background: #00ffff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px rgba(0, 255, 255, 0.5);
+            animation: eyeGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes eyeGlow {
+            0%, 100% { box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; }
+            50% { box-shadow: 0 0 15px #00ffff, 0 0 30px #00ffff, 0 0 40px rgba(0, 255, 255, 0.5); }
+        }
+
+        /* Title */
+        .title {
+            font-family: 'Arial Black', Impact, sans-serif;
+            font-size: 80px;
+            font-weight: 900;
+            letter-spacing: 15px;
+            background: linear-gradient(180deg, #fff 0%, #ccc 30%, #666 50%, #ccc 70%, #fff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            position: relative;
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+
+        .title::before {
+            content: 'WRAITH';
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: linear-gradient(180deg, #fff 0%, #ccc 30%, #666 50%, #ccc 70%, #fff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: blur(8px);
+            opacity: 0.5;
+            z-index: -1;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.3)); }
+            50% { filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5)); }
+        }
+
+        /* Acronym */
+        .acronym {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            color: #00cccc;
+            letter-spacing: 2px;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+
+        /* Tagline */
+        .tagline {
+            font-family: Georgia, serif;
+            font-size: 20px;
+            font-style: italic;
+            color: #9d4edd;
+            margin-top: 15px;
+            opacity: 0.9;
+            animation: taglineFade 4s ease-in-out infinite;
+        }
+
+        @keyframes taglineFade {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        /* Scanlines overlay */
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.1) 2px,
+                rgba(0, 0, 0, 0.1) 4px
+            );
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* Speed lines */
+        .speed-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.3), transparent);
+            animation: speedLine 2s linear infinite;
+        }
+
+        .speed-line:nth-child(15) { top: 30%; width: 100px; left: 15%; animation-delay: 0s; }
+        .speed-line:nth-child(16) { top: 45%; width: 80px; left: 18%; animation-delay: 0.3s; }
+        .speed-line:nth-child(17) { top: 55%; width: 120px; left: 12%; animation-delay: 0.6s; }
+        .speed-line:nth-child(18) { top: 30%; width: 100px; right: 15%; animation-delay: 0.15s; transform: scaleX(-1); }
+        .speed-line:nth-child(19) { top: 45%; width: 80px; right: 18%; animation-delay: 0.45s; transform: scaleX(-1); }
+        .speed-line:nth-child(20) { top: 55%; width: 120px; right: 12%; animation-delay: 0.75s; transform: scaleX(-1); }
+
+        @keyframes speedLine {
+            0% { opacity: 0; transform: translateX(-20px); }
+            50% { opacity: 0.6; }
+            100% { opacity: 0; transform: translateX(20px); }
+        }
+
+        /* Ethereal wisps */
+        .wisp {
+            position: absolute;
+            width: 4px;
+            height: 60px;
+            background: linear-gradient(to bottom, #7b2cbf, transparent);
+            border-radius: 2px;
+            opacity: 0.4;
+            filter: blur(2px);
+            animation: wispFloat 5s ease-in-out infinite;
+        }
+
+        .wisp:nth-child(21) { left: 30%; top: 20%; animation-delay: 0s; }
+        .wisp:nth-child(22) { left: 35%; top: 30%; animation-delay: 1s; height: 40px; }
+        .wisp:nth-child(23) { right: 30%; top: 20%; animation-delay: 0.5s; }
+        .wisp:nth-child(24) { right: 35%; top: 30%; animation-delay: 1.5s; height: 40px; }
+
+        @keyframes wispFloat {
+            0%, 100% { transform: translateY(0) rotate(-5deg); opacity: 0.3; }
+            50% { transform: translateY(-15px) rotate(5deg); opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <div class="banner-container">
+        <div class="grid-bg"></div>
+        
+        <!-- Network nodes -->
+        <div class="node"></div>
+        <div class="node"></div>
+        <div class="node"></div>
+        <div class="node"></div>
+        <div class="node"></div>
+        <div class="node"></div>
+        <div class="node"></div>
+        <div class="node"></div>
+        
+        <!-- Binary streams -->
+        <div class="binary-stream left">01101001 01101110 01110110</div>
+        <div class="binary-stream right">10110010 11001010 01010110</div>
+        <div class="binary-stream left">01110111 01110010 01100001</div>
+        <div class="binary-stream right">10100001 01101001 01110100</div>
+        <div class="binary-stream left">01101000 00100000 01110000</div>
+        <div class="binary-stream right">01110010 01101111 01110100</div>
+        
+        <!-- Speed lines -->
+        <div class="speed-line"></div>
+        <div class="speed-line"></div>
+        <div class="speed-line"></div>
+        <div class="speed-line"></div>
+        <div class="speed-line"></div>
+        <div class="speed-line"></div>
+        
+        <!-- Ethereal wisps -->
+        <div class="wisp"></div>
+        <div class="wisp"></div>
+        <div class="wisp"></div>
+        <div class="wisp"></div>
+        
+        <!-- Main content -->
+        <div class="content">
+            <div class="wraith-icon">
+                <div class="wraith-body"></div>
+                <div class="wraith-hood"></div>
+                <div class="wraith-eyes">
+                    <div class="eye"></div>
+                    <div class="eye"></div>
+                </div>
+            </div>
+            <h1 class="title">WRAITH</h1>
+            <p class="acronym">Wire-speed Resilient Authenticated Invisible Transfer Handler</p>
+            <p class="tagline">… your ghost in the network …</p>
+        </div>
+        
+        <div class="scanlines"></div>
+    </div>
+</body>
+</html>

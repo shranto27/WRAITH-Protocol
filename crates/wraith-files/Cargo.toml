@@ -1,0 +1,21 @@
+[package]
+name = "wraith-files"
+description = "File transfer engine for WRAITH - chunking, integrity, resume support"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+wraith-core = { workspace = true }
+wraith-crypto = { workspace = true }
+blake3 = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = "3"

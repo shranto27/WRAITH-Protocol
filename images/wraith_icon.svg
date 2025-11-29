@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#151520"/>
+      <stop offset="100%" stop-color="#08080c"/>
+    </radialGradient>
+    
+    <linearGradient id="body" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#e8e8e8" stop-opacity="0.95"/>
+      <stop offset="25%" stop-color="#b0b0b0" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#707080" stop-opacity="0.5"/>
+      <stop offset="75%" stop-color="#404050" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#202030" stop-opacity="0"/>
+    </linearGradient>
+    
+    <radialGradient id="aura" cx="50%" cy="45%" r="45%">
+      <stop offset="0%" stop-color="#00ffff" stop-opacity="0.4"/>
+      <stop offset="60%" stop-color="#00aaaa" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#006666" stop-opacity="0"/>
+    </radialGradient>
+    
+    <filter id="eyeGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <filter id="circuitGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="256" height="256" fill="url(#bg)"/>
+  
+  <!-- Outer aura glow -->
+  <ellipse cx="128" cy="130" rx="90" ry="110" fill="url(#aura)"/>
+  
+  <!-- Network nodes (background) -->
+  <g opacity="0.15" fill="#00ffff">
+    <circle cx="40" cy="50" r="3"/>
+    <circle cx="216" cy="50" r="3"/>
+    <circle cx="30" cy="128" r="4"/>
+    <circle cx="226" cy="128" r="4"/>
+    <circle cx="50" cy="210" r="3"/>
+    <circle cx="206" cy="210" r="3"/>
+  </g>
+  <g opacity="0.1" stroke="#00ffff" stroke-width="0.5" fill="none">
+    <line x1="40" y1="50" x2="30" y2="128"/>
+    <line x1="216" y1="50" x2="226" y2="128"/>
+    <line x1="30" y1="128" x2="50" y2="210"/>
+    <line x1="226" y1="128" x2="206" y2="210"/>
+  </g>
+  
+  <!-- Main wraith figure -->
+  <g>
+    <!-- Hooded cloak -->
+    <path d="M128 30
+             C95 30 65 60 58 100
+             C52 140 50 185 58 220
+             Q70 245 100 252
+             Q114 256 128 256
+             Q142 256 156 252
+             Q186 245 198 220
+             C206 185 204 140 198 100
+             C191 60 161 30 128 30Z"
+          fill="url(#body)"/>
+    
+    <!-- Hood interior (void) -->
+    <ellipse cx="128" cy="78" rx="38" ry="42" fill="#050508"/>
+    
+    <!-- Glowing eyes -->
+    <g filter="url(#eyeGlow)">
+      <ellipse cx="110" cy="74" rx="11" ry="7" fill="#00ffff"/>
+      <ellipse cx="146" cy="74" rx="11" ry="7" fill="#00ffff"/>
+      <ellipse cx="110" cy="74" rx="5" ry="3" fill="#ffffff"/>
+      <ellipse cx="146" cy="74" rx="5" ry="3" fill="#ffffff"/>
+    </g>
+    
+    <!-- Circuit traces on cloak -->
+    <g stroke="#00ffff" stroke-width="1.5" fill="none" opacity="0.4" filter="url(#circuitGlow)">
+      <path d="M100 115 L100 145 L120 145"/>
+      <circle cx="100" cy="115" r="3" fill="#00ffff"/>
+      <path d="M156 115 L156 145 L136 145"/>
+      <circle cx="156" cy="115" r="3" fill="#00ffff"/>
+      <path d="M110 175 L110 200 L128 200 L146 200 L146 175"/>
+      <circle cx="128" cy="200" r="4" fill="#00ffff"/>
+      <circle cx="128" cy="145" r="2" fill="#00ffff" opacity="0.6"/>
+    </g>
+    
+    <!-- Dissolving particles at bottom -->
+    <g opacity="0.35" fill="#505060">
+      <rect x="95" y="245" width="5" height="11"/>
+      <rect x="108" y="242" width="4" height="14"/>
+      <rect x="120" y="248" width="6" height="8"/>
+      <rect x="134" y="244" width="4" height="12"/>
+      <rect x="148" y="246" width="5" height="10"/>
+    </g>
+  </g>
+  
+  <!-- Ethereal wisps -->
+  <g opacity="0.4">
+    <path d="M75 180 Q55 140 65 100 Q70 70 85 55" 
+          stroke="#7b2cbf" stroke-width="6" fill="none" stroke-linecap="round" 
+          filter="url(#circuitGlow)"/>
+    <path d="M181 180 Q201 140 191 100 Q186 70 171 55" 
+          stroke="#7b2cbf" stroke-width="6" fill="none" stroke-linecap="round"
+          filter="url(#circuitGlow)"/>
+  </g>
+</svg>

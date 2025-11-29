@@ -1,0 +1,19 @@
+[package]
+name = "wraith-core"
+description = "Core protocol implementation for WRAITH - frame encoding, session state machine, congestion control"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+wraith-crypto = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+zeroize = { workspace = true }
+getrandom = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

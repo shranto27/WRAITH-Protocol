@@ -1,0 +1,19 @@
+[package]
+name = "wraith-obfuscation"
+description = "Traffic obfuscation for WRAITH - padding, timing, cover traffic, protocol mimicry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+wraith-crypto = { workspace = true }
+rand = { workspace = true }
+getrandom = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

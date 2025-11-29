@@ -1,0 +1,2 @@
+# WRAITH Protocol - clippy configuration
+msrv = "1.75"

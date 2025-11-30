@@ -23,7 +23,11 @@
 //! # {
 //! use wraith_transport::io_uring::{IoUringContext, PendingOp};
 //! use std::fs::File;
+//!
+//! #[cfg(unix)]
 //! use std::os::fd::AsRawFd;
+//! #[cfg(windows)]
+//! use std::os::windows::io::AsRawHandle as AsRawFd;
 //!
 //! let mut ctx = IoUringContext::new(64).unwrap();
 //!
@@ -43,8 +47,16 @@
 
 use std::collections::HashMap;
 use std::io;
-use std::os::fd::RawFd;
 use thiserror::Error;
+
+// Platform-specific RawFd type
+#[cfg(unix)]
+use std::os::fd::RawFd;
+
+// On Windows, we use a type alias for compatibility
+// The actual file descriptor operations would use Windows HANDLEs internally
+#[cfg(not(unix))]
+type RawFd = std::os::windows::io::RawHandle;
 
 /// io_uring errors
 #[derive(Debug, Error)]

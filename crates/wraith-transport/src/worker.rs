@@ -280,6 +280,7 @@ struct Worker {
 }
 
 impl Worker {
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
     fn spawn(
         id: usize,
         task_rx: Receiver<Task>,

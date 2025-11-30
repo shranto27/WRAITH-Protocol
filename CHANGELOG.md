@@ -12,6 +12,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2025-11-30
+
+### Changed
+
+**Code Quality and Style Improvements:**
+- Added `#[must_use]` attributes to ~65 pure functions across wraith-core and wraith-crypto
+  - Ensures function results are not accidentally discarded
+  - Improves API safety and developer ergonomics
+- Enhanced documentation with proper backticks for technical terms
+  - Improved rustdoc rendering and code example clarity
+- Added comprehensive `# Errors` documentation to Result-returning functions
+- Added `# Panics` documentation where applicable
+- Improved test coverage from 402 to 438 tests (+36 tests, +9% increase)
+
+**Technical Debt Remediation:**
+- Addressed immediate code quality issues identified during Phase 3 review
+- Removed duplicate `io_uring_impl.rs` file in wraith-files
+- Added comprehensive SAFETY comments for unsafe code justifications
+- Fixed pattern matching redundancy in noise.rs
+- Improved constant-time operation documentation
+- Enhanced error handling documentation across all public APIs
+
+**Test Suite Enhancements:**
+- wraith-transport: Increased from 39 to 40 tests (worker pool queue full validation)
+- wraith-obfuscation: Increased from 24 to 47 tests (+23 tests, timing and padding coverage)
+- Integration vectors: Increased from 12 to 24 tests (+12 tests, cryptographic correctness)
+- Total test count: 438 tests (177 core + 123 crypto + 24 vectors + 12 files + 15 integration + 47 obfuscation + 40 transport)
+
+**Documentation Updates:**
+- Updated README.md with accurate test counts and implementation status
+- Updated line count from ~15,000 to ~16,500 lines of Rust code
+- Corrected test breakdown across all crates
+- Enhanced security validation documentation
+
+### Fixed
+- Documentation formatting inconsistencies across multiple modules
+- Missing assertions in worker pool queue full test
+
+### Performance
+- Maintained 172M frames/sec parsing performance (232 GiB/s theoretical throughput)
+- Zero performance regression from code quality improvements
+- All benchmarks stable across refactoring
+
+### Quality
+- Zero clippy errors maintained
+- Zero unsafe code in cryptographic paths
+- All tests passing (438/438)
+- Documentation coverage improved
+
+---
+
 ## [0.3.0] - 2025-11-30
 
 ### Added
@@ -1117,7 +1168,8 @@ Fixes applied:
 
 ---
 
-[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.0...v0.1.5

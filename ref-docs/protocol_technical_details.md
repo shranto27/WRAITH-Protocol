@@ -323,6 +323,17 @@ Noise_XX Handshake Pattern:
     Transport Mode: Both parties have symmetric session keys
 ```
 
+**Noise Pattern String:** The complete pattern is `Noise_XX_25519_ChaChaPoly_BLAKE2s`.
+
+**Note on Hash Function:** The Noise protocol framework uses **BLAKE2s** (not BLAKE3) as required by the `snow` Rust library, which currently only supports BLAKE2s for Noise protocol hashing. BLAKE2s provides equivalent cryptographic security (128-bit collision resistance) and is well-suited for the Noise handshake. BLAKE3 is still used throughout the protocol for:
+- HKDF key derivation
+- File chunk hashing
+- DHT key generation
+- Symmetric key ratcheting
+- Connection ID generation
+
+Both BLAKE2s and BLAKE3 are cryptographically sound modern hash functions from the BLAKE family.
+
 ### 3.3 Handshake Message Formats
 
 #### 3.3.1 Phase 1: Initiator Hello

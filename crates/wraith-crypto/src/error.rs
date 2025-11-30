@@ -30,6 +30,22 @@ pub enum CryptoError {
     #[error("handshake error: {0}")]
     Handshake(String),
 
+    /// Noise handshake failed
+    #[error("handshake failed: {0}")]
+    HandshakeFailed(String),
+
+    /// Invalid state for operation
+    #[error("invalid state for operation")]
+    InvalidState,
+
+    /// Invalid message format
+    #[error("invalid message format: {0}")]
+    InvalidMessage(String),
+
+    /// Key derivation failed
+    #[error("key derivation failed")]
+    KeyDerivationFailed,
+
     /// Key not encodable with Elligator2
     #[error("key not encodable with Elligator2")]
     NotEncodable,
@@ -41,4 +57,16 @@ pub enum CryptoError {
     /// Nonce overflow (counter exhausted)
     #[error("nonce counter exhausted, rekey required")]
     NonceOverflow,
+
+    /// Replay attack detected (duplicate sequence number)
+    #[error("replay attack detected")]
+    ReplayDetected,
+
+    /// Invalid signature
+    #[error("invalid signature")]
+    InvalidSignature,
+
+    /// Invalid public key
+    #[error("invalid public key")]
+    InvalidPublicKey,
 }

@@ -15,13 +15,14 @@ members = [
     "crates/wraith-files",
     "crates/wraith-cli",
     "xtask",
+    "tests",
 ]
 
 # XDP crate excluded from default - requires special build
 exclude = ["crates/wraith-xdp"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.5"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"

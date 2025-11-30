@@ -7,7 +7,7 @@
 //! - Frame encoding and decoding (zero-copy parsing)
 //! - Session state machine
 //! - Stream multiplexing
-//! - BBR congestion control
+//! - `BBR` congestion control
 //! - Error types and handling
 //!
 //! ## Architecture
@@ -32,17 +32,23 @@
 pub mod congestion;
 pub mod error;
 pub mod frame;
+pub mod migration;
+pub mod path;
 pub mod session;
 pub mod stream;
 
 pub use congestion::BbrState;
 pub use error::Error;
 pub use frame::{Frame, FrameBuilder, FrameFlags, FrameType};
-pub use session::{Session, SessionConfig, SessionState};
-pub use stream::Stream;
+pub use migration::{PathState, PathValidator, ValidatedPath};
+pub use path::{DEFAULT_MTU, MAX_MTU, MIN_MTU, PathMtuDiscovery};
+pub use session::{
+    ConnectionId, HandshakePhase, Session, SessionConfig, SessionState, SessionStats,
+};
+pub use stream::{Stream, StreamState};
 
 /// Protocol version (major.minor encoded as u32)
-pub const PROTOCOL_VERSION: u32 = 0x00000001;
+pub const PROTOCOL_VERSION: u32 = 0x0000_0001;
 
 /// Fixed frame header size in bytes
 pub const FRAME_HEADER_SIZE: usize = 28;

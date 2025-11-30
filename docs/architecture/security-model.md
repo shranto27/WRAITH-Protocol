@@ -101,9 +101,11 @@ Collision attack: 2^128 complexity (BLAKE3)
 **Guarantee:** Peers mutually verified before data transfer.
 
 **Mechanism:**
-- Noise_XX handshake (mutual authentication)
+- Noise_XX handshake (mutual authentication using pattern `Noise_XX_25519_ChaChaPoly_BLAKE2s`)
 - Ed25519 signatures for identity (128-bit security)
 - Static key verification via out-of-band channel
+
+**Note:** The Noise protocol uses BLAKE2s for hashing (as required by the `snow` Rust library), while BLAKE3 is used for key derivation (HKDF), file hashing, and ratcheting. Both provide equivalent 128-bit collision resistance.
 
 **Attack Resistance:**
 ```

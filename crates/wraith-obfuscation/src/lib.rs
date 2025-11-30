@@ -15,6 +15,8 @@ pub mod cover;
 pub mod padding;
 pub mod timing;
 
+pub use cover::{CoverTrafficGenerator, TrafficDistribution};
+
 /// Padding mode for traffic analysis resistance
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaddingMode {

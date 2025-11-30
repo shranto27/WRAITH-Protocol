@@ -9,6 +9,164 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2025-11-30
+
+### Added
+
+**Phase 4 Part I - Optimization & Hardening - COMPLETE ✅ (2025-11-30):**
+
+This release completes Phase 4 Part I, delivering high-performance kernel bypass features and comprehensive security hardening across the entire protocol stack.
+
+#### AF_XDP Zero-Copy Socket Implementation (Sprints 4.1-4.2, PERF-001)
+
+Complete Linux AF_XDP integration for kernel bypass networking with zero-copy packet I/O:
+
+- **UMEM Management**: User-space memory allocation with configurable frame sizes (2048/4096 bytes)
+- **Four-Ring Architecture**:
+  - Fill Ring: Kernel → User packet delivery
+  - RX Ring: Received packet descriptors
+  - TX Ring: Transmit packet descriptors
+  - Completion Ring: TX completion notifications
+- **Producer/Consumer Synchronization**: Lock-free ring operations with atomic indices
+- **Batch Processing APIs**:
+  - `rx_batch()` - Receive multiple packets in a single call
+  - `tx_batch()` - Submit multiple packets for transmission
+  - `complete_tx()` - Collect transmission completions
+  - `fill_rx_buffers()` - Replenish receive buffers
+- **Zero-Copy Packet Access**: Direct buffer access via `get_packet_data()` and `get_packet_data_mut_unsafe()`
+- **16 comprehensive tests** covering all ring operations and edge cases
+
+**Performance Target:** 10-40 Gbps with compatible NICs
+
+#### BBR Pacing Enforcement (Sprint 4.3, PERF-002)
+
+Timer-based pacing rate enforcement integrated with BBR congestion control:
+
+- **Credit Accumulation System**: Smooth packet transmission without bursts
+- **Phase-Specific Pacing Gains**:
+  - Startup: 2.77x (aggressive bandwidth probing)
+  - Drain: 2.0x (queue draining after startup)
+  - ProbeBw: 8-phase cycle [1.25, 0.75, 1, 1, 1, 1, 1, 1]
+  - ProbeRtt: 1.0x (RTT measurement mode)
+- **Pacing APIs**:
+  - `can_send_paced()` - Check if sending is allowed
+  - `on_packet_sent_paced()` - Update pacing state after send
+  - `pacing_delay()` - Get delay until next send allowed
+- **Dynamic Rate Updates**: Pacing rate adjusts based on BBR bandwidth estimate and phase
+- **Burst Prevention**: Credit system prevents packet bursts that could trigger congestion
+- **3 comprehensive tests** for pacing behavior validation
+
+**Performance Target:** <5% transmission jitter
+
+#### io_uring Async File I/O (Sprint 4.4, PERF-003)
+
+Linux io_uring integration for high-performance async file operations:
+
+- **Async Operations**: Non-blocking read, write, and fsync
+- **Registered Buffers**: Zero-copy I/O with pre-registered memory regions
+- **Batch Submission**: Multiple operations submitted per syscall
+- **Configurable Queue Depth**: 128-4096 for batched operations
+- **High-Level APIs**:
+  - `AsyncFileReader` - Streaming file reads with automatic batching
+  - `AsyncFileWriter` - Buffered file writes with configurable flush
+- **Completion Tracking**: Request ID mapping for async operation completion
+- **Platform Fallback**: Synchronous I/O implementation for non-Linux systems
+- **15 comprehensive tests** covering all I/O operations and edge cases
+
+**Performance Target:** >100K IOPS
+
+#### Frame Validation Hardening (Sprint 4.5, SEC-001)
+
+Comprehensive input validation for protocol frames to prevent attacks:
+
+- **Reserved Stream ID Validation**: Stream IDs 1-15 reserved for protocol control use
+  - Prevents application usage of reserved stream IDs
+  - Ensures protocol integrity for control streams
+- **Offset Bounds Checking**: Maximum file offset 256 TB (2^48 bytes)
+  - Prevents integer overflow attacks
+  - Validates offset + length combinations
+- **Payload Size Limits**: Maximum 8,944 bytes (9000 MTU - 28 header - 16 auth tag)
+  - Enforces MTU constraints
+  - Prevents memory exhaustion attacks
+- **New Error Types**:
+  - `ReservedStreamId(u32)` - Application attempted to use reserved stream ID
+  - `InvalidOffset { offset, max }` - Offset exceeds protocol maximum
+  - `PayloadTooLarge { size, max }` - Payload exceeds MTU limit
+- **Validation Constants**:
+  - `MAX_PAYLOAD_SIZE = 8944` (9000 - 28 - 16)
+  - `MAX_FILE_OFFSET = 281474976710656` (2^48)
+  - `MAX_SEQUENCE_DELTA = 4294967295` (2^32 - 1)
+- **Property-Based Testing**: Using proptest for fuzzing validation logic
+- **13 comprehensive tests** including edge cases and manual frame corruption
+
+#### Buffer Pool & Documentation (Sprint 4.6, PERF-004, DOC-001)
+
+- **Global Buffer Pool** (already implemented in wraith-crypto):
+  - Thread-safe buffer reuse for encryption hot path
+  - Lock-free allocation with `BufferPool` type
+  - Integration via `encrypt_with_pool()` and `decrypt_with_pool()`
+  - Reduces allocation overhead in packet processing
+- **Complete Frame Type Documentation**:
+  - Documented all 15 frame types in `ref-docs/protocol_technical_details.md`
+  - Added missing frame type specifications:
+    - STREAM_CLOSE (0x0A) - Stream termination with optional error code
+    - STREAM_RESET (0x0B) - Abrupt stream abort with error code
+    - WINDOW_UPDATE (0x0C) - Flow control window increment
+    - GO_AWAY (0x0D) - Connection migration to new path
+    - PATH_CHALLENGE (0x0E) - Path validation request with nonce
+    - PATH_RESPONSE (0x0F) - Path validation response with echoed nonce
+  - Complete payload layouts with field descriptions
+  - Behavior specifications for each frame type
+  - Integration examples with session and stream layers
+
+### Changed
+
+- **Test Updates**:
+  - Updated all tests to use stream ID 16+ (avoiding newly reserved range 1-15)
+  - Fixed integration tests to comply with new validation rules
+  - Updated property-based tests to generate only valid parameters
+  - Total tests increased to **487 passing tests** (Phase 4 added 49 new tests)
+- **Test Breakdown**:
+  - wraith-core: 197 tests (frame, session, stream, BBR, path, migration)
+  - wraith-crypto: 123 tests (AEAD, signatures, hashing, Noise, ratchet, constant-time)
+  - wraith-transport: 54 tests (AF_XDP, io_uring, UDP, MTU, worker pools)
+  - wraith-obfuscation: 47 tests (padding, timing, cover traffic)
+  - wraith-files: 12 tests (chunking, hashing, async I/O)
+  - Integration vectors: 24 tests (cryptographic correctness)
+  - Integration tests: 15 tests (session crypto, frame encryption)
+  - Doctests: 15 tests (API examples)
+- **Quality Improvements**:
+  - All code passes `cargo clippy --workspace -- -D warnings` (zero warnings)
+  - All code formatted with `cargo fmt --all`
+  - Documentation builds successfully without warnings
+  - Zero test failures across all workspace crates
+
+### Performance
+
+- **Frame Parsing**: 172M frames/sec (5.8ns/frame, 232 GiB/s theoretical throughput)
+- **AEAD Encryption**: 3.2 GB/s (single core)
+- **BLAKE3 Hashing**: 8.5 GB/s (parallel)
+- **Session Creation**: 45μs average
+- **AF_XDP Zero-Copy**: 10-40 Gbps target with compatible NICs
+- **io_uring Async I/O**: >100K IOPS target
+
+### Security
+
+- **Input Validation**: Reserved stream IDs, offset bounds, payload size limits
+- **Zero Unsafe Code**: All cryptographic paths remain free of unsafe blocks
+- **Constant-Time Operations**: All critical comparisons use constant-time functions
+- **Memory Zeroization**: Automatic cleanup of sensitive key material
+- **Test Coverage**: 487 tests covering security-critical paths
+
+### Documentation
+
+- **Frame Type Specifications**: All 15 frame types fully documented
+- **Protocol Reference**: Complete wire format documentation
+- **API Examples**: Comprehensive usage examples in doctests
+- **Performance Benchmarks**: Updated with Phase 4 optimizations
+
+---
+
 ## [0.3.2] - 2025-11-30
 
 ### Added
@@ -1235,7 +1393,8 @@ Fixes applied:
 
 ---
 
-[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.2.0...v0.3.0

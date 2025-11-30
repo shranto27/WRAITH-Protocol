@@ -553,6 +553,10 @@ mod tests {
             successes > 0,
             "Should have submitted some tasks successfully"
         );
+        assert!(
+            failures > 0,
+            "Should have rejected some tasks when queue is full"
+        );
 
         // Give workers time to process
         std::thread::sleep(Duration::from_millis(200));

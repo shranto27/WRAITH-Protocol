@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.5] - 2024-11-30
+
+### Added
+- Comprehensive Phase 4 documentation in README
+- Privacy & Obfuscation documentation section
+- Cross-platform build support documentation
+
+### Fixed
+- Windows x86_64-pc-windows-msvc cross-platform compatibility
+  - Platform-specific RawFd type handling in io_uring module
+  - Added cfg attributes for Unix vs Windows builds
+- CI MSRV (Rust 1.85) build failure
+  - Enabled getrandom feature for rand_core dependency
+  - Resolved OsRng import and trait mismatch errors
+- Useless unsigned comparison warning in timing tests
+
+### Changed
+- Updated test coverage documentation (607 tests)
+- Enhanced README with complete obfuscation feature details
+- Improved release artifact naming and organization
+
+---
+
 ## [0.4.0] - 2024-11-30
 
 ### Added
@@ -1517,7 +1540,8 @@ Fixes applied:
 
 ---
 
-[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.4.0...v0.4.5
 [0.4.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.0...v0.3.1

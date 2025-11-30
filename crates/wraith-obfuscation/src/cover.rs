@@ -1,6 +1,5 @@
 //! Cover traffic generation for traffic analysis resistance.
 
-use rand::Rng;
 use std::time::{Duration, Instant};
 
 /// Traffic generation distribution
@@ -80,8 +79,9 @@ impl CoverTrafficGenerator {
     /// Returns a padding size between 0 and 256 bytes
     #[must_use]
     pub fn random_pad_size(&self) -> usize {
-        let mut rng = rand::rng();
-        rng.random_range(0..=256)
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        rng.gen_range(0..=256)
     }
 
     /// Enable/disable generator
@@ -99,7 +99,8 @@ impl CoverTrafficGenerator {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     fn calculate_next_send(now: Instant, rate: f64, distribution: TrafficDistribution) -> Instant {
-        let mut rng = rand::rng();
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
 
         let delay_ms = match distribution {
             TrafficDistribution::Constant => {
@@ -113,11 +114,11 @@ impl CoverTrafficGenerator {
             }
             TrafficDistribution::Poisson { lambda } => {
                 // Generate exponential inter-arrival time
-                let u: f64 = rng.random();
+                let u: f64 = rng.r#gen();
                 // Note: precision loss acceptable for timing
                 ((-u.ln() / lambda) * 1000.0) as u64
             }
-            TrafficDistribution::Uniform { min_ms, max_ms } => rng.random_range(min_ms..=max_ms),
+            TrafficDistribution::Uniform { min_ms, max_ms } => rng.gen_range(min_ms..=max_ms),
         };
 
         now + Duration::from_millis(delay_ms)

@@ -55,7 +55,7 @@ impl PathValidator {
     /// Returns 8-byte challenge data to send to peer
     pub fn initiate_challenge(&mut self, path_id: u64) -> [u8; 8] {
         let mut challenge = [0u8; 8];
-        getrandom::fill(&mut challenge).expect("getrandom failed");
+        getrandom::getrandom(&mut challenge).expect("getrandom failed");
 
         self.pending_challenges
             .insert(challenge, (path_id, Instant::now()));

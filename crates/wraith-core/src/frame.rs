@@ -589,7 +589,7 @@ impl FrameBuilder {
 
         // Write random padding
         let mut padding = vec![0u8; padding_len];
-        getrandom::fill(&mut padding).expect("CSPRNG failure");
+        getrandom::getrandom(&mut padding).expect("CSPRNG failure");
         buf.extend_from_slice(&padding);
 
         Ok(buf)

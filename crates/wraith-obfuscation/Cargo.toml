@@ -11,9 +11,16 @@ authors.workspace = true
 [dependencies]
 wraith-crypto = { workspace = true }
 rand = { workspace = true }
+rand_distr = { workspace = true }
 getrandom = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+base64 = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "obfuscation"
+harness = false

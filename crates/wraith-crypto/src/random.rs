@@ -10,7 +10,7 @@ use crate::CryptoError;
 ///
 /// Returns [`CryptoError::RandomFailed`] if the underlying OS CSPRNG fails.
 pub fn fill_random(buf: &mut [u8]) -> Result<(), CryptoError> {
-    getrandom::fill(buf).map_err(|_| CryptoError::RandomFailed)
+    getrandom::getrandom(buf).map_err(|_| CryptoError::RandomFailed)
 }
 
 /// Generate a random 32-byte array.

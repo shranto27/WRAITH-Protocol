@@ -102,7 +102,8 @@ pub fn get_numa_node_count() -> usize {
 pub unsafe fn allocate_on_node(size: usize, node: usize) -> Option<*mut u8> {
     use libc::{MAP_ANONYMOUS, MAP_PRIVATE, PROT_READ, PROT_WRITE, mmap};
 
-    // Allocate memory with mmap
+    // SAFETY: mmap is a standard POSIX syscall. We request anonymous private mapping with
+    // valid size and protection flags. The returned address is checked for MAP_FAILED.
     let addr = unsafe {
         mmap(
             ptr::null_mut(),
@@ -163,6 +164,8 @@ pub unsafe fn allocate_on_node(size: usize, _node: usize) -> Option<*mut u8> {
 #[cfg(target_os = "linux")]
 pub unsafe fn deallocate_on_node(ptr: *mut u8, size: usize) {
     if !ptr.is_null() {
+        // SAFETY: munmap is a standard POSIX syscall. Pointer and size must match the original
+        // mmap allocation, which is enforced by caller's contract.
         unsafe {
             libc::munmap(ptr as *mut libc::c_void, size);
         }
@@ -175,6 +178,8 @@ pub unsafe fn deallocate_on_node(ptr: *mut u8, size: usize) {
     use std::alloc::{Layout, dealloc};
 
     if !ptr.is_null() {
+        // SAFETY: Layout matches the allocation from allocate_on_node (non-Linux path).
+        // Pointer and size must be valid from original allocation (enforced by caller).
         let layout = Layout::from_size_align_unchecked(size, std::mem::align_of::<u8>());
         dealloc(ptr, layout);
     }
@@ -202,7 +207,8 @@ impl NumaAllocator {
     /// Get the current CPU's NUMA node
     #[cfg(target_os = "linux")]
     fn current_numa_node() -> Option<usize> {
-        // Try to get current CPU
+        // SAFETY: sched_getcpu is a standard Linux syscall that returns the current CPU ID
+        // or -1 on error. No memory safety issues.
         let cpu = unsafe { libc::sched_getcpu() };
         if cpu >= 0 {
             get_numa_node_for_cpu(cpu as usize)
@@ -222,9 +228,11 @@ impl NumaAllocator {
     /// The caller must free the memory with `deallocate()`
     pub unsafe fn allocate(&self, size: usize) -> Option<*mut u8> {
         if let Some(node) = self.node {
+            // SAFETY: Delegates to allocate_on_node with valid node ID.
             unsafe { allocate_on_node(size, node) }
         } else {
-            // Fallback to regular allocation
+            // Fallback to regular allocation on node 0
+            // SAFETY: Delegates to allocate_on_node with default node 0.
             unsafe { allocate_on_node(size, 0) }
         }
     }
@@ -234,6 +242,7 @@ impl NumaAllocator {
     /// # Safety
     /// The caller must ensure the pointer was allocated by this allocator
     pub unsafe fn deallocate(&self, ptr: *mut u8, size: usize) {
+        // SAFETY: Delegates to deallocate_on_node. Caller must ensure ptr/size match allocation.
         unsafe {
             deallocate_on_node(ptr, size);
         }
@@ -271,6 +280,7 @@ mod tests {
 
     #[test]
     fn test_allocate_deallocate() {
+        // SAFETY: Test allocates memory, writes test pattern, then deallocates with matching size.
         unsafe {
             let size = 4096;
             let ptr = allocate_on_node(size, 0);
@@ -302,6 +312,8 @@ mod tests {
     fn test_numa_allocator_allocate_deallocate() {
         let allocator = NumaAllocator::new();
 
+        // SAFETY: Test allocates memory via NUMA allocator, writes/reads test pattern with valid
+        // pointer arithmetic (i < size), then deallocates with matching size.
         unsafe {
             let size = 1024;
             if let Some(ptr) = allocator.allocate(size) {

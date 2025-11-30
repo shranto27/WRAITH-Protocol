@@ -357,6 +357,9 @@ impl Worker {
     fn pin_to_cpu(core_id: usize) -> Result<(), String> {
         use std::mem;
 
+        // SAFETY: sched_setaffinity is a standard Linux syscall. cpu_set_t is properly
+        // zero-initialized via mem::zeroed(), and CPU_ZERO/CPU_SET are standard libc macros.
+        // Passing 0 for pid means current thread, and size is correct for cpu_set_t.
         unsafe {
             let mut cpuset: libc::cpu_set_t = mem::zeroed();
             libc::CPU_ZERO(&mut cpuset);

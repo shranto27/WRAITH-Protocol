@@ -158,8 +158,9 @@ mod simd_parse {
     pub(super) fn parse_header_simd(data: &[u8]) -> (FrameType, FrameFlags, u16, u32, u64, u16) {
         #[cfg(target_arch = "x86_64")]
         {
-            // Safety: We've checked that data.len() >= 28 in the caller
-            // x86_64 supports unaligned loads via _mm_loadu_si128
+            // SAFETY: Caller ensures data.len() >= FRAME_HEADER_SIZE (28 bytes). x86_64 SSE2
+            // supports unaligned loads via _mm_loadu_si128. Pointers are derived from valid
+            // slice data and offsets are within bounds (ptr1 at 0, ptr2 at 12, both < 28).
             unsafe {
                 use core::arch::x86_64::*;
 
@@ -202,7 +203,9 @@ mod simd_parse {
     pub(super) fn parse_header_simd(data: &[u8]) -> (FrameType, FrameFlags, u16, u32, u64, u16) {
         #[cfg(target_arch = "aarch64")]
         {
-            // Safety: We've checked that data.len() >= 28 in the caller
+            // SAFETY: Caller ensures data.len() >= FRAME_HEADER_SIZE (28 bytes). ARM64 NEON
+            // supports unaligned loads via vld1q_u8. Pointers are derived from valid slice
+            // data and offsets are within bounds (ptr1 at 0, ptr2 at 12, both < 28).
             unsafe {
                 use core::arch::aarch64::*;
 

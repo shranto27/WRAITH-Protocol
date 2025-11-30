@@ -16,12 +16,9 @@ pub mod numa;
 pub mod udp;
 pub mod worker;
 
-// AF_XDP and io_uring are Linux-specific
+// AF_XDP is Linux-specific
 #[cfg(target_os = "linux")]
 pub mod af_xdp;
-
-#[cfg(target_os = "linux")]
-pub mod io_uring_impl;
 
 /// Transport configuration
 #[derive(Debug, Clone)]

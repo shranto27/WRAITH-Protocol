@@ -87,6 +87,8 @@ impl AsyncFileReader {
 
         let buffer = vec![0u8; len];
 
+        // SAFETY: Buffer pointer is valid and remains valid until completion since we store
+        // the buffer in pending_reads, which owns it until the read completes.
         unsafe {
             self.engine
                 .read(self.fd, offset, buffer.as_ptr() as *mut u8, len, request_id)?;
@@ -272,6 +274,8 @@ impl AsyncFileWriter {
         // Copy data since it needs to outlive the function call
         let data_copy = data.to_vec();
 
+        // SAFETY: Buffer pointer is valid and remains valid until completion since we store
+        // the buffer in pending_writes, which owns it until the write completes.
         unsafe {
             self.engine.write(
                 self.fd,

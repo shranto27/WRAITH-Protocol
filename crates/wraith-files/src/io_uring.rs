@@ -75,6 +75,8 @@ impl IoUringEngine {
             .build()
             .user_data(user_data);
 
+        // SAFETY: Pushing operation to io_uring submission queue. The buffer pointer (buf)
+        // must remain valid until the completion event, which is enforced by caller's contract.
         unsafe {
             self.ring
                 .submission()
@@ -109,6 +111,8 @@ impl IoUringEngine {
             .build()
             .user_data(user_data);
 
+        // SAFETY: Pushing operation to io_uring submission queue. The buffer pointer (buf)
+        // must remain valid until the completion event, which is enforced by caller's contract.
         unsafe {
             self.ring
                 .submission()

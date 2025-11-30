@@ -163,6 +163,9 @@ mod libbpf_impl {
         pub fn load(path: &str) -> Result<Self, XdpError> {
             let path_c = CString::new(path)?;
 
+            // SAFETY: libbpf FFI calls with valid CString pointers that outlive the calls.
+            // BPF object and program pointers are checked for null before dereferencing.
+            // File descriptors from libbpf are valid kernel handles.
             unsafe {
                 // Open BPF object file
                 let obj = libbpf_sys::bpf_object__open(path_c.as_ptr());
@@ -221,12 +224,16 @@ mod libbpf_impl {
         /// Returns an error if the interface doesn't exist or attachment fails
         pub fn attach(&self, ifname: &str, flags: XdpFlags) -> Result<(), XdpError> {
             let ifname_c = CString::new(ifname)?;
+            // SAFETY: if_nametoindex is a standard libc function that accepts a valid null-terminated
+            // C string pointer. The CString ensures the string is properly null-terminated and valid.
             let ifindex = unsafe { libc::if_nametoindex(ifname_c.as_ptr()) };
 
             if ifindex == 0 {
                 return Err(XdpError::InvalidInterface(ifname.to_string()));
             }
 
+            // SAFETY: bpf_program__fd and bpf_set_link_xdp_fd are valid libbpf FFI calls.
+            // prog pointer is valid (checked during load), ifindex is valid (checked above).
             unsafe {
                 let prog_fd = libbpf_sys::bpf_program__fd(self.prog);
                 let ret = libbpf_sys::bpf_set_link_xdp_fd(ifindex as i32, prog_fd, flags.bits());
@@ -244,12 +251,16 @@ mod libbpf_impl {
         /// * `ifname` - Interface name
         pub fn detach(&self, ifname: &str) -> Result<(), XdpError> {
             let ifname_c = CString::new(ifname)?;
+            // SAFETY: if_nametoindex is a standard libc function that accepts a valid null-terminated
+            // C string pointer. The CString ensures the string is properly null-terminated and valid.
             let ifindex = unsafe { libc::if_nametoindex(ifname_c.as_ptr()) };
 
             if ifindex == 0 {
                 return Err(XdpError::InvalidInterface(ifname.to_string()));
             }
 
+            // SAFETY: bpf_set_link_xdp_fd is a valid libbpf FFI call. Passing -1 as fd detaches
+            // the current XDP program. ifindex is valid (checked above).
             unsafe {
                 let ret = libbpf_sys::bpf_set_link_xdp_fd(ifindex as i32, -1, 0);
                 if ret != 0 {
@@ -279,6 +290,9 @@ mod libbpf_impl {
             let mut stats = XdpStats::default();
             let num_cpus = num_cpus::get() as u32;
 
+            // SAFETY: bpf_map_lookup_elem is a valid libbpf FFI call. stats_map_fd is a valid
+            // BPF map file descriptor (obtained during load). Pointers to stat_type and value
+            // are valid stack-allocated variables with correct lifetime.
             unsafe {
                 for stat_type in 0..4u32 {
                     let mut total = 0u64;
@@ -312,6 +326,9 @@ mod libbpf_impl {
 
     impl Drop for XdpProgram {
         fn drop(&mut self) {
+            // SAFETY: bpf_object__close is a valid libbpf FFI call that safely handles
+            // cleanup of BPF resources. obj pointer is either null (checked) or a valid
+            // pointer obtained from bpf_object__open.
             unsafe {
                 if !self.obj.is_null() {
                     libbpf_sys::bpf_object__close(self.obj);

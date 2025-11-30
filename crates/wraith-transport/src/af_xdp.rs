@@ -186,7 +186,8 @@ impl Umem {
     pub fn new(config: UmemConfig) -> Result<Arc<Self>, AfXdpError> {
         config.validate()?;
 
-        // Allocate memory using mmap
+        // SAFETY: mmap is a standard POSIX syscall. We request anonymous private mapping with
+        // MAP_POPULATE to prefault pages. The returned address is checked for MAP_FAILED.
         let buffer = unsafe {
             libc::mmap(
                 ptr::null_mut(),
@@ -202,9 +203,11 @@ impl Umem {
             return Err(AfXdpError::UmemCreation(Error::last_os_error().to_string()));
         }
 
-        // Lock memory to prevent swapping
+        // SAFETY: mlock is a standard POSIX syscall. Buffer is valid from mmap above.
+        // If mlock fails, we properly clean up with munmap before returning error.
         let ret = unsafe { libc::mlock(buffer, config.size) };
         if ret != 0 {
+            // SAFETY: Cleaning up mmap allocation with matching size.
             unsafe {
                 libc::munmap(buffer, config.size);
             }
@@ -248,6 +251,8 @@ impl Umem {
         }
 
         let offset = index * self.frame_size();
+        // SAFETY: Buffer is valid for the entire UMEM region (mmap'd and mlock'd).
+        // Offset calculation is bounds-checked (index < num_frames), ensuring no overflow.
         Some(unsafe { std::slice::from_raw_parts(self.buffer.add(offset), self.frame_size()) })
     }
 
@@ -258,6 +263,9 @@ impl Umem {
         }
 
         let offset = index * self.frame_size();
+        // SAFETY: Buffer is valid for the entire UMEM region (mmap'd and mlock'd).
+        // Offset calculation is bounds-checked (index < num_frames), ensuring no overflow.
+        // Mutable borrow ensures no aliasing.
         Some(unsafe { std::slice::from_raw_parts_mut(self.buffer.add(offset), self.frame_size()) })
     }
 
@@ -274,6 +282,8 @@ impl Umem {
 
 impl Drop for Umem {
     fn drop(&mut self) {
+        // SAFETY: Cleaning up mmap allocation with matching size from creation.
+        // Buffer pointer is valid (obtained from mmap during creation).
         unsafe {
             libc::munmap(self.buffer as *mut c_void, self.config.size);
         }
@@ -479,7 +489,8 @@ impl AfXdpSocket {
     ) -> Result<Self, AfXdpError> {
         config.validate()?;
 
-        // Create AF_XDP socket
+        // SAFETY: socket() is a standard POSIX syscall with valid AF_XDP family and SOCK_RAW type.
+        // File descriptor is checked for validity (< 0 indicates error).
         let fd = unsafe { libc::socket(libc::AF_XDP as c_int, libc::SOCK_RAW, 0) };
 
         if fd < 0 {
@@ -559,7 +570,8 @@ impl AfXdpSocket {
 
     /// Kick kernel to process TX ring
     fn kick_tx(&self) -> Result<(), AfXdpError> {
-        // Send dummy message to wake kernel
+        // SAFETY: sendto() is a standard POSIX syscall. We pass null pointers for empty message
+        // (0 bytes) with MSG_DONTWAIT flag. This is safe and used to wake the kernel.
         let ret =
             unsafe { libc::sendto(self.fd, ptr::null(), 0, libc::MSG_DONTWAIT, ptr::null(), 0) };
 
@@ -594,6 +606,8 @@ impl AfXdpSocket {
 
 impl Drop for AfXdpSocket {
     fn drop(&mut self) {
+        // SAFETY: close() is a standard POSIX syscall. File descriptor is valid
+        // (obtained from socket() during creation and checked for validity).
         unsafe {
             libc::close(self.fd);
         }

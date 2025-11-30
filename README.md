@@ -9,32 +9,32 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Current Status
 
-**Version:** 0.3.1 (Phases 1-3 Complete - Transport & Kernel Bypass)
+**Version:** 0.3.2 (Phases 1-4 Complete - Optimization & Hardening)
 
-WRAITH Protocol has completed Phases 1-3, delivering a fully functional core protocol, cryptographic layer, and high-performance transport implementation. The latest release includes AF_XDP kernel bypass, io_uring async I/O, UDP fallback, worker thread pools, and NUMA-aware allocation for wire-speed operation.
+WRAITH Protocol has completed Phases 1-4, delivering a fully functional core protocol, cryptographic layer, high-performance transport implementation, and comprehensive optimization and hardening. The latest release includes AF_XDP kernel bypass with zero-copy I/O, BBR pacing enforcement, io_uring async file I/O, and extensive frame validation hardening.
 
-**Phases 1-3 Complete ✅ (347/789 story points, 44% overall progress)**
+**Phases 1-4 Complete ✅ (423/789 story points, 54% overall progress)**
 
 **Implementation Status:**
-- Core workspace: 8 crates (7 active + 1 XDP), ~16,500+ lines of Rust code
-- Test coverage: **438 passing tests** (177 wraith-core + 123 wraith-crypto + 24 vectors + 12 files + 15 integration + 47 wraith-obfuscation + 40 wraith-transport)
-  - wraith-core: 177 tests (frame parsing, session management, stream multiplexing, congestion control, path MTU, connection migration)
+- Core workspace: 8 crates (7 active + 1 XDP), ~18,000+ lines of Rust code
+- Test coverage: **487 passing tests** (197 wraith-core + 123 wraith-crypto + 24 vectors + 12 files + 15 integration + 47 wraith-obfuscation + 54 wraith-transport + 15 doctests)
+  - wraith-core: 197 tests (frame parsing with validation hardening, session management, stream multiplexing, BBR congestion control with pacing, path MTU, connection migration)
   - wraith-crypto: 123 tests (Ed25519 signatures, X25519, Elligator2, XChaCha20-Poly1305 AEAD with key commitment, BLAKE3, Noise_XX, Double Ratchet, replay protection, constant-time ops)
-  - wraith-transport: 40 tests (AF_XDP socket management, worker pools, UDP, MTU discovery, NUMA allocation)
+  - wraith-transport: 54 tests (AF_XDP zero-copy sockets with batch processing, worker pools, UDP, MTU discovery, NUMA allocation)
   - wraith-obfuscation: 47 tests (cover traffic, padding, timing)
-  - wraith-files: 12 tests (io_uring async file I/O, chunking, hashing)
+  - wraith-files: 12 tests (io_uring async file I/O with registered buffers, chunking, hashing)
   - Integration vectors: 24 tests (cryptographic correctness, full pipeline)
   - Integration tests: 15 tests (session crypto, frame encryption, ratcheting)
 - Benchmarks: 24 criterion benchmarks (frame, transport, MTU, worker pool)
 - Performance: 172M frames/sec parsing (~232 GiB/s theoretical throughput)
-- Documentation: 59+ files, 40,000+ lines
+- Documentation: 59+ files, 40,000+ lines, complete frame type specifications
 - CI/CD: GitHub Actions workflows for testing, security scanning, multi-platform releases
 - Security: Dependabot and CodeQL integration, weekly vulnerability scans
 - Code quality: Zero clippy errors, zero unsafe code
@@ -43,24 +43,27 @@ WRAITH Protocol has completed Phases 1-3, delivering a fully functional core pro
 - ✅ **Phase 1:** Frame encoding/decoding with SIMD acceleration, session state machine, stream multiplexing, BBR congestion control
 - ✅ **Phase 2:** Ed25519 signatures, X25519 + Elligator2, XChaCha20-Poly1305 AEAD with key commitment, BLAKE3, Noise_XX handshake, Double Ratchet, replay protection
 - ✅ **Phase 3:** AF_XDP zero-copy networking, io_uring async I/O, UDP transport, worker thread pools, NUMA allocation, MTU discovery
-- ✅ **Advanced Features:** Path MTU Discovery, Connection Migration, Cover Traffic Generation, Buffer Pools, XDP packet filtering
-- ✅ Comprehensive test suite (402 tests)
+- ✅ **Phase 4:** AF_XDP batch processing (rx_batch/tx_batch), BBR pacing enforcement, io_uring registered buffers, frame validation hardening (reserved stream IDs, offset bounds, payload limits)
+- ✅ **Advanced Features:** Path MTU Discovery, Connection Migration, Cover Traffic Generation, Buffer Pools, XDP packet filtering, 15 documented frame types
+- ✅ Comprehensive test suite (487 tests)
 - ✅ Performance benchmarks
 - ✅ Security documentation (SECURITY.md, TECH-DEBT.md)
 
-**Next: Phase 4 - Obfuscation & Stealth (76 story points, 3-4 weeks)**
-- Protocol mimicry (TLS, WebSocket, DNS-over-HTTPS)
-- Advanced padding strategies
-- Timing obfuscation
-- Covert channel support
+**Next: Phase 5 - Discovery & NAT Traversal (123 story points, 5-7 weeks)**
+- Privacy-enhanced DHT implementation
+- STUN-like NAT traversal
+- Relay infrastructure
+- Peer discovery mechanisms
 
 ## Features
 
 ### Performance
 - **Wire-Speed Transfers**: 10+ Gbps throughput with AF_XDP kernel bypass
 - **Sub-Millisecond Latency**: <1ms packet processing with io_uring
-- **Zero-Copy I/O**: Direct NIC-to-application data path
-- **BBR Congestion Control**: Optimal bandwidth utilization
+- **Zero-Copy I/O**: Direct NIC-to-application data path via AF_XDP UMEM
+- **Batch Processing**: rx_batch/tx_batch APIs for efficient packet handling
+- **BBR Congestion Control**: Optimal bandwidth utilization with timer-based pacing
+- **Async File I/O**: io_uring with registered buffers for zero-copy file operations
 
 ### Security
 
@@ -388,12 +391,12 @@ WRAITH Protocol development follows a structured 7-phase approach spanning 32-44
 | **Phase 1** | Foundation & Core Types | 4-6 weeks | 89 | ✅ **Complete** |
 | **Phase 2** | Cryptographic Layer | 4-6 weeks | 102 | ✅ **Complete** |
 | **Phase 3** | Transport & Kernel Bypass | 6-8 weeks | 156 | ✅ **Complete** |
-| **Phase 4** | Obfuscation & Stealth | 3-4 weeks | 76 | 🔄 Next |
-| **Phase 5** | Discovery & NAT Traversal | 5-7 weeks | 123 | Planned |
+| **Phase 4** | Optimization & Hardening (Part I) | 2-3 weeks | 76 | ✅ **Complete** |
+| **Phase 5** | Discovery & NAT Traversal | 5-7 weeks | 123 | 🔄 Next |
 | **Phase 6** | Integration & Testing | 4-5 weeks | 98 | Planned |
-| **Phase 7** | Hardening & Optimization | 6-8 weeks | 145 | Planned |
+| **Phase 7** | Final Hardening & Optimization | 6-8 weeks | 145 | Planned |
 
-**Progress:** 347/789 story points delivered (44% complete)
+**Progress:** 423/789 story points delivered (54% complete)
 
 ### Client Applications (1,028 Story Points)
 
@@ -481,9 +484,10 @@ WRAITH Protocol is designed with security as a core principle:
 - **Buffer Pools:** Pre-allocated buffers reduce allocation overhead without compromising security
 
 **Validation:**
-- **Test Coverage:** 438 tests covering security-critical paths
+- **Test Coverage:** 487 tests covering security-critical paths
 - **Integration Vectors:** 24 integration tests validating cryptographic correctness
 - **Integration Tests:** 15 tests for session crypto and frame encryption
+- **Property-Based Tests:** proptest for frame validation fuzzing
 - **Automated Security Scanning:** Dependabot, CodeQL, RustSec advisories
 
 ### Reporting Vulnerabilities
@@ -511,16 +515,17 @@ WRAITH Protocol is in active development and we welcome contributions of all kin
 - **Translations:** Translate documentation to other languages
 
 ### Current Focus Areas
-1. ✅ **Phase 1 Complete** - Core protocol foundation (177 tests, 172M frames/sec, SIMD acceleration)
+1. ✅ **Phase 1 Complete** - Core protocol foundation (197 tests, 172M frames/sec, SIMD acceleration)
 2. ✅ **Phase 2 Complete** - Cryptographic layer (123 tests, full security suite with Ed25519)
-3. ✅ **Phase 3 Complete** - Transport & kernel bypass (39 tests, AF_XDP, io_uring, worker pools, NUMA)
-4. ✅ **Advanced Security Features** - Replay protection, key commitment, automatic rekey
-5. ✅ **Performance Optimizations** - SIMD frame parsing, buffer pools, fixed-point BBR arithmetic, lazy stream initialization
-6. ✅ **Path MTU Discovery** - Complete PMTUD implementation with binary search probing
-7. ✅ **Connection Migration** - PATH_CHALLENGE/PATH_RESPONSE with RTT measurement
-8. ✅ **Cover Traffic** - Constant, Poisson, and uniform distribution generation
-9. Begin Phase 4 obfuscation layer implementation (protocol mimicry, advanced padding, timing obfuscation)
-10. Maintain test coverage (current: 438 tests, target: maintain 80%+ coverage)
+3. ✅ **Phase 3 Complete** - Transport & kernel bypass (54 tests, AF_XDP, io_uring, worker pools, NUMA)
+4. ✅ **Phase 4 Part I Complete** - Optimization & hardening (487 total tests, AF_XDP batch processing, BBR pacing, io_uring registered buffers, frame validation)
+5. ✅ **Advanced Security Features** - Replay protection, key commitment, automatic rekey, reserved stream ID validation
+6. ✅ **Performance Optimizations** - SIMD frame parsing, buffer pools, fixed-point BBR arithmetic, lazy stream initialization, zero-copy batch processing
+7. ✅ **Path MTU Discovery** - Complete PMTUD implementation with binary search probing
+8. ✅ **Connection Migration** - PATH_CHALLENGE/PATH_RESPONSE with RTT measurement
+9. ✅ **Cover Traffic** - Constant, Poisson, and uniform distribution generation
+10. Begin Phase 5 discovery & NAT traversal implementation (DHT, relay, peer discovery)
+11. Maintain test coverage (current: 487 tests, target: maintain 80%+ coverage)
 
 See [ROADMAP.md](to-dos/ROADMAP.md) for detailed sprint planning and story point estimates.
 
@@ -584,4 +589,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** Phase 1-3 Complete (v0.3.1) | **License:** MIT | **Language:** Rust 2024 | **Tests:** 438 | **Quality:** Zero clippy errors, zero unsafe code
+**Status:** Phase 1-4 Complete (v0.3.2) | **License:** MIT | **Language:** Rust 2024 | **Tests:** 487 | **Quality:** Zero clippy errors, zero unsafe code

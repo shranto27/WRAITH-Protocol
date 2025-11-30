@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.3.2] - 2025-11-30
+
 ### Added
 
 **Phase 4 Part I - Optimization & Hardening (Sprints 4.1-4.6) - COMPLETE ✅ (2025-11-30):**
@@ -58,14 +62,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated all tests to use stream ID 16+ (avoiding newly reserved range 1-15)
   - Fixed integration tests to comply with new validation rules (reserved stream IDs, offset bounds)
   - Updated property-based tests to generate only valid parameters
-  - Total tests increased to 372 passing tests (Phase 4 added 18 new tests)
+  - Total tests increased to 487 passing tests (Phase 4 added 49 new tests)
 
 - **Quality Improvements:**
   - All code passes `cargo clippy --workspace -- -D warnings` (zero warnings)
   - All code formatted with `cargo fmt --all`
   - Documentation builds successfully without warnings (`cargo doc --workspace`)
   - Zero test failures across all workspace crates
-  - Test breakdown: wraith-core (197), wraith-crypto (124), integration (24), wraith-files (12), wraith-transport (15), wraith-obfuscation (47), wraith-transport (55)
+  - Test breakdown: wraith-core (197), wraith-crypto (123), integration vectors (24), wraith-files (12), integration tests (15), wraith-obfuscation (47), wraith-transport (54), doctests (15)
+  - Total: **487 passing tests** across all crates
 
 ### Fixed
 
@@ -1230,7 +1235,8 @@ Fixes applied:
 
 ---
 
-[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.5...v0.2.0

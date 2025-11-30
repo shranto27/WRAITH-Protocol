@@ -45,6 +45,39 @@ pub enum FrameError {
     /// Invalid padding
     #[error("invalid padding")]
     InvalidPadding,
+
+    /// Reserved stream ID (1-15)
+    #[error("reserved stream ID: {0} (1-15 are reserved)")]
+    ReservedStreamId(u32),
+
+    /// Invalid offset (exceeds max file size)
+    #[error("invalid offset: {offset} exceeds max {max}")]
+    InvalidOffset {
+        /// Provided offset
+        offset: u64,
+        /// Maximum allowed offset
+        max: u64,
+    },
+
+    /// Sequence number anomaly detected
+    #[error("sequence anomaly: expected ~{expected}, got {received} (delta: {delta})")]
+    SequenceAnomaly {
+        /// Expected sequence number
+        expected: u32,
+        /// Received sequence number
+        received: u32,
+        /// Delta from expected
+        delta: u32,
+    },
+
+    /// Payload too large
+    #[error("payload too large: {size} exceeds max {max}")]
+    PayloadTooLarge {
+        /// Payload size
+        size: usize,
+        /// Maximum allowed
+        max: usize,
+    },
 }
 
 /// Session-level errors

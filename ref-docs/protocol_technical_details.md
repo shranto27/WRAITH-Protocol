@@ -621,7 +621,98 @@ STREAM_OPEN Payload:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.9 PATH_CHALLENGE/PATH_RESPONSE (0x0E, 0x0F)
+### 4.9 STREAM_CLOSE Frame (0x0A)
+
+Graceful stream termination:
+
+```
+STREAM_CLOSE Payload:
+├─────────────────────────────────────────────────────────────────────┤
+│  Error Code (4 bytes):                                              │
+│    0x00000000: NO_ERROR - Normal close                             │
+│    0x00000001: CANCEL - User-initiated cancellation                │
+│    0x00000002: STOPPED - Receiver requested stop (STOP_SENDING)    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Final Offset (8 bytes): Last byte successfully received           │
+└─────────────────────────────────────────────────────────────────────┘
+
+Stream ID: Identifies stream to close
+Flags.FIN: Set to indicate clean stream closure
+```
+
+**Behavior**: Sender stops transmitting on this stream. Receiver may continue sending until it also sends STREAM_CLOSE (for bidirectional streams).
+
+### 4.10 STREAM_RESET Frame (0x0B)
+
+Abrupt stream termination (error condition):
+
+```
+STREAM_RESET Payload:
+├─────────────────────────────────────────────────────────────────────┤
+│  Error Code (4 bytes):                                              │
+│    0x00000000: NO_ERROR - Clean abort                              │
+│    0x00000001: TIMEOUT - Stream idle timeout                       │
+│    0x00000002: RESOURCE_LIMIT - Out of buffer space                │
+│    0x00000003: INTEGRITY_ERROR - Chunk hash mismatch               │
+│    0x00000004: PROTOCOL_ERROR - Invalid frame sequence             │
+├─────────────────────────────────────────────────────────────────────┤
+│  Final Size (8 bytes): Number of bytes sent before reset           │
+└─────────────────────────────────────────────────────────────────────┘
+
+Stream ID: Stream to reset
+Flags: No flags used
+```
+
+**Behavior**: Immediately terminates the stream. All buffered data for this stream is discarded by both sender and receiver.
+
+### 4.11 WINDOW_UPDATE Frame (0x0C)
+
+Flow control window credit:
+
+```
+WINDOW_UPDATE Payload:
+├─────────────────────────────────────────────────────────────────────┤
+│  Window Increment (8 bytes): Additional bytes peer may send        │
+└─────────────────────────────────────────────────────────────────────┘
+
+Stream ID:
+  - 0: Connection-level flow control (affects all streams)
+  - >0: Stream-level flow control (affects single stream)
+
+Flags: No flags used
+```
+
+**Maximum Window**: 2^62 - 1 bytes (QUIC-compatible limit).
+
+**Behavior**: Receiver sends when it has consumed data and freed buffer space. Sender tracks available window and blocks when window exhausted.
+
+### 4.12 GO_AWAY Frame (0x0D)
+
+Graceful connection shutdown:
+
+```
+GO_AWAY Payload:
+├─────────────────────────────────────────────────────────────────────┤
+│  Last Stream ID (4 bytes): Highest stream ID processed             │
+├─────────────────────────────────────────────────────────────────────┤
+│  Error Code (4 bytes):                                              │
+│    0x00000000: NO_ERROR - Graceful shutdown                        │
+│    0x00000001: SERVER_SHUTDOWN - Planned maintenance                │
+│    0x00000002: OVERLOAD - Resource exhaustion                      │
+│    0x00000003: VERSION_MISMATCH - Protocol incompatibility         │
+├─────────────────────────────────────────────────────────────────────┤
+│  Reason Length (2 bytes)                                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  Reason (UTF-8 string, variable)                                    │
+└─────────────────────────────────────────────────────────────────────┘
+
+Stream ID: 0 (connection-level)
+Flags: No flags used
+```
+
+**Behavior**: Sender stops accepting new streams but allows existing streams (ID ≤ Last Stream ID) to complete. Receiver should finish processing existing streams then close connection.
+
+### 4.13 PATH_CHALLENGE/PATH_RESPONSE (0x0E, 0x0F)
 
 Connection migration validation:
 

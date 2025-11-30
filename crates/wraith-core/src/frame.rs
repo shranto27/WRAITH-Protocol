@@ -14,6 +14,17 @@
 use crate::FRAME_HEADER_SIZE;
 use crate::error::FrameError;
 
+/// Maximum payload size (9000 - header - auth tag = 8944)
+const MAX_PAYLOAD_SIZE: usize = 8944;
+
+/// Maximum file offset (256 TB - reasonable upper bound)
+const MAX_FILE_OFFSET: u64 = 256 * 1024 * 1024 * 1024 * 1024;
+
+/// Maximum sequence number delta (detect reordering/attacks)
+/// Reserved for future sequence anomaly detection
+#[allow(dead_code)]
+const MAX_SEQUENCE_DELTA: u32 = 1_000_000;
+
 /// Frame types as defined in the protocol specification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -287,6 +298,9 @@ impl<'a> Frame<'a> {
     /// Returns `FrameError::ReservedFrameType` if the frame type is in the reserved range.
     /// Returns `FrameError::InvalidFrameType` if the frame type byte is unrecognized.
     /// Returns `FrameError::PayloadOverflow` if the declared payload length exceeds available data.
+    /// Returns `FrameError::ReservedStreamId` if stream ID is in reserved range (1-15).
+    /// Returns `FrameError::InvalidOffset` if offset exceeds maximum file size.
+    /// Returns `FrameError::PayloadTooLarge` if payload exceeds maximum size.
     pub fn parse(data: &'a [u8]) -> Result<Self, FrameError> {
         if data.len() < FRAME_HEADER_SIZE {
             return Err(FrameError::TooShort {
@@ -311,6 +325,27 @@ impl<'a> Frame<'a> {
 
         if FRAME_HEADER_SIZE + payload_len as usize > data.len() {
             return Err(FrameError::PayloadOverflow);
+        }
+
+        // Validate stream ID (1-15 are reserved for protocol use)
+        if stream_id > 0 && stream_id < 16 {
+            return Err(FrameError::ReservedStreamId(stream_id as u32));
+        }
+
+        // Validate offset (sanity check against max file size)
+        if offset > MAX_FILE_OFFSET {
+            return Err(FrameError::InvalidOffset {
+                offset,
+                max: MAX_FILE_OFFSET,
+            });
+        }
+
+        // Validate payload length
+        if payload_len as usize > MAX_PAYLOAD_SIZE {
+            return Err(FrameError::PayloadTooLarge {
+                size: payload_len as usize,
+                max: MAX_PAYLOAD_SIZE,
+            });
         }
 
         Ok(Self {
@@ -617,7 +652,7 @@ mod tests {
         for ft in frame_types {
             let frame = FrameBuilder::new()
                 .frame_type(ft)
-                .stream_id(1)
+                .stream_id(16)
                 .sequence(1)
                 .payload(&[0u8; 16])
                 .build(64)
@@ -755,7 +790,8 @@ mod tests {
 
     #[test]
     fn test_frame_offset_large() {
-        let large_offset = 0x0123_4567_89AB_CDEF_u64;
+        // Use a large offset within MAX_FILE_OFFSET
+        let large_offset = MAX_FILE_OFFSET - 1024;
         let frame = FrameBuilder::new()
             .frame_type(FrameType::Data)
             .offset(large_offset)
@@ -768,7 +804,7 @@ mod tests {
 
     #[test]
     fn test_frame_builder_default_type() {
-        let frame = FrameBuilder::new().stream_id(1).build(64).unwrap();
+        let frame = FrameBuilder::new().stream_id(16).build(64).unwrap();
 
         let parsed = Frame::parse(&frame).unwrap();
         assert_eq!(parsed.frame_type(), FrameType::Data);
@@ -810,16 +846,16 @@ mod tests {
 
     #[test]
     fn test_frame_stream_id_range() {
-        // Test client-initiated stream (odd)
-        let frame = FrameBuilder::new().stream_id(1).build(64).unwrap();
+        // Test client-initiated stream (odd, above reserved range)
+        let frame = FrameBuilder::new().stream_id(17).build(64).unwrap();
         let parsed = Frame::parse(&frame).unwrap();
-        assert_eq!(parsed.stream_id(), 1);
+        assert_eq!(parsed.stream_id(), 17);
         assert_eq!(parsed.stream_id() % 2, 1);
 
-        // Test server-initiated stream (even)
-        let frame = FrameBuilder::new().stream_id(2).build(64).unwrap();
+        // Test server-initiated stream (even, above reserved range)
+        let frame = FrameBuilder::new().stream_id(16).build(64).unwrap();
         let parsed = Frame::parse(&frame).unwrap();
-        assert_eq!(parsed.stream_id(), 2);
+        assert_eq!(parsed.stream_id(), 16);
         assert_eq!(parsed.stream_id() % 2, 0);
 
         // Test maximum stream ID
@@ -832,9 +868,9 @@ mod tests {
     fn test_scalar_vs_simd_parsing() {
         // Test that scalar and SIMD parsing produce identical results
         let test_cases = vec![
-            (FrameType::Data, 1, 100, 0, "test payload"),
+            (FrameType::Data, 16, 100, 0, "test payload"),
             (FrameType::Ack, 42, 1000, 1024, "ack data"),
-            (FrameType::Ping, u16::MAX, u32::MAX, u64::MAX, ""),
+            (FrameType::Ping, u16::MAX, u32::MAX, MAX_FILE_OFFSET, ""),
             (FrameType::StreamOpen, 0, 0, 0, "stream open"),
             (FrameType::Close, 999, 999999, 123456789, "close payload"),
         ];
@@ -1036,10 +1072,10 @@ mod tests {
 
             #[test]
             fn prop_roundtrip_preserves_data(
-                stream_id in any::<u16>(),
+                stream_id in prop::num::u16::ANY.prop_filter("not reserved", |&id| id == 0 || id >= 16),
                 sequence in any::<u32>(),
-                offset in any::<u64>(),
-                payload in prop::collection::vec(any::<u8>(), 0..1024),
+                offset in 0u64..=MAX_FILE_OFFSET,
+                payload in prop::collection::vec(any::<u8>(), 0..MAX_PAYLOAD_SIZE.min(1024)),
                 total_size in 128usize..2048
             ) {
                 let frame_bytes = FrameBuilder::new()
@@ -1114,5 +1150,249 @@ mod tests {
                 prop_assert_eq!(parsed.payload().len(), payload_len);
             }
         }
+    }
+
+    // Sprint 4.5: Frame Validation Hardening Tests
+
+    #[test]
+    fn test_reserved_stream_id_rejection() {
+        // Stream IDs 1-15 are reserved
+        for stream_id in 1u16..16 {
+            let mut frame = FrameBuilder::new()
+                .frame_type(FrameType::Data)
+                .stream_id(100) // Start with valid ID
+                .build(64)
+                .unwrap();
+
+            // Manually set reserved stream ID
+            let bytes = stream_id.to_be_bytes();
+            frame[10] = bytes[0];
+            frame[11] = bytes[1];
+
+            let result = Frame::parse(&frame);
+            assert!(
+                matches!(result, Err(FrameError::ReservedStreamId(id)) if id == stream_id as u32),
+                "Expected ReservedStreamId error for stream ID {}, got {:?}",
+                stream_id,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn test_stream_id_zero_allowed() {
+        // Stream ID 0 is allowed (connection-level control)
+        let frame = FrameBuilder::new()
+            .frame_type(FrameType::Control)
+            .stream_id(0)
+            .build(64)
+            .unwrap();
+
+        let parsed = Frame::parse(&frame).unwrap();
+        assert_eq!(parsed.stream_id(), 0);
+    }
+
+    #[test]
+    fn test_stream_id_above_reserved_allowed() {
+        // Stream ID 16 and above are valid
+        for stream_id in [16, 17, 100, 1000, 65535] {
+            let frame = FrameBuilder::new()
+                .frame_type(FrameType::Data)
+                .stream_id(stream_id)
+                .build(64)
+                .unwrap();
+
+            let parsed = Frame::parse(&frame).unwrap();
+            assert_eq!(parsed.stream_id(), stream_id);
+        }
+    }
+
+    #[test]
+    fn test_offset_bounds_valid() {
+        // Valid offsets up to MAX_FILE_OFFSET
+        let valid_offsets = [
+            0,
+            1024,
+            1024 * 1024,
+            1024 * 1024 * 1024,
+            MAX_FILE_OFFSET - 1,
+            MAX_FILE_OFFSET,
+        ];
+
+        for offset in valid_offsets {
+            let frame = FrameBuilder::new()
+                .frame_type(FrameType::Data)
+                .stream_id(100)
+                .offset(offset)
+                .build(64)
+                .unwrap();
+
+            let parsed = Frame::parse(&frame).unwrap();
+            assert_eq!(parsed.offset(), offset);
+        }
+    }
+
+    #[test]
+    fn test_offset_bounds_invalid() {
+        // Test offset validation by manually constructing invalid frames
+        // Layout: nonce(8) + type(1) + flags(1) + stream(2) + seq(4) + offset(8) + len(2) + reserved(2)
+        let mut frame = vec![0u8; FRAME_HEADER_SIZE];
+
+        // Set valid frame type (DATA = 0x01)
+        frame[8] = 0x01;
+
+        // Set stream ID to 100 (valid, not reserved)
+        frame[10..12].copy_from_slice(&100u16.to_be_bytes());
+
+        // Test various invalid offsets
+        let invalid_offsets = [MAX_FILE_OFFSET + 1, MAX_FILE_OFFSET + 1024, u64::MAX];
+
+        for offset in invalid_offsets {
+            // Set invalid offset at bytes 16-23
+            frame[16..24].copy_from_slice(&offset.to_be_bytes());
+
+            let result = Frame::parse(&frame);
+            assert!(
+                matches!(
+                    result,
+                    Err(FrameError::InvalidOffset { offset: o, max: m })
+                    if o == offset && m == MAX_FILE_OFFSET
+                ),
+                "Expected InvalidOffset error for offset {}, got {:?}",
+                offset,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn test_sequence_number_validation_valid() {
+        // Valid sequence numbers within MAX_SEQUENCE_DELTA
+        let base_seq = 1000;
+        let valid_deltas = [0, 1, 100, 1000, 10000, MAX_SEQUENCE_DELTA];
+
+        for delta in valid_deltas {
+            let seq = base_seq + delta;
+            let frame = FrameBuilder::new()
+                .frame_type(FrameType::Data)
+                .stream_id(100)
+                .sequence(seq)
+                .build(64)
+                .unwrap();
+
+            let parsed = Frame::parse(&frame).unwrap();
+            assert_eq!(parsed.sequence(), seq);
+        }
+    }
+
+    #[test]
+    fn test_payload_size_limits_valid() {
+        // Valid payload sizes up to MAX_PAYLOAD_SIZE
+        let valid_sizes = [0, 1, 100, 1024, 4096, MAX_PAYLOAD_SIZE];
+
+        for size in valid_sizes {
+            let payload = vec![0x42; size];
+            let frame = FrameBuilder::new()
+                .frame_type(FrameType::Data)
+                .stream_id(100)
+                .payload(&payload)
+                .build(FRAME_HEADER_SIZE + size)
+                .unwrap();
+
+            let parsed = Frame::parse(&frame).unwrap();
+            assert_eq!(parsed.payload().len(), size);
+        }
+    }
+
+    #[test]
+    fn test_payload_size_limits_invalid() {
+        // Test payload size validation by manually constructing invalid frame
+        // Make frame large enough to avoid PayloadOverflow error
+        let invalid_len = (MAX_PAYLOAD_SIZE + 1) as u16;
+        let mut frame = vec![0u8; FRAME_HEADER_SIZE + invalid_len as usize];
+
+        // Set valid frame type (DATA = 0x01)
+        frame[8] = 0x01;
+
+        // Set stream ID to 100 (valid, not reserved)
+        frame[10..12].copy_from_slice(&100u16.to_be_bytes());
+
+        // Set payload length to exceed MAX_PAYLOAD_SIZE
+        frame[24..26].copy_from_slice(&invalid_len.to_be_bytes());
+
+        let result = Frame::parse(&frame);
+        assert!(
+            matches!(
+                result,
+                Err(FrameError::PayloadTooLarge { size, max })
+                if size == invalid_len as usize && max == MAX_PAYLOAD_SIZE
+            ),
+            "Expected PayloadTooLarge error, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_payload_size_max_boundary() {
+        // Test exact MAX_PAYLOAD_SIZE boundary
+        let payload = vec![0x55; MAX_PAYLOAD_SIZE];
+        let frame = FrameBuilder::new()
+            .frame_type(FrameType::Data)
+            .stream_id(100)
+            .payload(&payload)
+            .build(FRAME_HEADER_SIZE + MAX_PAYLOAD_SIZE)
+            .unwrap();
+
+        let parsed = Frame::parse(&frame).unwrap();
+        assert_eq!(parsed.payload().len(), MAX_PAYLOAD_SIZE);
+    }
+
+    #[test]
+    fn test_validation_constants() {
+        // Verify that constants are set to expected values
+        assert_eq!(MAX_PAYLOAD_SIZE, 8944);
+        assert_eq!(MAX_FILE_OFFSET, 256 * 1024 * 1024 * 1024 * 1024);
+        assert_eq!(MAX_SEQUENCE_DELTA, 1_000_000);
+    }
+
+    #[test]
+    fn test_combined_validation() {
+        // Test frame with all valid fields near boundaries
+        let frame = FrameBuilder::new()
+            .frame_type(FrameType::Data)
+            .stream_id(16) // Just above reserved range
+            .sequence(500_000) // Well within delta
+            .offset(100 * 1024 * 1024 * 1024) // 100 GB
+            .payload(&vec![0xAB; 4096])
+            .build(FRAME_HEADER_SIZE + 4096)
+            .unwrap();
+
+        let parsed = Frame::parse(&frame).unwrap();
+        assert_eq!(parsed.frame_type(), FrameType::Data);
+        assert_eq!(parsed.stream_id(), 16);
+        assert_eq!(parsed.sequence(), 500_000);
+        assert_eq!(parsed.offset(), 100 * 1024 * 1024 * 1024);
+        assert_eq!(parsed.payload().len(), 4096);
+    }
+
+    #[test]
+    fn test_multiple_validation_failures() {
+        // Test that first validation error is returned
+        let mut frame = FrameBuilder::new()
+            .frame_type(FrameType::Data)
+            .stream_id(100)
+            .build(64)
+            .unwrap();
+
+        // Set reserved stream ID (should fail first)
+        frame[10] = 0;
+        frame[11] = 5; // Stream ID 5
+
+        let result = Frame::parse(&frame);
+        assert!(
+            matches!(result, Err(FrameError::ReservedStreamId(5))),
+            "Expected ReservedStreamId error first, got {:?}",
+            result
+        );
     }
 }

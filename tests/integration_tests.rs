@@ -34,7 +34,7 @@ fn generate_connection_id() -> ConnectionId {
 #[test]
 fn test_frame_payload_encryption_roundtrip() {
     // Create a frame with payload
-    let stream_id = 1u16;
+    let stream_id = 16u16;
     let payload = b"Hello, WRAITH Protocol!";
     let frame_data = FrameBuilder::new()
         .frame_type(FrameType::Data)
@@ -81,7 +81,7 @@ fn test_frame_payload_encryption_roundtrip() {
 fn test_frame_tampering_detection() {
     let frame_data = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"sensitive data")
         .build(TEST_FRAME_SIZE)
         .expect("Failed to build frame");
@@ -108,7 +108,7 @@ fn test_frame_tampering_detection() {
 fn test_wrong_connection_id_detection() {
     let frame_data = FrameBuilder::new()
         .frame_type(FrameType::Ack)
-        .stream_id(1)
+        .stream_id(16)
         .build(TEST_FRAME_SIZE)
         .expect("Failed to build frame");
 
@@ -174,7 +174,7 @@ fn test_session_crypto_frame_exchange() {
     // Alice creates and encrypts a DATA frame
     let alice_frame = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"Hello Bob!")
         .build(TEST_FRAME_SIZE)
         .expect("Failed to build frame");
@@ -189,7 +189,7 @@ fn test_session_crypto_frame_exchange() {
     // Bob creates and encrypts an ACK frame
     let bob_ack = FrameBuilder::new()
         .frame_type(FrameType::Ack)
-        .stream_id(1)
+        .stream_id(16)
         .build(TEST_FRAME_SIZE)
         .expect("Failed to build frame");
 
@@ -220,7 +220,7 @@ fn test_double_ratchet_frame_encryption() {
     // Alice encrypts a frame payload
     let frame_data = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"Ratcheted payload")
         .build(TEST_FRAME_SIZE)
         .expect("Failed to build frame");
@@ -253,7 +253,7 @@ fn test_double_ratchet_bidirectional_frames() {
     // Alice -> Bob: Data frame
     let alice_data = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"Request data")
         .build(TEST_FRAME_SIZE)
         .unwrap();
@@ -265,7 +265,7 @@ fn test_double_ratchet_bidirectional_frames() {
     // Bob -> Alice: Ack frame
     let bob_ack = FrameBuilder::new()
         .frame_type(FrameType::Ack)
-        .stream_id(1)
+        .stream_id(16)
         .offset(100)
         .build(TEST_FRAME_SIZE)
         .unwrap();
@@ -277,7 +277,7 @@ fn test_double_ratchet_bidirectional_frames() {
     // Alice -> Bob: More data
     let alice_data2 = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .offset(100)
         .payload(b"More data")
         .build(TEST_FRAME_SIZE)
@@ -300,7 +300,7 @@ fn test_forward_secrecy_with_frames() {
     // Create and encrypt a frame with key1
     let frame1 = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"Message 1")
         .build(TEST_FRAME_SIZE)
         .unwrap();
@@ -315,7 +315,7 @@ fn test_forward_secrecy_with_frames() {
     // Create and encrypt a frame with key2
     let frame2 = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"Message 2")
         .build(TEST_FRAME_SIZE)
         .unwrap();
@@ -490,7 +490,7 @@ fn test_rekey_frame_with_new_keys() {
     // Communication continues with new keys
     let data_frame = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"Post-rekey data")
         .build(TEST_FRAME_SIZE)
         .unwrap();
@@ -583,7 +583,7 @@ fn test_x25519_to_session_keys() {
     // Test encrypted frame exchange
     let frame = FrameBuilder::new()
         .frame_type(FrameType::Data)
-        .stream_id(1)
+        .stream_id(16)
         .payload(b"Post-handshake message")
         .build(TEST_FRAME_SIZE)
         .unwrap();

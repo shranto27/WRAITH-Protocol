@@ -92,6 +92,10 @@ pub struct BbrState {
     rounds_without_growth: u64,
     /// Prior `btl_bw` (for growth detection)
     prior_btl_bw: u64,
+    /// Next allowed send time (for pacing)
+    next_send_time: Instant,
+    /// Pacing rate in bytes per second
+    pacing_rate_bps: u64,
 }
 
 /// `BBR` algorithm phases
@@ -133,6 +137,8 @@ impl BbrState {
             probe_bw_cycle_idx: 0,
             rounds_without_growth: 0,
             prior_btl_bw: 0,
+            next_send_time: now,
+            pacing_rate_bps: 10_000_000 / 8, // Initial 10 Mbps
         }
     }
 
@@ -172,6 +178,9 @@ impl BbrState {
 
             // Update `BDP`
             self.bdp = (self.btl_bw as f64 * self.min_rtt.as_secs_f64()) as u64;
+
+            // Update pacing rate
+            self.update_pacing_rate();
         }
     }
 
@@ -186,6 +195,39 @@ impl BbrState {
         }
         // Use fixed-point gain for fast calculation
         apply_gain_fp(self.btl_bw, self.pacing_gain_fp)
+    }
+
+    /// Check if sending is allowed based on pacing
+    ///
+    /// Returns true if enough time has elapsed since the last send
+    /// based on the pacing rate.
+    #[must_use]
+    pub fn can_send_paced(&self, _bytes: usize) -> bool {
+        Instant::now() >= self.next_send_time
+    }
+
+    /// Update pacing after sending a packet
+    ///
+    /// Calculates the delay until the next packet can be sent based on
+    /// the pacing rate and packet size.
+    pub fn on_packet_sent_paced(&mut self, bytes: usize) {
+        // Update inflight tracking (existing behavior)
+        self.on_packet_sent(bytes as u64);
+
+        // Calculate pacing delay
+        if self.pacing_rate_bps > 0 {
+            // delay = bytes / rate (in seconds)
+            // Convert to nanoseconds: bytes * 8 * 1e9 / rate
+            let delay_ns = (bytes as u64 * 8 * 1_000_000_000) / self.pacing_rate_bps;
+            self.next_send_time = Instant::now() + Duration::from_nanos(delay_ns);
+        }
+    }
+
+    /// Update pacing rate based on current bandwidth estimate
+    ///
+    /// Called internally when bandwidth estimate changes.
+    fn update_pacing_rate(&mut self) {
+        self.pacing_rate_bps = self.pacing_rate();
     }
 
     /// Get current congestion window
@@ -318,6 +360,7 @@ impl BbrState {
         self.cwnd_gain = 2.0;
         self.cwnd_gain_fp = CWND_GAIN_FP; // Fixed-point cwnd gain
         self.state_start = Instant::now();
+        self.update_pacing_rate();
     }
 
     /// Enter `ProbeBw` phase
@@ -326,6 +369,7 @@ impl BbrState {
         self.probe_bw_cycle_idx = 0;
         self.set_probe_bw_gains();
         self.state_start = Instant::now();
+        self.update_pacing_rate();
     }
 
     /// Enter `ProbeRtt` phase
@@ -338,6 +382,7 @@ impl BbrState {
         self.probe_rtt_start = Some(Instant::now());
         self.last_probe_rtt = Instant::now();
         self.state_start = Instant::now();
+        self.update_pacing_rate();
     }
 
     /// Exit `ProbeRtt` phase
@@ -365,6 +410,7 @@ impl BbrState {
         self.pacing_gain_fp = PROBE_BW_GAINS_FP[self.probe_bw_cycle_idx]; // Fixed-point version
         self.cwnd_gain = 2.0;
         self.cwnd_gain_fp = CWND_GAIN_FP; // Fixed-point version
+        self.update_pacing_rate();
     }
 
     /// Get minimum `RTT`
@@ -1196,5 +1242,171 @@ mod tests {
         assert_eq!(bbr.phase(), BbrPhase::Startup);
         let expected = apply_gain_fp(bandwidth, STARTUP_GAIN_FP);
         assert_eq!(rate, expected);
+    }
+
+    // ========================================================================
+    // Pacing Enforcement Tests (Sprint 4.3)
+    // ========================================================================
+
+    #[test]
+    fn test_can_send_paced_initial() {
+        let bbr = BbrState::new();
+
+        // Initially should be able to send
+        assert!(bbr.can_send_paced(1500));
+    }
+
+    #[test]
+    fn test_on_packet_sent_paced() {
+        let mut bbr = BbrState::new();
+
+        // Set up bandwidth to get non-zero pacing rate
+        bbr.update_bandwidth(10_000_000, Duration::from_secs(1)); // 10 MB/s
+
+        // Send a packet
+        let packet_size = 1500;
+        bbr.on_packet_sent_paced(packet_size);
+
+        // Should have updated next_send_time
+        assert!(bbr.next_send_time > Instant::now());
+
+        // Verify inflight was updated
+        assert_eq!(bbr.bytes_in_flight(), packet_size as u64);
+    }
+
+    #[test]
+    fn test_pacing_delay_calculation() {
+        let mut bbr = BbrState::new();
+
+        // Set up a known bandwidth
+        let bandwidth = 1_000_000u64; // 1 MB/s = 125 KB/s
+        bbr.update_bandwidth(bandwidth, Duration::from_secs(1));
+
+        let before = Instant::now();
+        bbr.on_packet_sent_paced(1500); // 1500 bytes
+        let after = bbr.next_send_time;
+
+        // Calculate expected delay
+        // pacing_rate = bandwidth * gain (startup = 2.89)
+        let pacing_rate = apply_gain_fp(bandwidth, STARTUP_GAIN_FP);
+        // delay = bytes * 8 / rate (in seconds)
+        let expected_delay_ns = (1500u64 * 8 * 1_000_000_000) / pacing_rate;
+
+        // Next send time should be roughly current + delay
+        let actual_delay = after.duration_since(before);
+        let expected = Duration::from_nanos(expected_delay_ns);
+
+        // Allow 10% tolerance for timing variations
+        let tolerance = expected / 10;
+        let diff = if actual_delay > expected {
+            actual_delay - expected
+        } else {
+            expected - actual_delay
+        };
+
+        assert!(
+            diff <= tolerance,
+            "Pacing delay {} differs from expected {} by more than 10%",
+            actual_delay.as_nanos(),
+            expected.as_nanos()
+        );
+    }
+
+    #[test]
+    fn test_pacing_rate_updates_on_bandwidth_change() {
+        let mut bbr = BbrState::new();
+
+        let initial_rate = bbr.pacing_rate_bps;
+
+        // Update bandwidth
+        bbr.update_bandwidth(50_000_000, Duration::from_secs(1)); // 50 MB/s
+
+        // Pacing rate should have updated
+        assert_ne!(bbr.pacing_rate_bps, initial_rate);
+        assert!(bbr.pacing_rate_bps > initial_rate);
+
+        // Should match calculated pacing rate
+        assert_eq!(bbr.pacing_rate_bps, bbr.pacing_rate());
+    }
+
+    #[test]
+    fn test_pacing_rate_updates_on_phase_change() {
+        let mut bbr = BbrState::new();
+
+        // Set up bandwidth
+        bbr.update_bandwidth(10_000_000, Duration::from_secs(1));
+
+        let startup_rate = bbr.pacing_rate_bps;
+
+        // Transition to Drain
+        bbr.enter_drain();
+
+        // Pacing rate should change (Drain has lower gain than Startup)
+        assert_ne!(bbr.pacing_rate_bps, startup_rate);
+        assert!(bbr.pacing_rate_bps < startup_rate);
+
+        let drain_rate = bbr.pacing_rate_bps;
+
+        // Transition to ProbeBw
+        bbr.enter_probe_bw();
+
+        // Pacing rate should change again
+        assert_ne!(bbr.pacing_rate_bps, drain_rate);
+    }
+
+    #[test]
+    fn test_pacing_enforcement_prevents_bursts() {
+        let mut bbr = BbrState::new();
+
+        // Set up bandwidth
+        bbr.update_bandwidth(10_000_000, Duration::from_secs(1));
+
+        // Send first packet
+        bbr.on_packet_sent_paced(1500);
+
+        // Immediately check if we can send again
+        // Should be false because not enough time has passed
+        assert!(!bbr.can_send_paced(1500));
+
+        // Simulate waiting for pacing delay
+        let delay_ns = (1500u64 * 8 * 1_000_000_000) / bbr.pacing_rate_bps;
+        thread::sleep(Duration::from_nanos(delay_ns));
+
+        // Now should be able to send
+        assert!(bbr.can_send_paced(1500));
+    }
+
+    #[test]
+    fn test_pacing_with_zero_bandwidth() {
+        let mut bbr = BbrState::new();
+
+        // With zero bandwidth (initial state)
+        assert_eq!(bbr.btl_bw, 0);
+
+        // Should still be able to send (uses default initial rate)
+        assert!(bbr.can_send_paced(1500));
+
+        bbr.on_packet_sent_paced(1500);
+
+        // Should have set next_send_time based on initial rate
+        assert!(bbr.next_send_time > Instant::now());
+    }
+
+    #[test]
+    fn test_pacing_integration_with_existing_api() {
+        let mut bbr = BbrState::new();
+
+        // Set up bandwidth
+        bbr.update_bandwidth(25_000_000, Duration::from_secs(1));
+
+        // Both old and new send APIs should work
+        bbr.on_packet_sent(1500); // Old API
+        let inflight_old = bbr.bytes_in_flight();
+
+        bbr.on_packet_sent_paced(1500); // New API
+        let inflight_new = bbr.bytes_in_flight();
+
+        // New API should include old behavior (tracking inflight)
+        assert_eq!(inflight_new, inflight_old + 1500);
     }
 }

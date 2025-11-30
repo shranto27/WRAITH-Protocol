@@ -11,6 +11,7 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+pub mod io_uring;
 pub mod mtu;
 pub mod numa;
 pub mod udp;

@@ -57,4 +57,16 @@ pub enum CryptoError {
     /// Nonce overflow (counter exhausted)
     #[error("nonce counter exhausted, rekey required")]
     NonceOverflow,
+
+    /// Replay attack detected (duplicate sequence number)
+    #[error("replay attack detected")]
+    ReplayDetected,
+
+    /// Invalid signature
+    #[error("invalid signature")]
+    InvalidSignature,
+
+    /// Invalid public key
+    #[error("invalid public key")]
+    InvalidPublicKey,
 }

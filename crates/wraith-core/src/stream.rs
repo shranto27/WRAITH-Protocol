@@ -2,9 +2,17 @@
 //!
 //! Streams are logical bidirectional byte channels within a session,
 //! used for individual file transfers.
+//!
+//! ## Lazy Initialization
+//!
+//! Streams use two-phase initialization for performance:
+//! - `StreamLite`: Minimal state for idle streams (low memory)
+//! - `StreamFull`: Full state with buffers (allocated on first use)
+//! - `StreamVariant`: Enum wrapping either type
 
 use crate::error::SessionError;
 use std::collections::VecDeque;
+use std::time::Instant;
 
 /// Stream state machine states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,12 +31,112 @@ pub enum StreamState {
     Closed,
 }
 
-/// A multiplexed stream within a session
-pub struct Stream {
+/// Stream ID type (u16)
+pub type StreamId = u16;
+
+/// Stream configuration for activation.
+#[derive(Clone, Debug)]
+pub struct StreamConfig {
+    /// Initial flow control window size
+    pub initial_window: u64,
+}
+
+impl Default for StreamConfig {
+    fn default() -> Self {
+        Self {
+            initial_window: 65536,
+        }
+    }
+}
+
+/// Minimal stream state for idle streams (low memory overhead).
+///
+/// Use this for streams that have been created but not yet used.
+/// Can be upgraded to `StreamFull` when first data is sent/received.
+#[derive(Debug)]
+pub struct StreamLite {
     /// Stream ID (odd = client-initiated, even = server-initiated)
-    id: u16,
+    id: StreamId,
     /// Current stream state
     state: StreamState,
+    /// Stream priority (0-7, higher = more important)
+    priority: u8,
+    /// When the stream was created
+    created_at: Instant,
+}
+
+impl StreamLite {
+    /// Create a new lightweight stream.
+    #[must_use]
+    pub fn new(id: StreamId) -> Self {
+        Self {
+            id,
+            state: StreamState::Idle,
+            priority: 0,
+            created_at: Instant::now(),
+        }
+    }
+
+    /// Get the stream ID
+    #[must_use]
+    pub fn id(&self) -> StreamId {
+        self.id
+    }
+
+    /// Get current stream state
+    #[must_use]
+    pub fn state(&self) -> StreamState {
+        self.state
+    }
+
+    /// Get stream priority
+    #[must_use]
+    pub fn priority(&self) -> u8 {
+        self.priority
+    }
+
+    /// Activate the stream with full buffers and state.
+    ///
+    /// Consumes the lightweight stream and returns a full stream.
+    #[must_use]
+    pub fn activate(self, config: &StreamConfig) -> StreamFull {
+        StreamFull {
+            id: self.id,
+            state: self.state,
+            priority: self.priority,
+            send_window: config.initial_window,
+            recv_window: config.initial_window,
+            max_window: config.initial_window * 16, // Allow growth up to 16x
+            send_buffer: VecDeque::new(),
+            recv_buffer: VecDeque::new(),
+            bytes_sent: 0,
+            bytes_received: 0,
+            fin_sent: false,
+            fin_received: false,
+            created_at: self.created_at,
+            activated_at: Some(Instant::now()),
+        }
+    }
+
+    /// Check if this is a client-initiated stream (odd ID)
+    #[must_use]
+    pub fn is_client_initiated(&self) -> bool {
+        self.id % 2 == 1
+    }
+}
+
+/// Full stream state with buffers (higher memory overhead).
+///
+/// This is the active form of a stream, with full send/receive buffers
+/// and flow control state.
+#[derive(Debug)]
+pub struct StreamFull {
+    /// Stream ID (odd = client-initiated, even = server-initiated)
+    id: StreamId,
+    /// Current stream state
+    state: StreamState,
+    /// Stream priority (0-7, higher = more important)
+    priority: u8,
     /// Flow control window (bytes available to send)
     send_window: u64,
     /// Flow control window (bytes we can receive)
@@ -47,15 +155,106 @@ pub struct Stream {
     fin_sent: bool,
     /// Whether FIN has been received
     fin_received: bool,
+    /// When the stream was created
+    created_at: Instant,
+    /// When the stream was activated (upgraded from StreamLite)
+    activated_at: Option<Instant>,
 }
 
-impl Stream {
-    /// Create a new stream with the given ID and initial window
+/// Stream variant: either lightweight or full.
+///
+/// This allows efficient storage of idle streams while supporting
+/// full functionality for active streams.
+#[derive(Debug)]
+pub enum StreamVariant {
+    /// Lightweight stream (minimal memory)
+    Lite(StreamLite),
+    /// Full stream (with buffers)
+    Full(Box<StreamFull>),
+}
+
+impl StreamVariant {
+    /// Create a new lightweight stream.
     #[must_use]
-    pub fn new(id: u16, initial_window: u64) -> Self {
+    pub fn new_lite(id: StreamId) -> Self {
+        Self::Lite(StreamLite::new(id))
+    }
+
+    /// Create a new full stream.
+    #[must_use]
+    pub fn new_full(id: StreamId, config: &StreamConfig) -> Self {
+        Self::Full(Box::new(StreamLite::new(id).activate(config)))
+    }
+
+    /// Get the stream ID
+    #[must_use]
+    pub fn id(&self) -> StreamId {
+        match self {
+            Self::Lite(s) => s.id(),
+            Self::Full(s) => s.id(),
+        }
+    }
+
+    /// Get current stream state
+    #[must_use]
+    pub fn state(&self) -> StreamState {
+        match self {
+            Self::Lite(s) => s.state(),
+            Self::Full(s) => s.state(),
+        }
+    }
+
+    /// Check if this is a lite stream
+    #[must_use]
+    pub fn is_lite(&self) -> bool {
+        matches!(self, Self::Lite(_))
+    }
+
+    /// Check if this is a full stream
+    #[must_use]
+    pub fn is_full(&self) -> bool {
+        matches!(self, Self::Full(_))
+    }
+
+    /// Activate the stream if it's lite, converting to full.
+    ///
+    /// If already full, this is a no-op.
+    pub fn activate(&mut self, config: &StreamConfig) {
+        if let Self::Lite(_) = self {
+            let lite = std::mem::replace(self, Self::Lite(StreamLite::new(0))); // Temporary placeholder
+            if let Self::Lite(s) = lite {
+                *self = Self::Full(Box::new(s.activate(config)));
+            }
+        }
+    }
+
+    /// Get mutable reference to full stream, activating if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError::InvalidState` if the stream cannot be activated.
+    pub fn as_full_mut(&mut self, config: &StreamConfig) -> Result<&mut StreamFull, SessionError> {
+        self.activate(config);
+        match self {
+            Self::Full(s) => Ok(s),
+            Self::Lite(_) => Err(SessionError::InvalidState),
+        }
+    }
+}
+
+/// Legacy `Stream` type alias for backward compatibility.
+///
+/// In new code, use `StreamFull` or `StreamVariant` directly.
+pub type Stream = StreamFull;
+
+impl StreamFull {
+    /// Create a new full stream with the given ID and initial window
+    #[must_use]
+    pub fn new(id: StreamId, initial_window: u64) -> Self {
         Self {
             id,
             state: StreamState::Idle,
+            priority: 0,
             send_window: initial_window,
             recv_window: initial_window,
             max_window: initial_window * 16, // Allow growth up to 16x
@@ -65,6 +264,8 @@ impl Stream {
             bytes_received: 0,
             fin_sent: false,
             fin_received: false,
+            created_at: Instant::now(),
+            activated_at: None,
         }
     }
 
@@ -102,6 +303,24 @@ impl Stream {
     #[must_use]
     pub fn bytes_received(&self) -> u64 {
         self.bytes_received
+    }
+
+    /// Get stream priority
+    #[must_use]
+    pub fn priority(&self) -> u8 {
+        self.priority
+    }
+
+    /// Get when the stream was created
+    #[must_use]
+    pub fn created_at(&self) -> Instant {
+        self.created_at
+    }
+
+    /// Get when the stream was activated (if applicable)
+    #[must_use]
+    pub fn activated_at(&self) -> Option<Instant> {
+        self.activated_at
     }
 
     /// Check if this is a client-initiated stream (odd ID)
@@ -750,5 +969,115 @@ mod tests {
 
         // Max window should be 16x initial
         assert_eq!(max, INITIAL_WINDOW * 16);
+    }
+
+    // ========================================================================
+    // Lazy Stream Initialization Tests (Tier 2 - Performance Optimization)
+    // ========================================================================
+
+    #[test]
+    fn test_stream_lite_creation() {
+        let lite = StreamLite::new(43);
+
+        assert_eq!(lite.id(), 43);
+        assert_eq!(lite.state(), StreamState::Idle);
+        assert_eq!(lite.priority(), 0);
+        assert!(lite.is_client_initiated()); // Odd ID = client-initiated
+    }
+
+    #[test]
+    fn test_stream_lite_activation() {
+        let lite = StreamLite::new(1);
+        let config = StreamConfig::default();
+
+        let full = lite.activate(&config);
+
+        assert_eq!(full.id(), 1);
+        assert_eq!(full.state(), StreamState::Idle);
+        assert_eq!(full.send_window(), config.initial_window);
+        assert_eq!(full.recv_window(), config.initial_window);
+        assert_eq!(full.bytes_sent(), 0);
+        assert_eq!(full.bytes_received(), 0);
+    }
+
+    #[test]
+    fn test_stream_variant_new_lite() {
+        let variant = StreamVariant::new_lite(10);
+
+        assert!(variant.is_lite());
+        assert!(!variant.is_full());
+        assert_eq!(variant.id(), 10);
+        assert_eq!(variant.state(), StreamState::Idle);
+    }
+
+    #[test]
+    fn test_stream_variant_new_full() {
+        let config = StreamConfig::default();
+        let variant = StreamVariant::new_full(20, &config);
+
+        assert!(!variant.is_lite());
+        assert!(variant.is_full());
+        assert_eq!(variant.id(), 20);
+        assert_eq!(variant.state(), StreamState::Idle);
+    }
+
+    #[test]
+    fn test_stream_variant_activation() {
+        let config = StreamConfig::default();
+        let mut variant = StreamVariant::new_lite(5);
+
+        assert!(variant.is_lite());
+
+        variant.activate(&config);
+
+        assert!(variant.is_full());
+        assert_eq!(variant.id(), 5);
+    }
+
+    #[test]
+    fn test_stream_variant_as_full_mut() {
+        let config = StreamConfig::default();
+        let mut variant = StreamVariant::new_lite(7);
+
+        // Get mutable reference, which should activate
+        let full = variant.as_full_mut(&config).unwrap();
+
+        assert_eq!(full.id(), 7);
+        assert_eq!(full.state(), StreamState::Idle);
+
+        // Variant should now be full
+        assert!(variant.is_full());
+    }
+
+    #[test]
+    fn test_stream_variant_operations_after_activation() {
+        let config = StreamConfig::default();
+        let mut variant = StreamVariant::new_lite(3);
+
+        // Activate and get mutable reference
+        let full = variant.as_full_mut(&config).unwrap();
+
+        // Should be able to open and use like normal stream
+        full.open().unwrap();
+        assert_eq!(full.state(), StreamState::Open);
+
+        // Should be able to write
+        full.write(b"test data".to_vec()).unwrap();
+        assert!(full.has_data_to_send());
+    }
+
+    #[test]
+    fn test_stream_config_default() {
+        let config = StreamConfig::default();
+        assert_eq!(config.initial_window, 65536);
+    }
+
+    #[test]
+    fn test_stream_lite_server_vs_client() {
+        let client_stream = StreamLite::new(1); // Odd = client
+        let server_stream = StreamLite::new(2); // Even = server
+
+        assert!(client_stream.is_client_initiated());
+        assert!(!server_stream.is_client_initiated());
     }
 }

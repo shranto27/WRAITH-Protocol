@@ -25,6 +25,7 @@
 
 use crate::CryptoError;
 use crate::aead::{AeadKey, Nonce};
+use crate::constant_time::ct_eq;
 use crate::hash::{hkdf_expand, hkdf_extract};
 use crate::x25519::{PrivateKey, PublicKey};
 use rand_core::{CryptoRng, RngCore};
@@ -352,6 +353,44 @@ impl DoubleRatchet {
         Ok((header, ciphertext))
     }
 
+    /// Try to retrieve a skipped message key using constant-time lookup.
+    ///
+    /// This prevents timing side-channel attacks by iterating through all
+    /// skipped keys with constant-time comparison.
+    fn try_skipped_keys(
+        &mut self,
+        dh_public: &[u8; 32],
+        message_number: u32,
+    ) -> Option<MessageKey> {
+        // Prepare the key_id we're looking for
+        let target_dh = dh_public;
+        let target_num = message_number.to_le_bytes();
+
+        let mut found_key: Option<MessageKey> = None;
+        let mut remove_key_id: Option<([u8; 32], u32)> = None;
+
+        // Iterate through all skipped keys with constant-time comparison
+        for (stored_dh, stored_num) in self.skipped_keys.keys() {
+            let stored_num_bytes = stored_num.to_le_bytes();
+
+            // Constant-time comparison of both DH public key and message number
+            let dh_match = ct_eq(target_dh, stored_dh);
+            let num_match = ct_eq(&target_num, &stored_num_bytes);
+
+            if dh_match && num_match {
+                remove_key_id = Some((*stored_dh, *stored_num));
+                // Don't break - continue iterating to maintain constant-time
+            }
+        }
+
+        // Remove the key if found (this happens outside the loop)
+        if let Some(key_id) = remove_key_id {
+            found_key = self.skipped_keys.remove(&key_id);
+        }
+
+        found_key
+    }
+
     /// Decrypt a ciphertext message.
     ///
     /// Performs DH ratchet if the sender's DH public key has changed,
@@ -368,9 +407,10 @@ impl DoubleRatchet {
         header: &MessageHeader,
         ciphertext: &[u8],
     ) -> Result<Vec<u8>, RatchetError> {
-        // Check if we have a skipped key for this message
-        let key_id = (header.dh_public.to_bytes(), header.message_number);
-        if let Some(message_key) = self.skipped_keys.remove(&key_id) {
+        // Check if we have a skipped key for this message (constant-time lookup)
+        if let Some(message_key) =
+            self.try_skipped_keys(&header.dh_public.to_bytes(), header.message_number)
+        {
             let aead_key = message_key.to_aead_key();
             let nonce = derive_nonce(header.message_number);
             return aead_key

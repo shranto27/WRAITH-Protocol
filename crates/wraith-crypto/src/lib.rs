@@ -32,6 +32,7 @@ pub mod hash;
 pub mod noise;
 pub mod random;
 pub mod ratchet;
+pub mod signatures;
 pub mod x25519;
 
 pub use error::CryptoError;
@@ -53,6 +54,15 @@ pub const XCHACHA_NONCE_SIZE: usize = 24;
 
 /// BLAKE3 output size
 pub const BLAKE3_OUTPUT_SIZE: usize = 32;
+
+/// Ed25519 public key size
+pub const ED25519_PUBLIC_KEY_SIZE: usize = 32;
+
+/// Ed25519 secret key size
+pub const ED25519_SECRET_KEY_SIZE: usize = 32;
+
+/// Ed25519 signature size
+pub const ED25519_SIGNATURE_SIZE: usize = 64;
 
 /// Session keys derived from handshake
 #[derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop)]

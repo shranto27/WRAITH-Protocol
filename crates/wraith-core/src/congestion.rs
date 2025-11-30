@@ -21,16 +21,49 @@ const PROBE_RTT_INTERVAL: Duration = Duration::from_secs(10);
 /// Minimum inflight during `ProbeRtt` (4 packets worth)
 const PROBE_RTT_MIN_INFLIGHT: u64 = 4 * 1_500;
 
+/// Fixed-point pacing gains for `ProbeBw` cycle (8 fractional bits = multiply by 256).
+///
+/// Values represent: [1.25, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+/// - 320 = 1.25 * 256
+/// - 192 = 0.75 * 256
+/// - 256 = 1.0 * 256
+const PROBE_BW_GAINS_FP: [u32; 8] = [320, 192, 256, 256, 256, 256, 256, 256];
+
+/// Fixed-point startup gain (2.89 * 256 = 740)
+const STARTUP_GAIN_FP: u32 = 740;
+
+/// Fixed-point drain gain (1/2.89 * 256 ≈ 89)
+const DRAIN_GAIN_FP: u32 = 89;
+
+/// Fixed-point cwnd gain (2.0 * 256 = 512)
+const CWND_GAIN_FP: u32 = 512;
+
+/// Fixed-point unit (1.0 * 256 = 256)
+const FP_UNIT: u32 = 256;
+
+/// Apply fixed-point gain to a value.
+///
+/// Uses 8 fractional bits (value is multiplied by 256).
+/// Returns `value * gain_fp / 256`.
+#[inline]
+fn apply_gain_fp(value: u64, gain_fp: u32) -> u64 {
+    ((value as u128 * gain_fp as u128) >> 8) as u64
+}
+
 /// `BBR` congestion control state
 pub struct BbrState {
     /// Estimated bottleneck bandwidth (bytes/sec)
     btl_bw: u64,
     /// Minimum observed RTT
     min_rtt: Duration,
-    /// Current pacing gain
+    /// Current pacing gain (floating-point, for non-critical paths)
     pacing_gain: f64,
-    /// Current cwnd gain
+    /// Current pacing gain (fixed-point, for hot path)
+    pacing_gain_fp: u32,
+    /// Current cwnd gain (floating-point, for non-critical paths)
     cwnd_gain: f64,
+    /// Current cwnd gain (fixed-point, for hot path)
+    cwnd_gain_fp: u32,
     /// Bandwidth-Delay Product
     bdp: u64,
     /// Current phase
@@ -83,7 +116,9 @@ impl BbrState {
             btl_bw: 0,
             min_rtt: Duration::from_millis(100), // Initial estimate
             pacing_gain: 2.89,                   // Startup gain (2/ln(2))
+            pacing_gain_fp: STARTUP_GAIN_FP,     // Fixed-point startup gain
             cwnd_gain: 2.0,
+            cwnd_gain_fp: CWND_GAIN_FP, // Fixed-point cwnd gain
             bdp: 0,
             phase: BbrPhase::Startup,
             round_count: 0,
@@ -141,24 +176,22 @@ impl BbrState {
     }
 
     /// Get current pacing rate (bytes/sec)
+    ///
+    /// Uses fixed-point arithmetic for performance in hot path.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
     pub fn pacing_rate(&self) -> u64 {
         if self.btl_bw == 0 {
             // Initial rate: 10 Mbps
             return 10_000_000 / 8;
         }
-        // Note: precision loss is acceptable for pacing rate calculation
-        (self.btl_bw as f64 * self.pacing_gain) as u64
+        // Use fixed-point gain for fast calculation
+        apply_gain_fp(self.btl_bw, self.pacing_gain_fp)
     }
 
     /// Get current congestion window
+    ///
+    /// Uses fixed-point arithmetic for performance in hot path.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
     pub fn cwnd(&self) -> u64 {
         if self.bdp == 0 {
             // Initial window: 10 packets
@@ -169,8 +202,8 @@ impl BbrState {
             // Minimum inflight during `ProbeRtt`
             PROBE_RTT_MIN_INFLIGHT
         } else {
-            // Note: precision loss is acceptable for window calculation
-            let cwnd = (self.bdp as f64 * self.cwnd_gain) as u64;
+            // Use fixed-point gain for fast calculation
+            let cwnd = apply_gain_fp(self.bdp, self.cwnd_gain_fp);
             // Minimum of 4 packets
             cwnd.max(4 * 1_500)
         }
@@ -281,7 +314,9 @@ impl BbrState {
     fn enter_drain(&mut self) {
         self.phase = BbrPhase::Drain;
         self.pacing_gain = 1.0 / 2.89; // Inverse of `Startup` gain
+        self.pacing_gain_fp = DRAIN_GAIN_FP; // Fixed-point drain gain
         self.cwnd_gain = 2.0;
+        self.cwnd_gain_fp = CWND_GAIN_FP; // Fixed-point cwnd gain
         self.state_start = Instant::now();
     }
 
@@ -297,7 +332,9 @@ impl BbrState {
     fn enter_probe_rtt(&mut self) {
         self.phase = BbrPhase::ProbeRtt;
         self.pacing_gain = 1.0;
+        self.pacing_gain_fp = FP_UNIT; // 1.0 in fixed-point
         self.cwnd_gain = 1.0;
+        self.cwnd_gain_fp = FP_UNIT; // 1.0 in fixed-point
         self.probe_rtt_start = Some(Instant::now());
         self.last_probe_rtt = Instant::now();
         self.state_start = Instant::now();
@@ -325,7 +362,9 @@ impl BbrState {
         const PROBE_BW_GAINS: [f64; 8] = [1.25, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
 
         self.pacing_gain = PROBE_BW_GAINS[self.probe_bw_cycle_idx];
+        self.pacing_gain_fp = PROBE_BW_GAINS_FP[self.probe_bw_cycle_idx]; // Fixed-point version
         self.cwnd_gain = 2.0;
+        self.cwnd_gain_fp = CWND_GAIN_FP; // Fixed-point version
     }
 
     /// Get minimum `RTT`
@@ -350,6 +389,38 @@ impl BbrState {
     #[must_use]
     pub fn bytes_in_flight(&self) -> u64 {
         self.bytes_in_flight
+    }
+
+    /// Get estimated bottleneck bandwidth (bytes/second)
+    #[must_use]
+    pub fn estimated_bandwidth(&self) -> u64 {
+        self.btl_bw
+    }
+
+    /// Get estimated round-trip propagation delay
+    #[must_use]
+    pub fn estimated_rtt(&self) -> Duration {
+        self.min_rtt
+    }
+
+    /// Check if connection is bandwidth-limited
+    ///
+    /// Returns true if we're in ProbeBw phase and not application-limited.
+    /// This indicates the connection is limited by network bandwidth rather
+    /// than application send rate.
+    #[must_use]
+    pub fn is_bandwidth_limited(&self) -> bool {
+        // In ProbeBw phase, we're bandwidth-limited
+        // In other phases, we're either ramping up (Startup/Drain) or measuring RTT
+        matches!(self.phase, BbrPhase::ProbeBw)
+    }
+
+    /// Get current congestion window
+    ///
+    /// Alias for cwnd() for API consistency
+    #[must_use]
+    pub fn congestion_window(&self) -> u64 {
+        self.cwnd()
     }
 }
 
@@ -651,9 +722,21 @@ mod tests {
         bbr.update_bandwidth(5_000_000, Duration::from_secs(1)); // 5 MB/s
 
         let rate = bbr.pacing_rate();
-        let expected = (5_000_000.0 * 2.89) as u64; // Startup gain
+        let expected_f64 = (5_000_000.0 * 2.89) as u64; // Startup gain
 
-        assert_eq!(rate, expected);
+        // Fixed-point may differ slightly due to rounding - allow 1% tolerance
+        let diff = if rate > expected_f64 {
+            rate - expected_f64
+        } else {
+            expected_f64 - rate
+        };
+        let tolerance = expected_f64 / 100;
+        assert!(
+            diff <= tolerance,
+            "Rate {} differs from expected {} by more than 1%",
+            rate,
+            expected_f64
+        );
     }
 
     #[test]
@@ -876,5 +959,262 @@ mod tests {
         assert_eq!(bbr1.phase(), bbr2.phase());
         assert_eq!(bbr1.btl_bw(), bbr2.btl_bw());
         assert_eq!(bbr1.bytes_in_flight(), bbr2.bytes_in_flight());
+    }
+
+    // ========================================================================
+    // Fixed-Point Arithmetic Tests (Tier 2 - Performance Optimization)
+    // ========================================================================
+
+    #[test]
+    fn test_fixed_point_gain_application() {
+        // Test apply_gain_fp function
+        let value = 10_000_000u64;
+
+        // Test 1.0 gain (FP_UNIT = 256)
+        let result = apply_gain_fp(value, FP_UNIT);
+        assert_eq!(result, value); // Should be unchanged
+
+        // Test 2.0 gain (CWND_GAIN_FP = 512)
+        let result = apply_gain_fp(value, CWND_GAIN_FP);
+        assert_eq!(result, value * 2);
+
+        // Test 1.25 gain (320)
+        let result = apply_gain_fp(value, 320);
+        let expected = (value * 125) / 100; // 1.25x
+        assert_eq!(result, expected);
+
+        // Test 0.75 gain (192)
+        let result = apply_gain_fp(value, 192);
+        let expected = (value * 75) / 100; // 0.75x
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_pacing_rate_fixed_point() {
+        let mut bbr = BbrState::new();
+
+        // Set up bandwidth
+        let bandwidth = 5_000_000u64; // 5 MB/s
+        bbr.update_bandwidth(bandwidth, Duration::from_secs(1));
+
+        // Test startup phase (gain = 2.89)
+        let rate = bbr.pacing_rate();
+        let expected_fp = apply_gain_fp(bandwidth, STARTUP_GAIN_FP);
+        assert_eq!(rate, expected_fp);
+
+        // Verify it's close to floating-point version (within 1% tolerance)
+        let rate_f64 = (bandwidth as f64 * 2.89) as u64;
+        let diff = if rate > rate_f64 {
+            rate - rate_f64
+        } else {
+            rate_f64 - rate
+        };
+        let tolerance = rate_f64 / 100; // 1% tolerance
+        assert!(
+            diff <= tolerance,
+            "Fixed-point rate {} differs from float rate {} by more than 1%",
+            rate,
+            rate_f64
+        );
+    }
+
+    #[test]
+    fn test_cwnd_fixed_point() {
+        let mut bbr = BbrState::new();
+
+        // Set up BDP
+        bbr.update_bandwidth(10_000_000, Duration::from_secs(1)); // 10 MB/s
+        bbr.update_rtt(Duration::from_millis(100)); // 100ms RTT
+
+        // Test cwnd calculation
+        let cwnd = bbr.cwnd();
+        let expected_fp = apply_gain_fp(bbr.bdp(), CWND_GAIN_FP);
+        assert_eq!(cwnd, expected_fp);
+
+        // Verify it's close to floating-point version (within 1% tolerance)
+        let cwnd_f64 = (bbr.bdp() as f64 * 2.0) as u64;
+        let diff = if cwnd > cwnd_f64 {
+            cwnd - cwnd_f64
+        } else {
+            cwnd_f64 - cwnd
+        };
+        let tolerance = cwnd_f64 / 100; // 1% tolerance
+        assert!(
+            diff <= tolerance,
+            "Fixed-point cwnd {} differs from float cwnd {} by more than 1%",
+            cwnd,
+            cwnd_f64
+        );
+    }
+
+    #[test]
+    fn test_probe_bw_gains_fixed_point() {
+        let mut bbr = BbrState::new();
+        bbr.enter_probe_bw();
+
+        // Set up bandwidth
+        let bandwidth = 100_000_000u64; // 100 MB/s
+        bbr.update_bandwidth(bandwidth, Duration::from_secs(1));
+
+        // Test each gain in the ProbeBw cycle
+        let expected_fp_gains = PROBE_BW_GAINS_FP;
+        let expected_f64_gains = [1.25, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+
+        for (idx, (&_fp_gain, &f64_gain)) in expected_fp_gains
+            .iter()
+            .zip(expected_f64_gains.iter())
+            .enumerate()
+        {
+            bbr.probe_bw_cycle_idx = idx;
+            bbr.set_probe_bw_gains();
+
+            let rate_fp = bbr.pacing_rate();
+            let rate_f64 = (bandwidth as f64 * f64_gain) as u64;
+
+            // Verify within 1% tolerance
+            let diff = if rate_fp > rate_f64 {
+                rate_fp - rate_f64
+            } else {
+                rate_f64 - rate_fp
+            };
+            let tolerance = rate_f64 / 100;
+            assert!(
+                diff <= tolerance,
+                "Cycle {} (gain {:.2}): Fixed-point rate {} differs from float rate {} by more than 1%",
+                idx,
+                f64_gain,
+                rate_fp,
+                rate_f64
+            );
+        }
+    }
+
+    #[test]
+    fn test_drain_gain_fixed_point() {
+        let mut bbr = BbrState::new();
+        bbr.update_bandwidth(10_000_000, Duration::from_secs(1));
+        bbr.enter_drain();
+
+        let rate = bbr.pacing_rate();
+        let expected_fp = apply_gain_fp(bbr.btl_bw(), DRAIN_GAIN_FP);
+        assert_eq!(rate, expected_fp);
+
+        // Verify it's close to floating-point version (1/2.89)
+        let rate_f64 = (bbr.btl_bw() as f64 / 2.89) as u64;
+        let diff = if rate > rate_f64 {
+            rate - rate_f64
+        } else {
+            rate_f64 - rate
+        };
+        let tolerance = rate_f64 / 100; // 1% tolerance
+        assert!(
+            diff <= tolerance,
+            "Fixed-point drain rate {} differs from float rate {} by more than 1%",
+            rate,
+            rate_f64
+        );
+    }
+
+    #[test]
+    fn test_probe_rtt_gain_fixed_point() {
+        let mut bbr = BbrState::new();
+        bbr.update_bandwidth(10_000_000, Duration::from_secs(1));
+        bbr.enter_probe_rtt();
+
+        let rate = bbr.pacing_rate();
+        // ProbeRtt gain is 1.0
+        assert_eq!(rate, bbr.btl_bw());
+    }
+
+    // ========================================================================
+    // Tier 3 - Bandwidth Estimation Export Tests
+    // ========================================================================
+
+    #[test]
+    fn test_estimated_bandwidth() {
+        let mut bbr = BbrState::new();
+
+        let target_bw = 50_000_000u64; // 50 MB/s
+        bbr.update_bandwidth(target_bw, Duration::from_secs(1));
+
+        assert_eq!(bbr.estimated_bandwidth(), target_bw);
+    }
+
+    #[test]
+    fn test_estimated_rtt() {
+        let mut bbr = BbrState::new();
+
+        let target_rtt = Duration::from_millis(75);
+        bbr.update_rtt(target_rtt);
+
+        assert_eq!(bbr.estimated_rtt(), target_rtt);
+    }
+
+    #[test]
+    fn test_is_bandwidth_limited_startup() {
+        let bbr = BbrState::new();
+
+        // In Startup phase, should not be bandwidth-limited
+        assert_eq!(bbr.phase(), BbrPhase::Startup);
+        assert!(!bbr.is_bandwidth_limited());
+    }
+
+    #[test]
+    fn test_is_bandwidth_limited_drain() {
+        let mut bbr = BbrState::new();
+        bbr.enter_drain();
+
+        // In Drain phase, should not be bandwidth-limited
+        assert_eq!(bbr.phase(), BbrPhase::Drain);
+        assert!(!bbr.is_bandwidth_limited());
+    }
+
+    #[test]
+    fn test_is_bandwidth_limited_probe_bw() {
+        let mut bbr = BbrState::new();
+        bbr.enter_probe_bw();
+
+        // In ProbeBw phase, should be bandwidth-limited
+        assert_eq!(bbr.phase(), BbrPhase::ProbeBw);
+        assert!(bbr.is_bandwidth_limited());
+    }
+
+    #[test]
+    fn test_is_bandwidth_limited_probe_rtt() {
+        let mut bbr = BbrState::new();
+        bbr.enter_probe_rtt();
+
+        // In ProbeRtt phase, should not be bandwidth-limited
+        assert_eq!(bbr.phase(), BbrPhase::ProbeRtt);
+        assert!(!bbr.is_bandwidth_limited());
+    }
+
+    #[test]
+    fn test_congestion_window_alias() {
+        let mut bbr = BbrState::new();
+
+        bbr.update_bandwidth(10_000_000, Duration::from_secs(1));
+        bbr.update_rtt(Duration::from_millis(100));
+
+        // congestion_window() should return same value as cwnd()
+        assert_eq!(bbr.congestion_window(), bbr.cwnd());
+    }
+
+    #[test]
+    fn test_pacing_rate_getter() {
+        let mut bbr = BbrState::new();
+
+        let bandwidth = 20_000_000u64; // 20 MB/s
+        bbr.update_bandwidth(bandwidth, Duration::from_secs(1));
+
+        let rate = bbr.pacing_rate();
+
+        // Should be positive
+        assert!(rate > 0);
+
+        // In Startup, should be bandwidth * startup_gain
+        assert_eq!(bbr.phase(), BbrPhase::Startup);
+        let expected = apply_gain_fp(bandwidth, STARTUP_GAIN_FP);
+        assert_eq!(rate, expected);
     }
 }

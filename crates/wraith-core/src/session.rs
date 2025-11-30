@@ -94,6 +94,10 @@ pub struct SessionConfig {
     pub rekey_interval: Duration,
     /// Maximum packets before mandatory rekey
     pub rekey_packet_limit: u64,
+    /// Maximum bytes before mandatory rekey
+    pub rekey_byte_limit: u64,
+    /// Emergency rekey threshold (percentage of limits, e.g., 0.9 for 90%)
+    pub rekey_emergency_threshold: f64,
 }
 
 impl Default for SessionConfig {
@@ -105,6 +109,8 @@ impl Default for SessionConfig {
             idle_timeout: Duration::from_secs(30),
             rekey_interval: Duration::from_secs(120),
             rekey_packet_limit: 1_000_000,
+            rekey_byte_limit: 1024 * 1024 * 1024, // 1 GiB
+            rekey_emergency_threshold: 0.9,       // 90% of any limit triggers rekey
         }
     }
 }
@@ -377,22 +383,83 @@ impl Session {
     }
 
     /// Check if rekey is needed
+    ///
+    /// Rekey is triggered when any of the following conditions are met:
+    /// 1. **Time-based**: Rekey interval elapsed since last rekey (or establishment)
+    /// 2. **Packet-based**: Total packets (sent + received) exceeds limit
+    /// 3. **Byte-based**: Total bytes (sent + received) exceeds limit
+    /// 4. **Emergency threshold**: Any metric reaches configured emergency threshold (default 90%)
+    ///
+    /// Emergency rekey provides a safety margin before hard limits are reached.
     #[must_use]
     pub fn needs_rekey(&self) -> bool {
-        // Rekey if time interval exceeded
-        if let Some(last_rekey) = self.last_rekey {
-            if last_rekey.elapsed() >= self.config.rekey_interval {
-                return true;
-            }
+        // Calculate total traffic metrics
+        let total_packets = self.packets_sent + self.packets_received;
+        let total_bytes = self.bytes_sent + self.bytes_received;
+
+        // Emergency thresholds
+        let emergency_packet_threshold =
+            (self.config.rekey_packet_limit as f64 * self.config.rekey_emergency_threshold) as u64;
+        let emergency_byte_threshold =
+            (self.config.rekey_byte_limit as f64 * self.config.rekey_emergency_threshold) as u64;
+        let emergency_time_threshold = self
+            .config
+            .rekey_interval
+            .mul_f64(self.config.rekey_emergency_threshold);
+
+        // Check time-based rekey (emergency and hard limit)
+        let time_since_rekey = if let Some(last_rekey) = self.last_rekey {
+            last_rekey.elapsed()
         } else if let Some(established) = self.established_at {
-            // First rekey after establishment
-            if established.elapsed() >= self.config.rekey_interval {
-                return true;
-            }
+            established.elapsed()
+        } else {
+            Duration::ZERO
+        };
+
+        if time_since_rekey >= self.config.rekey_interval {
+            tracing::warn!(
+                "Rekey required: time limit exceeded ({:?})",
+                time_since_rekey
+            );
+            return true;
         }
 
-        // Rekey if packet limit exceeded
-        if self.packet_counter >= self.config.rekey_packet_limit {
+        if time_since_rekey >= emergency_time_threshold {
+            tracing::info!(
+                "Rekey recommended: approaching time limit ({:?})",
+                time_since_rekey
+            );
+            return true;
+        }
+
+        // Check packet-based rekey (emergency and hard limit)
+        if total_packets >= self.config.rekey_packet_limit {
+            tracing::warn!("Rekey required: packet limit exceeded ({})", total_packets);
+            return true;
+        }
+
+        if total_packets >= emergency_packet_threshold {
+            tracing::info!(
+                "Rekey recommended: approaching packet limit ({})",
+                total_packets
+            );
+            return true;
+        }
+
+        // Check byte-based rekey (emergency and hard limit)
+        if total_bytes >= self.config.rekey_byte_limit {
+            tracing::warn!(
+                "Rekey required: byte limit exceeded ({} bytes)",
+                total_bytes
+            );
+            return true;
+        }
+
+        if total_bytes >= emergency_byte_threshold {
+            tracing::info!(
+                "Rekey recommended: approaching byte limit ({} bytes)",
+                total_bytes
+            );
             return true;
         }
 
@@ -646,11 +713,12 @@ mod tests {
     fn test_rekey_needed_packets() {
         let mut config = SessionConfig::default();
         config.rekey_packet_limit = 5;
+        config.rekey_emergency_threshold = 1.0; // Disable emergency threshold
         let mut session = Session::with_config(config);
 
-        // Send packets
+        // Send packets (record_sent increments packets_sent)
         for _ in 0..5 {
-            let _ = session.next_packet_counter();
+            session.record_sent(1);
         }
 
         assert!(session.needs_rekey());
@@ -795,5 +863,190 @@ mod tests {
         // Can return to established or close
         assert!(session.can_transition(SessionState::Established));
         assert!(session.can_transition(SessionState::Closed));
+    }
+
+    // ==================== Enhanced Rekey Logic Tests ====================
+
+    #[test]
+    fn test_rekey_bytes_hard_limit() {
+        let mut config = SessionConfig::default();
+        config.rekey_byte_limit = 1000;
+        config.rekey_emergency_threshold = 1.0; // Disable emergency threshold
+        let mut session = Session::with_config(config);
+
+        // Not needed initially
+        assert!(!session.needs_rekey());
+
+        // Send bytes up to limit
+        session.record_sent(500);
+        session.record_received(499);
+        assert!(!session.needs_rekey()); // Total: 999 bytes
+
+        // Exceed byte limit
+        session.record_received(1);
+        assert!(session.needs_rekey()); // Total: 1000 bytes
+    }
+
+    #[test]
+    fn test_rekey_bytes_emergency_threshold() {
+        let mut config = SessionConfig::default();
+        config.rekey_byte_limit = 1000;
+        config.rekey_emergency_threshold = 0.9; // 90%
+        let mut session = Session::with_config(config);
+
+        // Not needed initially
+        assert!(!session.needs_rekey());
+
+        // Approach emergency threshold (900 bytes = 90% of 1000)
+        session.record_sent(450);
+        session.record_received(449);
+        assert!(!session.needs_rekey()); // Total: 899 bytes
+
+        // Cross emergency threshold
+        session.record_sent(1);
+        assert!(session.needs_rekey()); // Total: 900 bytes
+    }
+
+    #[test]
+    fn test_rekey_packets_emergency_threshold() {
+        let mut config = SessionConfig::default();
+        config.rekey_packet_limit = 100;
+        config.rekey_emergency_threshold = 0.9;
+        let mut session = Session::with_config(config);
+
+        // Send packets approaching emergency threshold
+        for _ in 0..89 {
+            session.record_sent(1);
+        }
+        assert!(!session.needs_rekey()); // 89 packets < 90
+
+        // Cross emergency threshold (90 packets = 90% of 100)
+        session.record_sent(1);
+        assert!(session.needs_rekey()); // 90 packets >= 90
+    }
+
+    #[test]
+    fn test_rekey_time_emergency_threshold() {
+        let mut config = SessionConfig::default();
+        config.rekey_interval = Duration::from_millis(100);
+        config.rekey_emergency_threshold = 0.9;
+        let mut session = Session::new_initiator(config);
+
+        // Establish session
+        session
+            .transition_to(SessionState::Handshaking(HandshakePhase::InitSent))
+            .unwrap();
+        session.transition_to(SessionState::Established).unwrap();
+
+        // Not needed initially
+        assert!(!session.needs_rekey());
+
+        // Wait for emergency threshold (90ms = 90% of 100ms)
+        std::thread::sleep(Duration::from_millis(92));
+        assert!(session.needs_rekey());
+    }
+
+    #[test]
+    fn test_rekey_combined_sent_received_packets() {
+        let mut config = SessionConfig::default();
+        config.rekey_packet_limit = 10;
+        config.rekey_emergency_threshold = 1.0; // Disable emergency
+        let mut session = Session::with_config(config);
+
+        // Mix sent and received packets
+        for _ in 0..5 {
+            session.record_sent(100);
+        }
+        for _ in 0..4 {
+            session.record_received(100);
+        }
+        assert!(!session.needs_rekey()); // 9 packets total
+
+        // One more received packet crosses the limit
+        session.record_received(100);
+        assert!(session.needs_rekey()); // 10 packets total
+    }
+
+    #[test]
+    fn test_rekey_combined_sent_received_bytes() {
+        let mut config = SessionConfig::default();
+        config.rekey_byte_limit = 500;
+        config.rekey_emergency_threshold = 1.0; // Disable emergency
+        let mut session = Session::with_config(config);
+
+        // Mix sent and received bytes
+        session.record_sent(300); // 300 bytes sent
+        session.record_received(199); // 199 bytes received
+        assert!(!session.needs_rekey()); // 499 bytes total
+
+        // One more byte crosses the limit
+        session.record_received(1);
+        assert!(session.needs_rekey()); // 500 bytes total
+    }
+
+    #[test]
+    fn test_rekey_multiple_thresholds() {
+        let mut config = SessionConfig::default();
+        config.rekey_packet_limit = 1000;
+        config.rekey_byte_limit = 10000;
+        config.rekey_interval = Duration::from_secs(60);
+        config.rekey_emergency_threshold = 0.8; // 80%
+        let mut session = Session::with_config(config);
+
+        // Not needed initially
+        assert!(!session.needs_rekey());
+
+        // Cross packet emergency threshold (800 packets = 80% of 1000)
+        for _ in 0..800 {
+            session.record_sent(1);
+        }
+        assert!(session.needs_rekey());
+    }
+
+    #[test]
+    fn test_rekey_after_rekey_resets_timer() {
+        let mut config = SessionConfig::default();
+        config.rekey_interval = Duration::from_millis(50);
+        config.rekey_emergency_threshold = 1.0; // Disable emergency
+        let mut session = Session::new_initiator(config);
+
+        // Establish session
+        session
+            .transition_to(SessionState::Handshaking(HandshakePhase::InitSent))
+            .unwrap();
+        session.transition_to(SessionState::Established).unwrap();
+
+        std::thread::sleep(Duration::from_millis(60));
+        assert!(session.needs_rekey());
+
+        // Perform rekey (simulated by entering Rekeying state)
+        session.transition_to(SessionState::Rekeying).unwrap();
+        session.transition_to(SessionState::Established).unwrap();
+
+        // Should not need rekey immediately after
+        assert!(!session.needs_rekey());
+
+        // But should need rekey after interval again
+        std::thread::sleep(Duration::from_millis(60));
+        assert!(session.needs_rekey());
+    }
+
+    #[test]
+    fn test_rekey_no_false_positives() {
+        let mut config = SessionConfig::default();
+        config.rekey_packet_limit = 1000;
+        config.rekey_byte_limit = 10000;
+        config.rekey_interval = Duration::from_secs(3600);
+        config.rekey_emergency_threshold = 0.9;
+        let mut session = Session::with_config(config);
+
+        // Send traffic well below all thresholds
+        for _ in 0..100 {
+            session.record_sent(10);
+            session.record_received(10);
+        }
+
+        // Should not trigger rekey (200 packets, 2000 bytes, <1s elapsed)
+        assert!(!session.needs_rekey());
     }
 }

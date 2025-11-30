@@ -32,12 +32,16 @@
 pub mod congestion;
 pub mod error;
 pub mod frame;
+pub mod migration;
+pub mod path;
 pub mod session;
 pub mod stream;
 
 pub use congestion::BbrState;
 pub use error::Error;
 pub use frame::{Frame, FrameBuilder, FrameFlags, FrameType};
+pub use migration::{PathState, PathValidator, ValidatedPath};
+pub use path::{DEFAULT_MTU, MAX_MTU, MIN_MTU, PathMtuDiscovery};
 pub use session::{
     ConnectionId, HandshakePhase, Session, SessionConfig, SessionState, SessionStats,
 };

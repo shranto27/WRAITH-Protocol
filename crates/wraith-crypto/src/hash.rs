@@ -20,6 +20,7 @@ pub fn hash(data: &[u8]) -> HashOutput {
 /// Supports incremental updates and parallel hashing.
 pub struct TreeHasher {
     hasher: blake3::Hasher,
+    total_len: usize,
 }
 
 impl TreeHasher {
@@ -28,12 +29,31 @@ impl TreeHasher {
     pub fn new() -> Self {
         Self {
             hasher: blake3::Hasher::new(),
+            total_len: 0,
         }
     }
 
     /// Update with more data.
     pub fn update(&mut self, data: &[u8]) {
         self.hasher.update(data);
+        self.total_len += data.len();
+    }
+
+    /// Update hasher with multiple chunks.
+    ///
+    /// More efficient than multiple single updates when you have
+    /// multiple chunks ready to hash.
+    pub fn update_batch(&mut self, chunks: &[&[u8]]) {
+        for chunk in chunks {
+            self.hasher.update(chunk);
+            self.total_len += chunk.len();
+        }
+    }
+
+    /// Get total bytes hashed so far.
+    #[must_use]
+    pub fn total_len(&self) -> usize {
+        self.total_len
     }
 
     /// Finalize and return the hash.
@@ -273,5 +293,115 @@ mod tests {
         ];
 
         assert_eq!(hash_output, expected);
+    }
+
+    // ========================================================================
+    // Batch Hash Update Tests (Tier 2 - Performance Optimization)
+    // ========================================================================
+
+    #[test]
+    fn test_batch_update_single_chunk() {
+        let mut hasher = TreeHasher::new();
+        let data = b"test data";
+
+        hasher.update_batch(&[data]);
+
+        assert_eq!(hasher.total_len(), data.len());
+        let hash_batch = hasher.finalize();
+
+        // Compare with single update
+        let mut hasher2 = TreeHasher::new();
+        hasher2.update(data);
+        let hash_single = hasher2.finalize();
+
+        assert_eq!(hash_batch, hash_single);
+    }
+
+    #[test]
+    fn test_batch_update_multiple_chunks() {
+        let mut hasher = TreeHasher::new();
+        let chunks = [b"hello" as &[u8], b" ", b"world"];
+
+        hasher.update_batch(&chunks);
+
+        assert_eq!(hasher.total_len(), 11); // "hello world"
+        let hash_batch = hasher.finalize();
+
+        // Compare with concatenated single update
+        let mut hasher2 = TreeHasher::new();
+        hasher2.update(b"hello world");
+        let hash_single = hasher2.finalize();
+
+        assert_eq!(hash_batch, hash_single);
+    }
+
+    #[test]
+    fn test_batch_vs_sequential_identical() {
+        let chunks = [b"chunk1" as &[u8], b"chunk2", b"chunk3", b"chunk4"];
+
+        // Hash using batch
+        let mut hasher_batch = TreeHasher::new();
+        hasher_batch.update_batch(&chunks);
+        let hash_batch = hasher_batch.finalize();
+
+        // Hash using sequential updates
+        let mut hasher_seq = TreeHasher::new();
+        for chunk in &chunks {
+            hasher_seq.update(chunk);
+        }
+        let hash_seq = hasher_seq.finalize();
+
+        // Should produce identical hashes
+        assert_eq!(hash_batch, hash_seq);
+
+        // Total lengths should match
+        assert_eq!(hasher_batch.total_len(), hasher_seq.total_len());
+    }
+
+    #[test]
+    fn test_batch_update_empty_chunks() {
+        let mut hasher = TreeHasher::new();
+        let chunks: Vec<&[u8]> = vec![];
+
+        hasher.update_batch(&chunks);
+
+        assert_eq!(hasher.total_len(), 0);
+    }
+
+    #[test]
+    fn test_batch_update_mixed_sizes() {
+        let mut hasher = TreeHasher::new();
+        let chunk1 = b"short";
+        let chunk2 = b"this is a much longer chunk with more data";
+        let chunk3 = b"x";
+
+        hasher.update_batch(&[chunk1, chunk2, chunk3]);
+
+        let expected_len = chunk1.len() + chunk2.len() + chunk3.len();
+        assert_eq!(hasher.total_len(), expected_len);
+
+        // Verify hash matches sequential
+        let mut hasher2 = TreeHasher::new();
+        hasher2.update(chunk1);
+        hasher2.update(chunk2);
+        hasher2.update(chunk3);
+
+        assert_eq!(hasher.finalize(), hasher2.finalize());
+    }
+
+    #[test]
+    fn test_total_len_tracking() {
+        let mut hasher = TreeHasher::new();
+
+        assert_eq!(hasher.total_len(), 0);
+
+        hasher.update(b"12345");
+        assert_eq!(hasher.total_len(), 5);
+
+        hasher.update(b"67890");
+        assert_eq!(hasher.total_len(), 10);
+
+        hasher.update_batch(&[b"abc", b"def"]);
+        assert_eq!(hasher.total_len(), 16);
     }
 }

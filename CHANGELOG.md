@@ -8,8 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- No unreleased changes
 
-**Phase 3: Transport & Kernel Bypass (2025-11-29):**
+---
+
+## [0.3.0] - 2025-11-30
+
+### Added
+
+**Phase 3: Transport & Kernel Bypass - COMPLETE ✅ (2025-11-30):**
 
 - **XDP/eBPF Foundation** (`wraith-xdp/`)
   - XDP packet filter program for WRAITH traffic (UDP ports 40000-50000)
@@ -85,6 +92,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Race condition in AsyncFileReader/Writer `wait_for()` causing lost completions
   when multiple operations complete simultaneously
+
+### Phase 3 Deliverables ✅
+
+**Completed Components (156/156 story points):**
+1. ✅ XDP/eBPF packet filter with AF_XDP socket redirection
+2. ✅ AF_XDP socket management with UMEM and ring buffers
+3. ✅ Worker thread pool with CPU core pinning and per-worker statistics
+4. ✅ NUMA-aware memory allocation and topology detection
+5. ✅ Path MTU discovery with binary search probing
+6. ✅ UDP transport with cross-platform support
+7. ✅ io_uring async file I/O with batched operations
+8. ✅ Transport benchmarks (UDP throughput, latency, worker pools, MTU cache)
+9. ✅ Comprehensive test suite (39 transport tests, 12 files tests)
+10. ✅ Cross-platform graceful fallbacks (non-Linux stubs)
+
+**Performance Validation:**
+- ✅ AF_XDP zero-copy framework operational
+- ✅ io_uring async I/O with queue depth 128-4096
+- ✅ UDP transport with 2MB buffers for high throughput
+- ✅ Worker pool with configurable thread count and core pinning
+- ✅ All quality gates passing (clippy, fmt, tests)
+
+**Documentation:**
+- XDP/eBPF implementation details
+- AF_XDP socket management patterns
+- Worker thread pool architecture
+- NUMA allocation strategies
+- Transport benchmark results
+
+**Next: Phase 4 - Obfuscation & Stealth**
+
+**Prerequisites Met:**
+- Transport layer operational ✅
+- Kernel bypass framework ready ✅
+- Async I/O integrated ✅
+- Cross-platform support confirmed ✅
+
+**Phase 4 Focus (76 story points, 3-4 weeks):**
+- Protocol mimicry (TLS, WebSocket, DNS-over-HTTPS wrappers)
+- Advanced padding strategies
+- Timing obfuscation with jitter
+- Covert channel support
+
+---
 
 ## [0.2.0] - 2025-11-29
 
@@ -1066,7 +1117,8 @@ Fixes applied:
 
 ---
 
-[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/doublegate/WRAITH-Protocol/compare/v0.1.0...v0.1.5
 [0.1.0]: https://github.com/doublegate/WRAITH-Protocol/releases/tag/v0.1.0

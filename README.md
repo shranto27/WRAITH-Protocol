@@ -9,28 +9,30 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Current Status
 
-**Version:** 0.2.0 (Phases 1-2 Complete + Major Security & Performance Enhancements)
+**Version:** 0.3.0 (Phases 1-3 Complete - Transport & Kernel Bypass)
 
-WRAITH Protocol has completed Phases 1-2 with a fully functional core protocol and cryptographic layer. The latest release delivers production-ready frame encoding, session management, stream multiplexing, congestion control, and a comprehensive cryptographic suite with forward secrecy and advanced security features.
+WRAITH Protocol has completed Phases 1-3, delivering a fully functional core protocol, cryptographic layer, and high-performance transport implementation. The latest release includes AF_XDP kernel bypass, io_uring async I/O, UDP fallback, worker thread pools, and NUMA-aware allocation for wire-speed operation.
 
-**Phases 1-2 Complete ✅ (191/789 story points, 24% overall progress)**
+**Phases 1-3 Complete ✅ (347/789 story points, 44% overall progress)**
 
 **Implementation Status:**
-- Core workspace: 7 crates, ~12,000 lines of Rust code
-- Test coverage: **351 passing tests** (177 wraith-core + 124 wraith-crypto + 24 obfuscation + 15 transport + 12 integration)
+- Core workspace: 8 crates (7 active + 1 XDP), ~15,000+ lines of Rust code
+- Test coverage: **402 passing tests** (177 wraith-core + 123 wraith-crypto + 24 obfuscation + 39 transport + 12 files + 15 discovery + 12 integration)
   - wraith-core: 177 tests (frame parsing, session management, stream multiplexing, congestion control, path MTU, connection migration)
-  - wraith-crypto: 124 tests (Ed25519 signatures, X25519, Elligator2, XChaCha20-Poly1305 AEAD with key commitment, BLAKE3, Noise_XX, Double Ratchet, replay protection, constant-time ops)
+  - wraith-crypto: 123 tests (Ed25519 signatures, X25519, Elligator2, XChaCha20-Poly1305 AEAD with key commitment, BLAKE3, Noise_XX, Double Ratchet, replay protection, constant-time ops)
+  - wraith-transport: 39 tests (AF_XDP socket management, worker pools, UDP, MTU discovery, NUMA allocation)
   - wraith-obfuscation: 24 tests (cover traffic, padding)
-  - wraith-transport: 15 tests (UDP, io_uring stubs)
+  - wraith-files: 12 tests (io_uring async file I/O, chunking, hashing)
+  - wraith-discovery: 15 tests (DHT, relay)
   - Integration vectors: 12 tests
-- Benchmarks: 19 criterion benchmarks (frame parse/build/roundtrip)
+- Benchmarks: 24 criterion benchmarks (frame, transport, MTU, worker pool)
 - Performance: 172M frames/sec parsing (~232 GiB/s theoretical throughput)
 - Documentation: 59+ files, 40,000+ lines
 - CI/CD: GitHub Actions workflows for testing, security scanning, multi-platform releases
@@ -40,16 +42,17 @@ WRAITH Protocol has completed Phases 1-2 with a fully functional core protocol a
 **Completed Components:**
 - ✅ **Phase 1:** Frame encoding/decoding with SIMD acceleration, session state machine, stream multiplexing, BBR congestion control
 - ✅ **Phase 2:** Ed25519 signatures, X25519 + Elligator2, XChaCha20-Poly1305 AEAD with key commitment, BLAKE3, Noise_XX handshake, Double Ratchet, replay protection
-- ✅ **Advanced Features:** Path MTU Discovery, Connection Migration, Cover Traffic Generation, Buffer Pools
-- ✅ Comprehensive test suite (351 tests)
+- ✅ **Phase 3:** AF_XDP zero-copy networking, io_uring async I/O, UDP transport, worker thread pools, NUMA allocation, MTU discovery
+- ✅ **Advanced Features:** Path MTU Discovery, Connection Migration, Cover Traffic Generation, Buffer Pools, XDP packet filtering
+- ✅ Comprehensive test suite (402 tests)
 - ✅ Performance benchmarks
 - ✅ Security documentation (SECURITY.md, TECH-DEBT.md)
 
-**Next: Phase 3 - Transport & Kernel Bypass (156 story points, 6-8 weeks)**
-- AF_XDP zero-copy networking
-- io_uring async I/O integration
-- Full connection migration implementation
-- Multi-path support
+**Next: Phase 4 - Obfuscation & Stealth (76 story points, 3-4 weeks)**
+- Protocol mimicry (TLS, WebSocket, DNS-over-HTTPS)
+- Advanced padding strategies
+- Timing obfuscation
+- Covert channel support
 
 ## Features
 
@@ -384,13 +387,13 @@ WRAITH Protocol development follows a structured 7-phase approach spanning 32-44
 |-------|-------|----------|--------------|--------|
 | **Phase 1** | Foundation & Core Types | 4-6 weeks | 89 | ✅ **Complete** |
 | **Phase 2** | Cryptographic Layer | 4-6 weeks | 102 | ✅ **Complete** |
-| **Phase 3** | Transport & Kernel Bypass | 6-8 weeks | 156 | 🔄 Next |
-| **Phase 4** | Obfuscation & Stealth | 3-4 weeks | 76 | Planned |
+| **Phase 3** | Transport & Kernel Bypass | 6-8 weeks | 156 | ✅ **Complete** |
+| **Phase 4** | Obfuscation & Stealth | 3-4 weeks | 76 | 🔄 Next |
 | **Phase 5** | Discovery & NAT Traversal | 5-7 weeks | 123 | Planned |
 | **Phase 6** | Integration & Testing | 4-5 weeks | 98 | Planned |
 | **Phase 7** | Hardening & Optimization | 6-8 weeks | 145 | Planned |
 
-**Progress:** 191/789 story points delivered (24% complete)
+**Progress:** 347/789 story points delivered (44% complete)
 
 ### Client Applications (1,028 Story Points)
 
@@ -508,15 +511,15 @@ WRAITH Protocol is in active development and we welcome contributions of all kin
 
 ### Current Focus Areas
 1. ✅ **Phase 1 Complete** - Core protocol foundation (177 tests, 172M frames/sec, SIMD acceleration)
-2. ✅ **Phase 2 Complete** - Cryptographic layer (124 tests, full security suite with Ed25519)
-3. ✅ **Advanced Security Features** - Replay protection, key commitment, automatic rekey
-4. ✅ **Performance Optimizations** - SIMD frame parsing, buffer pools, fixed-point BBR arithmetic, lazy stream initialization
-5. ✅ **Path MTU Discovery** - Complete PMTUD implementation with binary search probing
-6. ✅ **Connection Migration** - PATH_CHALLENGE/PATH_RESPONSE with RTT measurement
-7. ✅ **Cover Traffic** - Constant, Poisson, and uniform distribution generation
-8. Begin Phase 3 transport layer implementation (AF_XDP, io_uring)
-9. Implement zero-copy networking and kernel bypass
-10. Maintain test coverage (current: 351 tests, target: maintain 80%+ coverage)
+2. ✅ **Phase 2 Complete** - Cryptographic layer (123 tests, full security suite with Ed25519)
+3. ✅ **Phase 3 Complete** - Transport & kernel bypass (39 tests, AF_XDP, io_uring, worker pools, NUMA)
+4. ✅ **Advanced Security Features** - Replay protection, key commitment, automatic rekey
+5. ✅ **Performance Optimizations** - SIMD frame parsing, buffer pools, fixed-point BBR arithmetic, lazy stream initialization
+6. ✅ **Path MTU Discovery** - Complete PMTUD implementation with binary search probing
+7. ✅ **Connection Migration** - PATH_CHALLENGE/PATH_RESPONSE with RTT measurement
+8. ✅ **Cover Traffic** - Constant, Poisson, and uniform distribution generation
+9. Begin Phase 4 obfuscation layer implementation (protocol mimicry, advanced padding, timing obfuscation)
+10. Maintain test coverage (current: 402 tests, target: maintain 80%+ coverage)
 
 See [ROADMAP.md](to-dos/ROADMAP.md) for detailed sprint planning and story point estimates.
 
@@ -580,4 +583,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** Phase 1-2 Complete (v0.2.0) | **License:** MIT | **Language:** Rust 2024 | **Tests:** 351 | **Quality:** Zero clippy errors, zero unsafe code
+**Status:** Phase 1-3 Complete (v0.3.0) | **License:** MIT | **Language:** Rust 2024 | **Tests:** 402 | **Quality:** Zero clippy errors, zero unsafe code

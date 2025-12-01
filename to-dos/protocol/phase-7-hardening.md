@@ -1,7 +1,7 @@
 # Phase 7: Hardening & Optimization Sprint Planning
 
 **Duration:** Weeks 37-44 (6-8 weeks)
-**Total Story Points:** 158
+**Total Story Points:** 179 (158 base + 21 from Phase 6 refactoring findings)
 **Risk Level:** Medium (security critical, time-consuming)
 
 ---
@@ -352,6 +352,65 @@ echo "Dependency audit complete."
 - [ ] License compatibility verified
 - [ ] Supply chain verified (checksums)
 - [ ] Minimal unsafe code in dependencies
+
+---
+
+**7.1.4: Phase 6 Refactoring - Security Findings** (8 SP)
+
+*From comprehensive code review analysis (2025-11-30)*
+
+**HIGH PRIORITY:**
+
+1. **Private Key Serialization Without Encryption** (3 SP)
+   - **Location:** `crates/wraith-cli/src/main.rs:314`
+   - **Issue:** `generate_keypair()` writes raw private key bytes to file without encryption
+   - **Risk:** Key material stored in plaintext on filesystem
+   - **Fix:** Encrypt private key with passphrase-derived key (Argon2id) before storage
+   - [ ] Add `argon2` and `rpassword` dependencies
+   - [ ] Implement `encrypt_private_key()` function
+   - [ ] Implement `decrypt_private_key()` function
+   - [ ] Update `generate_keypair` to prompt for passphrase
+   - [ ] Add tests for encrypted key round-trip
+
+2. **TransferSession Lacks ZeroizeOnDrop** (2 SP)
+   - **Location:** `crates/wraith-core/src/transfer/session.rs`
+   - **Issue:** Session state may persist in memory after transfer completion
+   - **Risk:** Sensitive transfer metadata not cleared from memory
+   - **Fix:** Add `#[derive(ZeroizeOnDrop)]` and appropriate field annotations
+   - [ ] Add `zeroize` dependency to wraith-core
+   - [ ] Implement `ZeroizeOnDrop` for `TransferSession`
+   - [ ] Mark sensitive fields for zeroization
+   - [ ] Add test verifying zeroization occurs
+
+**MEDIUM PRIORITY:**
+
+3. **Configuration Validation Incomplete** (1 SP)
+   - **Location:** `crates/wraith-cli/src/config.rs:260-285`
+   - **Issue:** `validate()` misses `log_level` and `bootstrap_nodes` URL validation
+   - [ ] Add `log_level` validation (trace, debug, info, warn, error)
+   - [ ] Add URL format validation for bootstrap nodes
+   - [ ] Add tests for invalid configurations
+
+4. **File Path Injection Potential** (1 SP)
+   - **Location:** `crates/wraith-cli/src/main.rs:144`
+   - **Issue:** File paths from CLI not sanitized for directory traversal
+   - [ ] Canonicalize paths before use
+   - [ ] Validate paths against allowed directories
+   - [ ] Add tests for path traversal attempts (`../`, symlinks)
+
+5. **Timing Information in Error Paths** (1 SP)
+   - **Location:** Various crypto error handlers
+   - **Issue:** Different error branches may have different execution times
+   - [ ] Audit error paths in crypto operations
+   - [ ] Ensure constant-time error handling where applicable
+   - [ ] Add timing tests for error paths
+
+**Acceptance Criteria:**
+- [ ] All high-priority items (1-2) completed
+- [ ] Private keys encrypted at rest with strong KDF
+- [ ] TransferSession properly zeroizes on drop
+- [ ] Medium-priority items tracked for completion
+- [ ] Security tests added for each fix
 
 ---
 
@@ -1151,6 +1210,89 @@ These benchmarks were removed from `benches/transfer.rs` during code cleanup (de
 
 ---
 
+**7.3.5: Phase 6 Refactoring - Performance Findings** (9 SP)
+
+*From comprehensive code review analysis (2025-11-30)*
+
+**HIGH PRIORITY:**
+
+6. **Missing Chunks Calculation is O(n)** (2 SP)
+   - **Location:** `crates/wraith-files/src/chunker.rs:226-230`
+   - **Current:** Iterates all chunks to find missing ones
+   - **Impact:** For 1 GB file (4096 chunks), O(4096) per call
+   - **Fix:** Maintain explicit `missing_chunks: HashSet<u64>` updated on each write
+   ```rust
+   // Before: O(n)
+   pub fn missing_chunks(&self) -> Vec<u64> {
+       (0..self.total_chunks)
+           .filter(|i| !self.received_chunks.contains(i))
+           .collect()
+   }
+
+   // After: O(m) where m = missing count
+   pub fn missing_chunks(&self) -> Vec<u64> {
+       self.missing_chunks.iter().copied().collect()
+   }
+   ```
+   - [ ] Add `missing_chunks: HashSet<u64>` to `FileReassembler`
+   - [ ] Initialize with all chunk indices in constructor
+   - [ ] Remove from set on `write_chunk()`
+   - [ ] Update `missing_chunks()` to return set contents
+   - [ ] Add benchmark comparing old vs new implementation
+
+7. **TransferSession Missing Chunks Also O(n)** (2 SP)
+   - **Location:** `crates/wraith-core/src/transfer/session.rs:212-218`
+   - **Same Issue:** Iterates all chunks to calculate missing
+   - **Fix:** Same pattern - maintain explicit missing set
+   - [ ] Add `missing_chunks: HashSet<u64>` to `TransferSession`
+   - [ ] Update on `mark_chunk_transferred()`
+   - [ ] Update `missing_count()` to return set length
+   - [ ] Add benchmark for transfer session operations
+
+8. **IncrementalTreeHasher Allocates in Hot Path** (3 SP)
+   - **Location:** `crates/wraith-files/src/tree_hash.rs:212-215`
+   - **Current:** `drain().collect()` allocates new Vec for each chunk
+   - **Impact:** Unnecessary allocation per chunk (256 KiB default)
+   - **Fix:** Use slice-based approach without allocation
+   ```rust
+   // Before: allocates
+   let chunk = self.current_buffer.drain(..self.chunk_size).collect::<Vec<_>>();
+
+   // After: no allocation
+   let chunk = &self.current_buffer[..self.chunk_size];
+   let hash = blake3::hash(chunk);
+   self.chunk_hashes.push(*hash.as_bytes());
+   self.current_buffer = self.current_buffer[self.chunk_size..].to_vec();
+   ```
+   - [ ] Refactor `process_chunk()` to use slices
+   - [ ] Benchmark before/after (target: 10% improvement)
+   - [ ] Consider ring buffer for truly zero-allocation
+
+**MEDIUM PRIORITY:**
+
+9. **Merkle Root Computation Allocates Per Level** (1 SP)
+   - **Location:** `crates/wraith-files/src/tree_hash.rs:116-149`
+   - **Issue:** Creates new `Vec` for each tree level
+   - **Impact:** Log(n) allocations for n chunks
+   - [ ] Pre-allocate with capacity
+   - [ ] Use in-place computation if possible
+
+10. **Progress Calculation on Every Update** (1 SP)
+    - **Location:** `crates/wraith-core/src/transfer/session.rs:173-179`
+    - **Issue:** Division on every `progress()` call
+    - [ ] Cache progress value
+    - [ ] Invalidate cache on chunk completion
+    - [ ] Benchmark impact
+
+**Acceptance Criteria:**
+- [ ] All high-priority items (6-8) completed
+- [ ] Missing chunks operations reduced from O(n) to O(m)
+- [ ] Hot path allocations eliminated
+- [ ] Benchmarks show measurable improvement (>10%)
+- [ ] No performance regressions in existing benchmarks
+
+---
+
 ### Sprint 7.4: Documentation (Weeks 42-43)
 
 **Duration:** 1.5 weeks
@@ -1644,6 +1786,46 @@ wraith nat-status
 - [ ] Monitoring setup
 - [ ] Troubleshooting procedures
 - [ ] Performance tuning guide
+
+---
+
+**7.4.3: Phase 6 Refactoring - Documentation Findings** (4 SP)
+
+*From comprehensive code review analysis (2025-11-30)*
+
+**HIGH PRIORITY:**
+
+11. **Missing API Documentation for TransferSession** (2 SP)
+    - **Location:** `crates/wraith-core/src/transfer/session.rs`
+    - **Issue:** Module has struct docs but no crate-level visibility or comprehensive examples
+    - [ ] Add `#![doc = "Transfer session management"]` at crate level
+    - [ ] Add usage examples in module doc
+    - [ ] Document all public methods with `# Examples` sections
+    - [ ] Document state machine transitions with diagram
+    - [ ] Add `# Safety` sections for any sensitive operations
+
+**MEDIUM PRIORITY:**
+
+12. **Configuration Options Undocumented** (1 SP)
+    - **Location:** `crates/wraith-cli/src/config.rs`
+    - **Issue:** Struct fields have serde attributes but minimal doc comments
+    - [ ] Document each configuration option
+    - [ ] Add default values in documentation
+    - [ ] Add valid ranges/constraints
+    - [ ] Create example config file with comments
+
+13. **Integration Test Purpose Unclear** (1 SP)
+    - **Location:** `tests/integration_tests.rs`
+    - **Issue:** Phase 7 placeholder tests lack detail on expected behavior
+    - [ ] Document expected test scenarios in comments
+    - [ ] Add test plan for each placeholder
+    - [ ] Define success criteria for end-to-end tests
+
+**Acceptance Criteria:**
+- [ ] TransferSession has complete rustdoc with examples
+- [ ] Configuration options fully documented
+- [ ] Integration test expectations documented
+- [ ] `cargo doc --workspace` builds without warnings
 
 ---
 

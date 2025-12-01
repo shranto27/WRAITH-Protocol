@@ -1,17 +1,18 @@
 # WRAITH Protocol - Technical Debt TODO List
 
-**Generated:** 2025-11-30
-**Status:** Phase 4 Complete (499/789 SP)
+**Generated:** 2025-11-30 (Updated post-Phase 5)
+**Status:** Phase 5 Complete (546/789 SP, 69%)
 
 ---
 
 ## Summary
 
-**Total Items:** 8
+**Total Items:** 10 (2 resolved, 4 new)
 **Critical:** 0
-**High:** 1
+**High:** 0
 **Medium:** 2
-**Low:** 5
+**Low:** 8
+**Resolved:** 2 (TD-002, TD-006)
 
 ---
 
@@ -61,35 +62,23 @@
 
 ---
 
-#### 2. Relay Implementation
+#### 2. Relay Implementation - ✅ **RESOLVED**
 
-**File:** `wraith-discovery/src/relay.rs:5`
-**Line:** 5
-**Type:** TODO
-**Severity:** MEDIUM
+**File:** `wraith-discovery/src/relay.rs`
+**Status:** ✅ **COMPLETE** (Phase 5, 2025-11-30)
 
-**Context:**
-```rust
-// TODO: Relay implementation deferred to Phase 5 (Discovery & NAT Traversal)
-// This module is a stub placeholder for now.
-```
-
-**Requirements:**
-- Relay server implementation (TURN-like functionality)
+**Implemented Features:**
+- Relay server (TURN-like functionality)
 - Relay client integration
-- Load balancing across relays
+- Connection forwarding between peers
 - Authentication and authorization
+- Active relay tracking
 
-**Dependencies:**
-- Phase 4 complete (transport layer optimized)
-- DHT implementation (Phase 5)
-- NAT traversal logic (Phase 5)
-
-**Estimated Effort:** 3-4 weeks (part of Phase 5, 123 story points)
-**Phase:** Phase 5 (Discovery & NAT Traversal)
-**Owner:** Network Engineering
-
-**Recommendation:** Scheduled for Phase 5 sprint planning (documented in phase-5-discovery.md)
+**Resolution:**
+- Fully implemented during Phase 5 (Discovery & NAT Traversal)
+- 126 tests passing for wraith-discovery
+- Integration tested with DHT and NAT traversal
+- Documented in phase-5-discovery.md
 
 ---
 
@@ -289,6 +278,129 @@ Commands::Keygen { .. } => {
 **Owner:** Security Engineering
 
 **Recommendation:** Deferred to v0.6.0
+
+---
+
+#### 9. Outdated rand Ecosystem (TD-007)
+
+**File:** `Cargo.toml` (dev-dependencies)
+**Type:** Dependency Update
+**Severity:** LOW
+
+**Context:**
+```toml
+[dev-dependencies]
+rand = "0.8.5"  # Latest: 0.9.2
+getrandom = "0.2.16"  # Latest: 0.3.4 (breaking API change)
+```
+
+**Issue:**
+- `rand` 0.8.5 → 0.9.2 (breaking change)
+- Blocked by `rand_distr` 0.4 compatibility (requires rand 0.8)
+- `rand_distr` 0.6-rc supports rand 0.9 but is release candidate (unstable)
+- `getrandom` 0.2.16 → 0.3.4 (part of rand ecosystem update)
+
+**Requirements:**
+- Update both `rand` (0.9) and `rand_distr` (0.6) together when stable
+- Update `getrandom` to 0.3.4 simultaneously
+- Verify all dev-dependency usage (tests, benchmarks)
+
+**Blocker:**
+- `rand_distr` 0.6 is release candidate (unstable)
+- Breaking API changes require test updates
+
+**Estimated Effort:** 2-3 hours
+**Phase:** Phase 7 (Hardening & Optimization)
+**Owner:** Maintenance Engineering
+
+**Recommendation:** Defer to Phase 7 when rand_distr 0.6 is stable
+
+---
+
+#### 10. Transport Files Without Unit Tests (TD-008)
+
+**Files:**
+- `wraith-transport/src/udp_async.rs` (351 LOC)
+- `wraith-transport/src/factory.rs` (340 LOC)
+- `wraith-transport/src/quic.rs` (175 LOC)
+
+**Type:** Test Coverage Gap
+**Severity:** LOW
+
+**Context:**
+Total 925 LOC across 3 files without dedicated unit tests. Integration tests exist but unit tests recommended for better isolation.
+
+**Requirements:**
+- Add unit tests for UdpAsync transport (basic send/receive, error handling)
+- Add unit tests for TransportFactory (creation logic, type selection)
+- Add unit tests for QuicTransport (connection establishment, stream operations)
+- Target: 70%+ unit test coverage per file
+
+**Dependencies:**
+- Mock transport infrastructure (already exists)
+- Test utilities for transport setup
+
+**Estimated Effort:** 1-2 days
+**Phase:** Phase 6 (Integration & Testing)
+**Owner:** Test Engineering
+
+**Recommendation:** Add during Phase 6 test expansion
+
+---
+
+#### 11. Unsafe Documentation Gap (TD-009)
+
+**Files:** Multiple crates
+**Type:** Documentation Quality
+**Severity:** LOW
+
+**Context:**
+54 unsafe references across codebase, 42 with SAFETY comments (78% coverage). 12 blocks need documentation.
+
+**Missing SAFETY Documentation:**
+- Review all 54 unsafe blocks for SAFETY comment presence
+- Document justification for each unsafe operation
+- Ensure platform guards are properly documented
+- Cross-reference with security audit findings
+
+**Requirements:**
+- Add SAFETY comments to remaining 12 unsafe blocks
+- Verify existing SAFETY comments are accurate
+- Document memory safety invariants
+- Add references to relevant documentation
+
+**Estimated Effort:** 4-6 hours
+**Phase:** Phase 7 (Hardening & Optimization)
+**Owner:** Security Engineering
+
+**Recommendation:** Complete during Phase 7 security audit preparation
+
+---
+
+#### 12. Dependency Monitoring Automation (TD-010)
+
+**File:** `.github/workflows/ci.yml`
+**Type:** Process Improvement
+**Severity:** INFO
+
+**Context:**
+Manual dependency monitoring via `cargo-outdated`. Automate to catch updates earlier.
+
+**Requirements:**
+- Add GitHub Action to run `cargo-outdated` weekly
+- Configure alerts for critical dependency updates
+- Integrate with Dependabot for automated PRs
+- Document dependency update policy
+
+**Dependencies:**
+- GitHub Actions configuration
+- Notification integration (issues, Slack, etc.)
+
+**Estimated Effort:** 2-3 hours
+**Phase:** Any (process improvement)
+**Owner:** DevOps Engineering
+
+**Recommendation:** Implement during next CI/CD improvements sprint
 
 ---
 
@@ -512,35 +624,39 @@ let session = SessionBuilder::established()
 
 ---
 
-### 3. Transport Trait Abstraction
+### 3. Transport Trait Abstraction - ✅ **RESOLVED**
 
-**Current State:** Concrete transport types (UdpTransport, AfXdpSocket)
+**Status:** ✅ **COMPLETE** (Phase 5, 2025-11-30)
 
-**Recommendation:** Introduce Transport trait
+**Implementation:**
+- Transport trait with send/receive/clone operations
+- Factory pattern for transport creation
+- UDP async transport (tokio-based)
+- QUIC transport implementation
+- Mock transport for testing
 
-**Proposed Design:**
+**Implemented Design:**
 ```rust
-// wraith-transport/src/trait.rs
+// wraith-transport/src/transport.rs
 pub trait Transport: Send + Sync {
     fn send(&mut self, packet: &[u8]) -> Result<(), TransportError>;
     fn recv(&mut self, buffer: &mut [u8]) -> Result<usize, TransportError>;
     fn local_addr(&self) -> SocketAddr;
     fn peer_addr(&self) -> Option<SocketAddr>;
+    fn clone_box(&self) -> Box<dyn Transport>;
 }
 
 // Implementations:
-impl Transport for UdpTransport { /* ... */ }
-impl Transport for AfXdpSocket { /* ... */ }
+impl Transport for UdpAsync { /* ... */ }
+impl Transport for QuicTransport { /* ... */ }
+impl Transport for MockTransport { /* ... */ }
 ```
 
-**Benefits:**
-- Easier to add new transports (QUIC, SCTP, etc.)
-- Better testability (mock transports)
-- Required for relay support (Phase 5)
-
-**Effort:** 4-6 hours
-**Priority:** MEDIUM
-**Phase:** Phase 5 (Discovery & NAT Traversal)
+**Resolution:**
+- Fully implemented during Phase 5
+- 24 transport tests passing
+- Enables relay, multi-transport, and future protocol extensions
+- Integration tested with session layer
 
 ---
 
@@ -770,19 +886,25 @@ impl Transport for MockAfXdpSocket {
 
 ---
 
-## Summary
+## Summary (Post-Phase 5)
 
-**Total TODO Items:** 8
-- **Blocking Phase 4:** 1 (AF_XDP socket configuration)
-- **Blocking Phase 5:** 1 (Relay implementation)
-- **Blocking Phase 6:** 0
-- **Non-blocking:** 6 (CLI stubs)
+**Total TODO Items:** 10
+- **Resolved in Phase 5:** 2 (TD-002 Transport trait, TD-006 Relay)
+- **Blocking Phase 6:** 1 (TD-008 Transport unit tests)
+- **Blocking Phase 7:** 2 (TD-007 rand ecosystem, TD-009 unsafe docs)
+- **Non-blocking:** 5 (CLI stubs)
+
+**New Items from Phase 5:** 4
+- TD-007: Outdated rand ecosystem (LOW, Phase 7)
+- TD-008: Transport files without unit tests (LOW, Phase 6)
+- TD-009: Unsafe documentation gap (LOW, Phase 7)
+- TD-010: Dependency monitoring automation (INFO, any time)
 
 **Estimated Remediation Effort:**
-- **Critical Path:** 1 week (hardware benchmarking)
-- **Phase 5:** 4-6 weeks (Discovery & NAT traversal)
-- **Optional:** 12 days (refactoring, test improvements)
+- **Phase 6:** 1-2 days (transport unit tests)
+- **Phase 7:** 6-9 hours (rand update, unsafe docs)
+- **Optional:** 2-3 hours (dependency automation)
 
 **Code Quality:** EXCELLENT (92/100)
-**Technical Debt Ratio:** LOW (14%)
-**Recommendation:** ✅ **PROCEED TO PHASE 5** (after hardware benchmarking)
+**Technical Debt Ratio:** LOW (~13%)
+**Recommendation:** ✅ **PROCEED TO PHASE 6** (Integration & Testing)

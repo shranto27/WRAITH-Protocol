@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **SEC-001:** Implemented S/Kademlia crypto puzzle Sybil resistance
+  - 20-bit difficulty requiring ~1M hash attempts for NodeId generation
+  - O(1) verification, O(2^difficulty) generation
+  - Protects DHT from Sybil and Eclipse attacks
+- **SEC-002:** Implemented DHT privacy enhancement with group_secret
+  - `info_hash = BLAKE3-keyed(group_secret, content_hash)`
+  - Real file hashes never exposed in DHT lookups
+  - Only participants with group_secret can derive lookup keys
+- **SEC-003:** Implemented STUN MESSAGE-INTEGRITY authentication
+  - RFC 5389 compliant HMAC-SHA1 authentication
+  - Transaction ID validation
+  - CRC-32 fingerprint verification
+  - Rate limiting (10 req/s per IP default)
+
+### Added
+
+- `SybilResistance` struct for configurable crypto puzzle difficulty
+- `GroupSecret` type with automatic zeroization
+- `DhtPrivacy` module for privacy-preserving operations
+- `StunAuthentication` struct for RFC 5389 auth
+- `StunRateLimiter` for DoS protection
+- 28 new security-focused tests
+
+### Dependencies
+
+- Added `hmac` 0.12 for HMAC-SHA1
+- Added `sha1` 0.10 for SHA-1 hashing
+- Added `md-5` 0.10 for long-term credential derivation
+
+### Documentation
+
+- Created `phase-5-tech-debt.md`
+- Updated technical debt tracking documents
+- Updated README with security features
+
 ## [0.5.0] - 2025-11-30
 
 ### Added

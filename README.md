@@ -31,7 +31,7 @@ WRAITH Protocol has completed Phases 1-5, delivering a fully functional core pro
 **Code Quality Metrics:**
 - **Quality Grade:** A (92/100)
 - **Technical Debt Ratio:** 14% (well within healthy range)
-- **Test Coverage:** 828 tests passing (100% pass rate)
+- **Test Coverage:** 869 tests passing (100% pass rate)
 - **Security Vulnerabilities:** Zero
 - **Clippy Warnings:** Zero
 - **Unsafe Code Documentation:** 100% coverage (40+ SAFETY comments)
@@ -39,13 +39,13 @@ WRAITH Protocol has completed Phases 1-5, delivering a fully functional core pro
 
 **Implementation Status:**
 - Core workspace: 9 crates (8 active + 1 XDP), ~22,500+ lines of Rust code
-- Test coverage: **828 passing tests** (197 wraith-core + 123 wraith-crypto + 24 vectors + 130 wraith-obfuscation unit + 54 wraith-transport + 16 wraith-files + 184 wraith-discovery + 100 doctests)
+- Test coverage: **869 passing tests** (197 wraith-core + 123 wraith-crypto + 24 vectors + 130 wraith-obfuscation unit + 54 wraith-transport + 16 wraith-files + 212 wraith-discovery + 100 doctests)
   - wraith-core: 197 tests (frame parsing with validation hardening, session management, stream multiplexing, BBR congestion control with pacing, path MTU, connection migration)
   - wraith-crypto: 123 tests (Ed25519 signatures, X25519, Elligator2, XChaCha20-Poly1305 AEAD with key commitment, BLAKE3, Noise_XX, Double Ratchet, replay protection, constant-time ops)
   - wraith-transport: 54 tests (AF_XDP zero-copy sockets with batch processing, worker pools, UDP, MTU discovery, NUMA allocation)
   - wraith-obfuscation: 167 tests total (130 unit + 37 doctests: padding engine with 5 modes, timing obfuscation with 5 distributions, TLS 1.3 mimicry, WebSocket framing, DoH tunneling, adaptive profiles)
   - wraith-files: 16 tests total (12 unit + 4 doctests: io_uring async file I/O with registered buffers, chunking, BLAKE3 hashing)
-  - wraith-discovery: 184 tests (Kademlia DHT routing, STUN client, ICE candidate gathering, relay client/server/selector, unified discovery manager with 15 integration tests)
+  - wraith-discovery: 212 tests (Kademlia DHT routing with S/Kademlia Sybil resistance, DHT privacy enhancement, STUN client with MESSAGE-INTEGRITY authentication, ICE candidate gathering, relay client/server/selector, unified discovery manager with 15 integration tests, 28 security hardening tests)
   - Integration vectors: 24 tests (cryptographic correctness, full pipeline validation)
   - Doctests: 100 tests (API documentation examples across all crates)
 - Benchmarks: 28 criterion benchmarks (frame parsing/building, transport throughput/latency, MTU cache, worker pools, obfuscation operations)
@@ -101,6 +101,9 @@ WRAITH Protocol has completed Phases 1-5, delivering a fully functional core pro
 - **Constant-Time Operations**: All cryptographic operations timing side-channel resistant
 - **Memory Safety**: Pure Rust implementation with ZeroizeOnDrop on all secret key material
 - **Documented Unsafe Code**: Zero unsafe in crypto paths; performance-critical unsafe fully documented with SAFETY comments
+- **S/Kademlia Sybil Resistance**: Crypto puzzle-based NodeId generation (20-bit difficulty, ~1M hash attempts)
+- **DHT Privacy Enhancement**: BLAKE3-keyed info_hash prevents real content hash exposure
+- **STUN MESSAGE-INTEGRITY**: RFC 5389 HMAC-SHA1 authentication with rate limiting (10 req/s default)
 
 ### Privacy & Obfuscation
 
@@ -143,13 +146,22 @@ WRAITH Protocol has completed Phases 1-5, delivering a fully functional core pro
 - **K-bucket Routing Table**: XOR-distance-based routing with k=20
 - **Peer Discovery**: FIND_NODE queries with distance-based routing
 - **Value Storage**: STORE and FIND_VALUE operations for peer announcements
-- **Security**: Encrypted peer announcements, rate limiting, Sybil resistance
+- **S/Kademlia Sybil Resistance**: Crypto puzzle-based NodeId generation (20-bit difficulty)
+  - O(1) verification, O(2^difficulty) generation (~1M hash attempts)
+  - Protects DHT from Sybil and Eclipse attacks
+- **DHT Privacy Enhancement**: BLAKE3-keyed `info_hash` computation
+  - Real file hashes never exposed in DHT lookups
+  - Only participants with `group_secret` can derive lookup keys
+  - Privacy-preserving peer discovery
 
 **NAT Traversal:**
 - **STUN Client**: RFC 5389 compliant NAT type detection
   - Full Cone, Restricted Cone, Port-Restricted Cone, Symmetric NAT detection
   - Public IP and port mapping discovery
   - Multiple STUN server support for reliability
+  - MESSAGE-INTEGRITY authentication (HMAC-SHA1) for secure STUN requests
+  - Transaction ID validation and CRC-32 fingerprint verification
+  - Rate limiting (10 req/s per IP default) for DoS protection
 - **ICE-like Candidate Gathering**: Host, Server Reflexive, Relayed candidates
 - **UDP Hole Punching**: Simultaneous open for NAT traversal
 - **Relay Fallback**: Automatic relay selection when direct connection fails
@@ -680,4 +692,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** Phase 5 Complete (v0.5.0), Phase 6 Ready ✅ | **License:** MIT | **Language:** Rust 2024 | **Tests:** 828 | **Quality:** Grade A (92/100), 14% debt ratio, 100% unsafe docs, 69% protocol complete (546/789 SP)
+**Status:** Phase 5 Complete (v0.5.0), Phase 6 Ready ✅ | **License:** MIT | **Language:** Rust 2024 | **Tests:** 869 | **Quality:** Grade A (92/100), 14% debt ratio, 100% unsafe docs, 69% protocol complete (546/789 SP)

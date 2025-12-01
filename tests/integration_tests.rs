@@ -1,8 +1,8 @@
-//! Integration tests for cross-crate interactions.
+// Integration tests for cross-crate interactions.
 //!
-//! Tests the integration between wraith-crypto and wraith-core crates,
-//! verifying that cryptographic operations work correctly with frame
-//! encoding/decoding and session management.
+// Tests the integration between wraith-crypto and wraith-core crates,
+// verifying that cryptographic operations work correctly with frame
+// encoding/decoding and session management.
 
 use rand_core::{OsRng, RngCore};
 use wraith_core::{
@@ -594,4 +594,222 @@ fn test_x25519_to_session_keys() {
         Frame::parse(&pt).unwrap().payload(),
         b"Post-handshake message"
     );
+}
+// Integration tests for WRAITH Protocol
+//
+// Tests the integration of all protocol components:
+// - File transfer end-to-end
+// - Multi-peer coordination
+// - Resume functionality
+// - NAT traversal
+// - Relay fallback
+
+use std::path::PathBuf;
+use tempfile::TempDir;
+use wraith_core::transfer::{Direction, TransferSession, TransferState};
+use wraith_files::DEFAULT_CHUNK_SIZE;
+use wraith_files::chunker::{FileChunker, FileReassembler};
+use wraith_files::tree_hash::compute_tree_hash;
+
+/// Test basic file chunking and reassembly (unit-level integration)
+#[test]
+fn test_file_chunking_integration() {
+    // Create test file
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test.dat");
+    let test_data = vec![0xAA; 1024 * 1024]; // 1 MB
+    std::fs::write(&test_file, &test_data).unwrap();
+
+    // Chunk file
+    let mut chunker = FileChunker::new(&test_file, DEFAULT_CHUNK_SIZE).unwrap();
+    let total_chunks = chunker.num_chunks();
+    assert_eq!(total_chunks, 4); // 1MB / 256KB = 4 chunks
+
+    // Reassemble
+    let output_file = temp_dir.path().join("output.dat");
+    let mut reassembler =
+        FileReassembler::new(&output_file, test_data.len() as u64, DEFAULT_CHUNK_SIZE).unwrap();
+
+    let mut chunk_index = 0;
+    while let Some(chunk) = chunker.read_chunk().unwrap() {
+        reassembler.write_chunk(chunk_index, &chunk).unwrap();
+        chunk_index += 1;
+    }
+
+    assert!(reassembler.is_complete());
+    reassembler.finalize().unwrap();
+
+    // Verify
+    let reconstructed = std::fs::read(&output_file).unwrap();
+    assert_eq!(reconstructed, test_data);
+}
+
+/// Test tree hash verification integration
+#[test]
+fn test_tree_hash_verification_integration() {
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test.dat");
+    let test_data = vec![0xBB; 512 * 1024]; // 512 KB
+    std::fs::write(&test_file, &test_data).unwrap();
+
+    // Compute tree hash
+    let tree = compute_tree_hash(&test_file, DEFAULT_CHUNK_SIZE).unwrap();
+    assert_eq!(tree.chunks.len(), 2); // 512KB / 256KB = 2 chunks
+
+    // Verify first chunk
+    let mut chunker = FileChunker::new(&test_file, DEFAULT_CHUNK_SIZE).unwrap();
+    let chunk = chunker.read_chunk().unwrap().unwrap();
+    assert!(tree.verify_chunk(0, &chunk));
+
+    // Verify second chunk
+    let chunk2 = chunker.read_chunk().unwrap().unwrap();
+    assert!(tree.verify_chunk(1, &chunk2));
+}
+
+/// Test transfer session progress tracking
+#[test]
+fn test_transfer_session_progress() {
+    let session = TransferSession::new_receive(
+        [1u8; 32],
+        PathBuf::from("/tmp/test.dat"),
+        1024 * 1024, // 1 MB
+        DEFAULT_CHUNK_SIZE,
+    );
+
+    assert_eq!(session.state(), TransferState::Initializing);
+    assert_eq!(session.progress(), 0.0);
+    assert_eq!(session.missing_count(), 4); // 4 chunks missing
+}
+
+/// Test multi-peer coordination
+#[test]
+fn test_multi_peer_coordination() {
+    let mut session = TransferSession::new_receive(
+        [2u8; 32],
+        PathBuf::from("/tmp/multi.dat"),
+        10 * DEFAULT_CHUNK_SIZE as u64,
+        DEFAULT_CHUNK_SIZE,
+    );
+
+    let peer1 = [1u8; 32];
+    let peer2 = [2u8; 32];
+
+    session.add_peer(peer1);
+    session.add_peer(peer2);
+
+    assert_eq!(session.peer_count(), 2);
+
+    // Assign chunks to different peers
+    session.assign_chunk_to_peer(&peer1, 0);
+    session.assign_chunk_to_peer(&peer1, 1);
+    session.assign_chunk_to_peer(&peer2, 2);
+    session.assign_chunk_to_peer(&peer2, 3);
+
+    // Next unassigned chunk should be 4
+    assert_eq!(session.next_chunk_to_request(), Some(4));
+
+    // Mark chunks as downloaded
+    session.mark_peer_chunk_downloaded(&peer1, 0);
+    session.mark_peer_chunk_downloaded(&peer2, 2);
+
+    assert_eq!(session.peer_downloaded_count(&peer1), 1);
+    assert_eq!(session.peer_downloaded_count(&peer2), 1);
+}
+
+/// Placeholder: Full file transfer test (requires protocol integration)
+#[test]
+#[ignore = "Requires full protocol integration (Phase 7)"]
+fn test_file_transfer_end_to_end() {
+    // Placeholder for full end-to-end test
+    // Will be implemented in Phase 7 when protocol components are integrated
+
+    // Structure:
+    // 1. Start sender and receiver nodes
+    // 2. Transfer file
+    // 3. Verify received file matches original
+    // 4. Check transfer session state
+}
+
+/// Placeholder: Resume functionality test (requires protocol integration)
+#[test]
+#[ignore = "Requires full protocol integration (Phase 7)"]
+fn test_file_transfer_with_resume() {
+    // Placeholder for resume test
+    // Will be implemented in Phase 7
+
+    // Structure:
+    // 1. Start transfer
+    // 2. Interrupt after 50% complete
+    // 3. Resume transfer
+    // 4. Verify complete file
+}
+
+/// Placeholder: Multi-peer download test (requires protocol integration)
+#[test]
+#[ignore = "Requires full protocol integration (Phase 7)"]
+fn test_multi_peer_parallel_download() {
+    // Placeholder for multi-peer test
+    // Will be implemented in Phase 7
+
+    // Structure:
+    // 1. Setup multiple sender nodes
+    // 2. Download from all simultaneously
+    // 3. Verify speedup vs single peer
+    // 4. Verify chunk deduplication
+}
+
+/// Placeholder: NAT traversal test (requires protocol integration)
+#[test]
+#[ignore = "Requires full protocol integration (Phase 7)"]
+fn test_nat_traversal() {
+    // Placeholder for NAT traversal test
+    // Will be implemented in Phase 7
+
+    // Structure:
+    // 1. Simulate NAT scenario
+    // 2. Perform STUN/ICE hole punching
+    // 3. Establish direct connection
+    // 4. Transfer file
+}
+
+/// Placeholder: Relay fallback test (requires protocol integration)
+#[test]
+#[ignore = "Requires full protocol integration (Phase 7)"]
+fn test_relay_fallback() {
+    // Placeholder for relay fallback test
+    // Will be implemented in Phase 7
+
+    // Structure:
+    // 1. Start relay server
+    // 2. Simulate failed direct connection
+    // 3. Fall back to relay
+    // 4. Transfer file via relay
+    // 5. Verify throughput acceptable
+}
+
+/// Placeholder: Obfuscation levels test (requires protocol integration)
+#[test]
+#[ignore = "Requires full protocol integration (Phase 7)"]
+fn test_obfuscation_levels() {
+    // Placeholder for obfuscation test
+    // Will be implemented in Phase 7
+
+    // Structure:
+    // 1. Transfer with each obfuscation level (none, low, medium, high, paranoid)
+    // 2. Verify packets look as expected
+    // 3. Measure overhead
+}
+
+/// Placeholder: Encryption end-to-end test (requires protocol integration)
+#[test]
+#[ignore = "Requires full protocol integration (Phase 7)"]
+fn test_encryption_end_to_end() {
+    // Placeholder for encryption test
+    // Will be implemented in Phase 7
+
+    // Structure:
+    // 1. Perform Noise_XX handshake
+    // 2. Transfer encrypted file
+    // 3. Verify decryption at receiver
+    // 4. Verify key ratcheting occurred
 }

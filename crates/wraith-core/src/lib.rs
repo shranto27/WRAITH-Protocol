@@ -36,6 +36,7 @@ pub mod migration;
 pub mod path;
 pub mod session;
 pub mod stream;
+pub mod transfer;
 
 pub use congestion::BbrState;
 pub use error::Error;

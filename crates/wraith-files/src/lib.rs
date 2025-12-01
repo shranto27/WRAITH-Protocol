@@ -14,6 +14,7 @@
 pub mod chunker;
 pub mod hasher;
 pub mod transfer;
+pub mod tree_hash;
 
 // Linux-only high-performance file I/O using io_uring
 #[cfg(target_os = "linux")]

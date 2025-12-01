@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**P0 Critical Security Hardening (2025-11-30):**
+- Complete `unsafe` code documentation audit across all crates
+- Documented all `unsafe impl Send/Sync` implementations:
+  - `wraith-transport::Umem` - SAFETY: Single owner, no shared mutable access
+  - `wraith-transport::AfXdpSocket` - SAFETY: Atomic operations ensure thread safety
+  - `wraith-xdp::XdpProgram` - SAFETY: No concurrent access, immutable after load
+- Added comprehensive SAFETY comments to 40+ unsafe blocks
+  - `wraith-transport::af_xdp.rs` - 22 SAFETY comments (UMEM, ring ops, packet data access)
+  - `wraith-transport::numa.rs` - 9 SAFETY comments (mbind, topology detection)
+  - `wraith-transport::worker.rs` - 5 SAFETY comments (CPU affinity, core pinning)
+  - `wraith-files::io_uring_impl.rs` - 4 SAFETY comments (io_uring operations)
+- 100% unsafe code documentation coverage achieved
+- All unsafe code now has:
+  - Detailed justification explaining why unsafe is necessary
+  - Safety invariants documented
+  - Precondition requirements stated
+  - Thread safety analysis where applicable
+
+**Security Scanning Infrastructure:**
+- Added `.gitleaks.toml` configuration for false positive suppression
+  - Test vectors allowlist (BLAKE3, XChaCha20-Poly1305, X25519, Ed25519)
+  - Documentation examples allowlist (key formats, protocol examples)
+  - Zero real security findings after allowlist application
+- Gitleaks integrated into security scanning workflow
+- All security gates passing (CodeQL, cargo-audit, gitleaks)
+
 **Pre-Phase 5 Technical Debt Review (2025-11-30):**
 - Comprehensive pre-Phase 5 technical debt review (3 files, 753 insertions)
 - `to-dos/technical-debt/pre-phase-5-review-summary.md` - Executive summary of readiness assessment

@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Phase 5 Sprint 5.4: Relay Infrastructure (2025-11-30):**
+- Implemented DERP-style relay infrastructure for NAT traversal
+  - `RelayMessage` protocol with 9 message types (Register, SendPacket, RecvPacket, etc.)
+  - Comprehensive serialization/deserialization with bincode
+  - End-to-end encryption (relay cannot decrypt payloads)
+- Added `RelayClient` for connecting to relay servers
+  - Async registration with relay servers
+  - Packet forwarding through relay
+  - Automatic keepalive mechanism
+  - State machine (Disconnected, Connecting, Registering, Connected, Error)
+  - Background message receiver task
+  - 4 comprehensive tests
+- Implemented `RelayServer` skeleton
+  - Client registration and connection management
+  - Packet forwarding between peers
+  - Rate limiting (configurable packets per client per second)
+  - Client timeout and automatic cleanup
+  - Connection statistics tracking
+  - Configurable max clients, rate limits, timeouts
+  - 6 comprehensive tests
+- Added `RelaySelector` with intelligent relay selection
+  - Multiple selection strategies (LowestLatency, LowestLoad, HighestPriority, Balanced)
+  - Geographic region filtering
+  - Latency measurement and tracking
+  - Load balancing across relays
+  - Fallback relay ordering
+  - 14 comprehensive tests
+- Integration tests: 10 new tests covering full relay workflow
+- **Test Results:** 37 new unit tests + 10 integration tests, all passing (47 total)
+- **Quality Gates:** All passing (fmt, clippy, test)
+- **Progress:** Phase 5 Sprint 5.4 Complete (110/123 SP, 89% of Phase 5)
+
 **Phase 5 Sprint 5.1: Transport Trait Abstraction (2025-11-30):**
 - Implemented `Transport` trait for multi-backend transport abstraction
   - Async send/receive operations with proper error handling

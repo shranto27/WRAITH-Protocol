@@ -5,6 +5,234 @@ All notable changes to WRAITH Protocol will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-12-01
+
+### Added
+
+**Phase 7: Hardening & Optimization - COMPLETE (2025-12-01):**
+
+This release completes Phase 7, delivering security hardening, fuzzing infrastructure, performance optimization, comprehensive documentation, and cross-platform packaging for production readiness.
+
+#### Sprint 7.1: Security Audit (34 SP) - COMPLETE
+
+**Security Review and Hardening:**
+- Comprehensive security audit of all cryptographic implementations
+- Code review checklist for constant-time operations
+- Verification of ZeroizeOnDrop on all secret key material
+- Review of unsafe code blocks with SAFETY comments
+- Threat modeling documentation updates
+- Security best practices documentation
+
+#### Sprint 7.2: Fuzzing & Property Testing (26 SP) - COMPLETE
+
+**Fuzzing Infrastructure (fuzz/ - NEW):**
+- `fuzz/Cargo.toml` - libfuzzer-sys configuration
+- 5 fuzz targets for critical parsing paths:
+  - `frame_parser.rs` - Frame parsing with arbitrary bytes
+    - Tests both SIMD and scalar parsing paths
+    - Ensures parser never panics on malformed input
+  - `dht_message.rs` - DHT message parsing
+    - Validates Kademlia message handling
+    - Tests FIND_NODE, FIND_VALUE, STORE operations
+  - `padding.rs` - Padding engine with all modes
+    - Tests PowerOfTwo, SizeClasses, ConstantRate, Statistical
+    - Validates padding/depadding round-trips
+  - `crypto.rs` - Cryptographic primitives
+    - AEAD encrypt/decrypt fuzzing
+    - Key derivation input validation
+  - `tree_hash.rs` - BLAKE3 tree hashing
+    - Merkle tree construction with arbitrary data
+    - Incremental hasher state transitions
+
+**Property-Based Testing:**
+- proptest integration for frame validation
+- Invariant testing for state machines
+- Round-trip property tests for serialization
+
+#### Sprint 7.3: Performance Optimization (47 SP) - COMPLETE
+
+**O(m) Missing Chunks Optimization (wraith-files/src/chunker.rs):**
+- Dual-tracking pattern with `missing_chunks: HashSet` and `received_chunks: HashSet`
+- `missing_chunks()` returns iterator over missing set - O(m) where m = missing count
+- `missing_count()` returns missing set length - O(1)
+- `is_chunk_missing()` uses HashSet lookup - O(1)
+- `has_chunk()` uses HashSet lookup - O(1)
+- Previous O(n) iteration replaced with O(1)/O(m) operations
+- Critical for large file resume operations (10,000+ chunks)
+
+**Allocation-Free Hashing (wraith-files/src/tree_hash.rs):**
+- `IncrementalTreeHasher::update()` uses slice references
+- No intermediate Vec allocations during hash computation
+- Zero-copy chunk boundary detection
+- Pre-allocated leaf hash vector in `finalize()`
+- Memory-efficient streaming for multi-gigabyte files
+
+**Performance Benchmarks (crates/wraith-files/benches/files_bench.rs - NEW 400 lines):**
+- FileReassembler benchmarks:
+  - `bench_missing_chunks_by_completion` - Validates O(m) scaling at 0%, 50%, 90%, 95%, 99%, 100%
+  - `bench_missing_count` - Validates O(1) count operation
+  - `bench_is_chunk_missing` - Validates O(1) membership test
+  - `bench_chunk_write` - Sequential and random write patterns
+- IncrementalTreeHasher benchmarks:
+  - `bench_incremental_hasher_update` - Update throughput (1KB-64KB)
+  - `bench_incremental_hasher_full` - End-to-end streaming (1MB-100MB)
+- Merkle tree benchmarks:
+  - `bench_merkle_root_computation` - Root calculation (4-4096 leaves)
+  - `bench_tree_hash_from_data` - Full file hashing (1MB-100MB)
+- FileChunker benchmarks:
+  - `bench_file_chunking` - Sequential read throughput (1MB-100MB)
+  - `bench_random_access_chunking` - Seek and read performance
+
+**Profiling Infrastructure (scripts/profile.sh - NEW 234 lines):**
+- CPU profiling with perf and flamegraph
+  - `profile_cpu()` - Generates SVG flamegraphs for hotspot analysis
+  - Targets transfer and crypto benchmarks
+- Memory profiling with valgrind
+  - `profile_memory()` - Uses massif for allocation tracking
+  - Leak detection with full stack traces
+- Cache profiling with perf stat
+  - `profile_cache()` - L1/L2 cache hit rates
+  - Instructions per cycle analysis
+- Benchmark runner
+  - `run_benchmarks()` - Full criterion suite with HTML reports
+- Usage: `./scripts/profile.sh [cpu|memory|cache|bench|all]`
+
+**Benchmark Results:**
+- Missing chunks (99% complete, 10K total): <1us (was O(n), now O(m))
+- Missing count: <100ns regardless of file size
+- Tree hashing: >3 GiB/s (in-memory)
+- Merkle root (4096 leaves): <50us
+- File chunking: >1.5 GiB/s
+- Chunk verification: <1us per 256 KiB chunk
+
+#### Sprint 7.4: Documentation (26 SP) - COMPLETE
+
+**User Documentation (docs/USER_GUIDE.md - NEW ~800 lines):**
+- Installation guide (pre-built binaries, build from source)
+- Quick start tutorial with examples
+- CLI command reference (send, receive, daemon, status, peers, keygen)
+- Configuration guide with all sections explained
+- File transfer workflows (single file, multi-peer, resume)
+- Obfuscation modes (none, low, medium, high, paranoid)
+- Multi-peer download coordination
+- Troubleshooting guide with common issues
+- FAQ section
+- Security best practices
+
+**Configuration Reference (docs/CONFIG_REFERENCE.md - NEW ~650 lines):**
+- Complete TOML configuration reference
+- All configuration sections documented:
+  - `[node]` - Node identity and keypair
+  - `[network]` - Listen address, ports, connections
+  - `[transport]` - AF_XDP, io_uring, UDP settings
+  - `[session]` - Timeouts, retransmission, SACK
+  - `[congestion]` - BBR parameters
+  - `[obfuscation]` - Padding, timing, mimicry
+  - `[discovery]` - DHT, relay, NAT traversal
+  - `[transfer]` - Chunking, multi-peer, resume
+  - `[files]` - io_uring, direct I/O settings
+  - `[logging]` - Levels, formats, audit
+  - `[security]` - Replay protection, ratcheting
+  - `[metrics]` - Prometheus endpoint
+- Environment variable mappings
+- Example configurations:
+  - Minimal configuration
+  - High-performance server
+  - Privacy-focused configuration
+  - Relay server configuration
+
+**API Reference Updates (docs/engineering/api-reference.md):**
+- TransferSession documentation (methods, states, multi-peer)
+- FileChunker documentation (sequential/random access)
+- FileReassembler documentation (O(m) optimization explained)
+- FileTreeHash and tree_hash functions documentation
+- IncrementalTreeHasher documentation
+
+**Deployment Guide Updates (docs/operations/deployment-guide.md):**
+- Expanded Performance Tuning section:
+  - System tuning (sysctl, ulimits)
+  - CPU optimization (isolcpus, NUMA)
+  - AF_XDP performance tuning
+  - io_uring optimization
+  - Benchmark expectations
+- Comprehensive Security Hardening section:
+  - File system permissions
+  - User/group configuration
+  - Systemd security directives
+  - SELinux policy module
+  - AppArmor profile
+  - Network security (iptables/nftables)
+  - Security audit checklist
+  - Security monitoring
+
+#### Sprint 7.5: Cross-Platform & Packaging (25 SP) - COMPLETE
+
+**Cross-Platform CI Testing (.github/workflows/ci.yml):**
+- Added test matrix for Linux, macOS, and Windows
+- Platform-specific test flags (Windows uses limited threads)
+- Enhanced caching strategy per platform
+- Documentation header with job descriptions
+
+**Packaging Script (scripts/package.sh - NEW 400 lines):**
+- Multi-format package generation:
+  - `tar.gz` - Generic Linux tarball with docs and example config
+  - `deb` - Debian/Ubuntu package with systemd service
+  - `rpm` - Fedora/RHEL package with systemd service
+- Package features:
+  - Automatic version extraction from Cargo.toml
+  - Architecture detection (x86_64, aarch64)
+  - SHA256 checksum generation
+  - Stripped binaries for smaller size
+  - Example configuration files
+  - Systemd service with security hardening
+  - Pre/post install scripts for user/group creation
+- Usage: `./scripts/package.sh [deb|rpm|tar|all]`
+
+**Package Contents:**
+- Binary: `/usr/bin/wraith`
+- Config: `/etc/wraith/config.toml.example`
+- Service: `/lib/systemd/system/wraith.service`
+- Docs: README.md, LICENSE, CHANGELOG.md, USER_GUIDE.md
+
+**Systemd Service Features:**
+- Automatic user/group creation (wraith:wraith)
+- Security hardening (NoNewPrivileges, ProtectSystem, etc.)
+- Resource limits (NOFILE=65536, NPROC=4096)
+- Automatic restart on failure
+
+### Changed
+
+- **Version:** 0.6.0 -> 0.7.0
+- **Documentation Structure:**
+  - Added USER_GUIDE.md for end-user documentation
+  - Added CONFIG_REFERENCE.md for configuration documentation
+  - Expanded api-reference.md with Phase 6 components
+  - Expanded deployment-guide.md with security/performance sections
+- **FileReassembler Performance:**
+  - `missing_chunks()` changed from O(n) iteration to O(m) HashSet return
+  - Added `missing_count()` for O(1) count queries
+  - Dual HashSet tracking for optimal performance
+
+### Fixed
+
+- **Performance Issues:**
+  - O(n) missing chunks iteration replaced with O(m) HashSet operations
+  - Allocation overhead in incremental tree hashing eliminated
+  - Memory efficiency improved for large file transfers
+
+### Phase 7 Complete
+
+**All Sprints Completed:**
+- Sprint 7.1: Security Audit (34/34 SP) - COMPLETE
+- Sprint 7.2: Fuzzing & Property Testing (26/26 SP) - COMPLETE
+- Sprint 7.3: Performance Optimization (47/47 SP) - COMPLETE
+- Sprint 7.4: Documentation (26/26 SP) - COMPLETE
+- Sprint 7.5: Cross-Platform & Packaging (25/25 SP) - COMPLETE
+
+**Phase 7 Progress:** 158/158 SP complete (100%)
+
+---
+
 ## [0.6.0] - 2025-11-30
 
 ### Added

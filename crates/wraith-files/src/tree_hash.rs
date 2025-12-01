@@ -104,6 +104,11 @@ pub fn compute_tree_hash<P: AsRef<Path>>(path: P, chunk_size: usize) -> io::Resu
 /// hashing the concatenation of their two children. If there's an odd
 /// number of nodes at any level, the last node is promoted to the next level.
 ///
+/// # Performance
+///
+/// Pre-allocates each tree level to minimize allocations. For n leaves,
+/// performs log2(n) allocations instead of O(n) from repeated Vec::push.
+///
 /// # Example
 ///
 /// ```
@@ -125,7 +130,9 @@ pub fn compute_merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
     let mut current_level = leaves.to_vec();
 
     while current_level.len() > 1 {
-        let mut next_level = Vec::new();
+        // Pre-allocate next level with exact capacity
+        let next_level_size = current_level.len().div_ceil(2);
+        let mut next_level = Vec::with_capacity(next_level_size);
 
         for pair in current_level.chunks(2) {
             let hash = if pair.len() == 2 {
@@ -204,17 +211,25 @@ impl IncrementalTreeHasher {
     ///
     /// Data is buffered until a complete chunk is accumulated, at which
     /// point it's hashed and added to the chunk list.
+    ///
+    /// # Performance
+    ///
+    /// Uses slice-based hashing to avoid allocation in the hot path.
+    /// Each chunk is hashed directly from the buffer without creating
+    /// an intermediate Vec.
     pub fn update(&mut self, data: &[u8]) {
         self.current_buffer.extend_from_slice(data);
 
-        // Process complete chunks
+        // Process complete chunks without intermediate allocation
         while self.current_buffer.len() >= self.chunk_size {
-            let chunk = self
-                .current_buffer
-                .drain(..self.chunk_size)
-                .collect::<Vec<_>>();
-            let hash = blake3::hash(&chunk);
+            // Hash directly from the buffer slice (no allocation)
+            let hash = blake3::hash(&self.current_buffer[..self.chunk_size]);
             self.chunk_hashes.push(*hash.as_bytes());
+
+            // Remove the processed bytes efficiently
+            // This is still O(n) for the remaining bytes, but avoids
+            // the intermediate allocation that drain().collect() creates
+            self.current_buffer.drain(..self.chunk_size);
         }
     }
 

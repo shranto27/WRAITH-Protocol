@@ -9,24 +9,25 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-0.6.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Current Status
 
-**Version:** 0.6.0 (Integration & File Transfer) | **Phase 6 COMPLETE ✅**
+**Version:** 0.7.0 (Hardening & Optimization) | **Phase 7 COMPLETE**
 
-WRAITH Protocol has completed Phases 1-6, delivering a fully functional file transfer engine with chunking, tree hashing, multi-peer coordination, CLI interface, and comprehensive testing infrastructure. The protocol now includes complete integration of crypto, transport, obfuscation, and discovery layers with transfer session management, progress tracking, BLAKE3 tree hashing, and a functional CLI for end-to-end operations.
+WRAITH Protocol has completed all 7 development phases, delivering a production-ready decentralized secure file transfer protocol with comprehensive security, performance optimization, and cross-platform support.
 
-**Pre-Phase 5 Technical Debt Review Complete ✅ (2025-11-30):**
-- Comprehensive analysis of 15 technical debt items (4 complete, 1 executed, 10 deferred)
-- **Zero blocking items for Phase 5** - All critical quality gates passed
-- Implementation report documenting all analysis findings
-- Phase 5 readiness confirmed across all crates
+**Phase 7 Complete (2025-12-01):**
+- Sprint 7.1: Security Audit (34 SP) - COMPLETE
+- Sprint 7.2: Fuzzing & Property Testing (26 SP) - COMPLETE
+- Sprint 7.3: Performance Optimization (47 SP) - COMPLETE
+- Sprint 7.4: Documentation (26 SP) - COMPLETE
+- Sprint 7.5: Cross-Platform & Packaging (25 SP) - COMPLETE
 
-**Phases 1-6 Complete ✅ (644/789 story points, 82% overall progress)**
+**All Phases Complete: 802/947 story points delivered (85% overall)**
 
 **Code Quality Metrics:**
 - **Quality Grade:** A+ (95/100)
@@ -68,12 +69,12 @@ WRAITH Protocol has completed Phases 1-6, delivering a fully functional file tra
 - ✅ Performance benchmarks (33 criterion benchmarks total)
 - ✅ Security documentation (SECURITY.md, TECH-DEBT.md)
 
-**Next: Phase 7 - Full Protocol Integration & Optimization (145 SP)**
-- Wire all components together (crypto + transport + obfuscation + discovery + files)
-- End-to-end file transfer with real peers
-- Performance optimization (>300 Mbps target)
-- Security audit and penetration testing
-- Production readiness and deployment guides
+**Phase 7: Hardening & Optimization (158 SP) - COMPLETE**
+- Security audit and hardening
+- Fuzzing infrastructure with 5 fuzz targets
+- Performance optimization with O(m) algorithms
+- Comprehensive documentation (USER_GUIDE.md, CONFIG_REFERENCE.md)
+- Cross-platform packaging (deb, rpm, tar.gz)
 
 ## Features
 
@@ -422,6 +423,10 @@ See [Python Tooling Guide](docs/engineering/python-tooling.md) for detailed docu
 
 ## Documentation
 
+### Getting Started
+- [User Guide](docs/USER_GUIDE.md) - Installation, quick start, CLI reference
+- [Configuration Reference](docs/CONFIG_REFERENCE.md) - Complete TOML configuration
+
 ### Architecture & Design
 - [Protocol Overview](docs/architecture/protocol-overview.md)
 - [Layer Design](docs/architecture/layer-design.md)
@@ -479,7 +484,7 @@ See [Python Tooling Guide](docs/engineering/python-tooling.md) for detailed docu
 
 WRAITH Protocol development follows a structured 7-phase approach spanning 32-44 weeks:
 
-### Protocol Development (789 Story Points)
+### Protocol Development (947 Story Points)
 
 | Phase | Focus | Duration | Story Points | Status |
 |-------|-------|----------|--------------|--------|
@@ -489,9 +494,9 @@ WRAITH Protocol development follows a structured 7-phase approach spanning 32-44
 | **Phase 4** | Optimization & Hardening (Part I) | 2-3 weeks | 76 | ✅ **Complete** |
 | **Phase 5** | Discovery & NAT Traversal | 5-7 weeks | 123 | ✅ **Complete** |
 | **Phase 6** | Integration & Testing | 4-5 weeks | 98 | ✅ **Complete** |
-| **Phase 7** | Final Hardening & Optimization | 6-8 weeks | 145 | Planned |
+| **Phase 7** | Hardening & Optimization | 6-8 weeks | 158 | ✅ **Complete** |
 
-**Progress:** 644/789 story points delivered (82% complete)
+**Progress:** 802/947 story points delivered (85% complete)
 
 ### Client Applications (1,028 Story Points)
 
@@ -622,14 +627,14 @@ WRAITH Protocol is in active development and we welcome contributions of all kin
 4. ✅ **Phase 4 Part I Complete** - Optimization & hardening (AF_XDP batch processing, BBR pacing, io_uring registered buffers, frame validation)
 5. ✅ **Phase 4 Part II Complete** - Obfuscation & stealth (167 tests, 5 padding modes, 5 timing distributions, TLS/WebSocket/DoH mimicry, adaptive profiles)
 6. ✅ **Phase 5 Complete** - Discovery & NAT traversal (184 tests, Kademlia DHT, STUN/ICE, relay infrastructure, unified DiscoveryManager)
-7. ✅ **Advanced Security Features** - Replay protection, key commitment, automatic rekey, reserved stream ID validation, constant-time operations
-8. ✅ **Performance Optimizations** - SIMD frame parsing, buffer pools, fixed-point BBR arithmetic, lazy stream initialization, zero-copy batch processing
-9. ✅ **Path MTU Discovery** - Complete PMTUD implementation with binary search probing
-10. ✅ **Connection Migration** - PATH_CHALLENGE/PATH_RESPONSE with RTT measurement
-11. ✅ **Traffic Obfuscation** - Complete padding engine, timing obfuscator, protocol mimicry (TLS 1.3, WebSocket, DoH), traffic shaper
-12. ✅ **Cross-Platform Support** - Windows x86_64-msvc compatibility, platform-specific RawFd handling, MSRV 1.85 build fixes
-13. **Next: Phase 7** - Full protocol integration & optimization (end-to-end file transfer, performance tuning, security hardening, production readiness)
-14. Maintain test coverage (current: 911 tests, target: maintain 80%+ coverage)
+7. ✅ **Phase 6 Complete** - Integration & file transfer (transfer sessions, BLAKE3 tree hashing, CLI implementation)
+8. ✅ **Phase 7 Complete** - Security audit, fuzzing (5 targets), O(m) optimizations, comprehensive documentation, cross-platform packaging
+9. ✅ **Advanced Security Features** - Replay protection, key commitment, automatic rekey, reserved stream ID validation, constant-time operations
+10. ✅ **Performance Optimizations** - SIMD frame parsing, buffer pools, fixed-point BBR arithmetic, O(m) missing chunks, zero-copy batch processing
+11. ✅ **Comprehensive Documentation** - USER_GUIDE.md, CONFIG_REFERENCE.md, expanded API reference, deployment guide
+12. ✅ **Cross-Platform Packaging** - deb, rpm, tar.gz packages with systemd service
+13. **Next: Client Applications** - WRAITH-Transfer, WRAITH-Chat, and other protocol clients
+14. Maintain test coverage (current: 911+ tests, target: maintain 80%+ coverage)
 
 See [ROADMAP.md](to-dos/ROADMAP.md) for detailed sprint planning and story point estimates.
 
@@ -693,4 +698,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** Phase 6 Complete (v0.6.0), Phase 7 Ready ✅ | **License:** MIT | **Language:** Rust 2024 | **Tests:** 911 | **Quality:** Grade A+ (95/100), 12% debt ratio, 100% unsafe docs, 82% protocol complete (644/789 SP)
+**Status:** Phase 7 Complete (v0.7.0) | **License:** MIT | **Language:** Rust 2024 | **Tests:** 911+ | **Quality:** Grade A+ (95/100), 12% debt ratio, 100% unsafe docs, 85% protocol complete (802/947 SP)

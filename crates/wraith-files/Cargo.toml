@@ -23,3 +23,9 @@ io-uring = { workspace = true }
 [dev-dependencies]
 proptest = { workspace = true }
 tempfile = "3"
+criterion = { workspace = true }
+rand = "0.8"
+
+[[bench]]
+name = "files_bench"
+harness = false

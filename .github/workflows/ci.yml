@@ -1,4 +1,17 @@
 ---
+# WRAITH Protocol CI Workflow
+#
+# Runs on every push to main/develop and on pull requests.
+# Includes cross-platform testing matrix for Linux, macOS, and Windows.
+#
+# Jobs:
+# 1. check - Basic compilation check
+# 2. test - Cross-platform test matrix (Linux, macOS, Windows)
+# 3. clippy - Linting
+# 4. fmt - Formatting check
+# 5. docs - Documentation build
+# 6. msrv - Minimum Supported Rust Version check
+
 name: CI
 
 "on":
@@ -33,9 +46,25 @@ jobs:
       - name: Check
         run: cargo check --workspace --all-features
 
+  #############################################################################
+  # Cross-Platform Test Matrix
+  #############################################################################
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            test_flags: ""
+          - os: macos-latest
+            test_flags: ""
+          - os: windows-latest
+            # Windows may need longer timeouts for some tests
+            test_flags: "-- --test-threads=2"
+
     steps:
       - uses: actions/checkout@v6
 
@@ -49,10 +78,14 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-test-
+            ${{ runner.os }}-cargo-
 
       - name: Run tests
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --all-features ${{ matrix.test_flags }}
+        shell: bash
 
   clippy:
     name: Clippy

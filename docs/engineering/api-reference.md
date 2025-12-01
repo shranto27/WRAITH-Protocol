@@ -849,6 +849,491 @@ async fn example() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
+## wraith-core: Transfer Session
+
+### TransferSession
+
+Manages file transfer state with multi-peer coordination.
+
+```rust
+pub struct TransferSession {
+    /// Transfer ID (unique identifier)
+    pub id: [u8; 32],
+    /// Transfer direction
+    pub direction: Direction,
+    /// File path
+    pub file_path: PathBuf,
+    /// File size in bytes
+    pub file_size: u64,
+    /// Chunk size in bytes
+    pub chunk_size: usize,
+    /// Total number of chunks
+    pub total_chunks: u64,
+    // ... private fields
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransferState {
+    /// Transfer initializing
+    Initializing,
+    /// Performing handshake
+    Handshaking,
+    /// Actively transferring
+    Transferring,
+    /// Transfer paused (can resume)
+    Paused,
+    /// Completing final verification
+    Completing,
+    /// Transfer complete
+    Complete,
+    /// Transfer failed
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Send,
+    Receive,
+}
+
+impl TransferSession {
+    /// Creates a new send transfer session.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique 32-byte transfer identifier
+    /// * `file_path` - Path to the file being sent
+    /// * `file_size` - Total file size in bytes
+    /// * `chunk_size` - Size of each chunk in bytes
+    pub fn new_send(
+        id: [u8; 32],
+        file_path: PathBuf,
+        file_size: u64,
+        chunk_size: usize,
+    ) -> Self;
+
+    /// Creates a new receive transfer session.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique 32-byte transfer identifier
+    /// * `file_path` - Path where the received file will be saved
+    /// * `file_size` - Expected total file size in bytes
+    /// * `chunk_size` - Size of each chunk in bytes
+    pub fn new_receive(
+        id: [u8; 32],
+        file_path: PathBuf,
+        file_size: u64,
+        chunk_size: usize,
+    ) -> Self;
+
+    /// Starts the transfer.
+    pub fn start(&mut self);
+
+    /// Pauses the transfer (can resume).
+    pub fn pause(&mut self);
+
+    /// Resumes a paused transfer.
+    pub fn resume(&mut self);
+
+    /// Marks a chunk as transferred.
+    ///
+    /// Updates both transferred and missing chunk sets for O(1) operations.
+    pub fn mark_chunk_transferred(&mut self, chunk_index: u64, chunk_size: usize);
+
+    /// Returns transfer progress (0.0 to 1.0).
+    pub fn progress(&self) -> f64;
+
+    /// Returns transfer speed in bytes/sec.
+    pub fn speed(&self) -> Option<f64>;
+
+    /// Returns ETA in seconds.
+    pub fn eta(&self) -> Option<f64>;
+
+    /// Returns missing chunk indices.
+    ///
+    /// # Performance
+    ///
+    /// O(m) where m is the number of missing chunks,
+    /// NOT O(n) where n is total chunks.
+    pub fn missing_chunks(&self) -> Vec<u64>;
+
+    /// Returns missing chunk count.
+    ///
+    /// O(1) operation.
+    pub fn missing_count(&self) -> u64;
+
+    /// Checks if a specific chunk is missing.
+    ///
+    /// O(1) lookup.
+    pub fn is_chunk_missing(&self, chunk_index: u64) -> bool;
+
+    // Multi-peer coordination
+    /// Adds a peer to the transfer.
+    pub fn add_peer(&mut self, peer_id: [u8; 32]);
+
+    /// Removes a peer, returning their assigned chunks.
+    pub fn remove_peer(&mut self, peer_id: &[u8; 32]) -> Option<HashSet<u64>>;
+
+    /// Assigns a chunk to a specific peer.
+    pub fn assign_chunk_to_peer(&mut self, peer_id: &[u8; 32], chunk_index: u64) -> bool;
+
+    /// Returns the next unassigned chunk to request.
+    pub fn next_chunk_to_request(&self) -> Option<u64>;
+
+    /// Returns aggregate download speed from all peers.
+    pub fn aggregate_peer_speed(&self) -> f64;
+
+    /// Returns current state.
+    pub fn state(&self) -> TransferState;
+
+    /// Checks if transfer is complete.
+    pub fn is_complete(&self) -> bool;
+}
+```
+
+**Example:**
+```rust
+use wraith_core::transfer::{TransferSession, Direction};
+use std::path::PathBuf;
+
+// Create receive session for 1 GB file
+let mut session = TransferSession::new_receive(
+    [1u8; 32],
+    PathBuf::from("/tmp/received.dat"),
+    1_000_000_000,  // 1 GB
+    256 * 1024,     // 256 KB chunks
+);
+
+session.start();
+
+// Add multiple peers for parallel download
+session.add_peer([2u8; 32]);
+session.add_peer([3u8; 32]);
+
+// Assign chunks to peers
+session.assign_chunk_to_peer(&[2u8; 32], 0);
+session.assign_chunk_to_peer(&[3u8; 32], 1);
+
+// Mark chunks as received
+session.mark_chunk_transferred(0, 256 * 1024);
+session.mark_chunk_transferred(1, 256 * 1024);
+
+println!("Progress: {:.1}%", session.progress() * 100.0);
+println!("Speed: {:.1} MB/s", session.speed().unwrap_or(0.0) / 1_000_000.0);
+println!("ETA: {:.0}s", session.eta().unwrap_or(0.0));
+```
+
+---
+
+## wraith-files: File Chunking
+
+### FileChunker
+
+Reads files in chunks with seek support for random access.
+
+```rust
+pub struct FileChunker {
+    // Private fields
+}
+
+impl FileChunker {
+    /// Creates a new chunker for a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the file to chunk
+    /// * `chunk_size` - Size of each chunk in bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be opened.
+    pub fn new<P: AsRef<Path>>(path: P, chunk_size: usize) -> io::Result<Self>;
+
+    /// Creates a chunker with default chunk size (256 KB).
+    pub fn with_default_size<P: AsRef<Path>>(path: P) -> io::Result<Self>;
+
+    /// Returns total number of chunks.
+    pub fn num_chunks(&self) -> u64;
+
+    /// Returns chunk size in bytes.
+    pub fn chunk_size(&self) -> usize;
+
+    /// Returns total file size.
+    pub fn total_size(&self) -> u64;
+
+    /// Reads next chunk sequentially.
+    ///
+    /// Returns None when all chunks have been read.
+    pub fn read_chunk(&mut self) -> io::Result<Option<Vec<u8>>>;
+
+    /// Seeks to a specific chunk index.
+    pub fn seek_to_chunk(&mut self, chunk_index: u64) -> io::Result<()>;
+
+    /// Reads a specific chunk by index.
+    pub fn read_chunk_at(&mut self, chunk_index: u64) -> io::Result<Vec<u8>>;
+
+    /// Returns chunk metadata including BLAKE3 hash.
+    pub fn chunk_info(&mut self, chunk_index: u64) -> io::Result<ChunkInfo>;
+}
+
+#[derive(Debug, Clone)]
+pub struct ChunkInfo {
+    /// Chunk index
+    pub index: u64,
+    /// Byte offset in file
+    pub offset: u64,
+    /// Chunk size in bytes
+    pub size: usize,
+    /// BLAKE3 hash of chunk
+    pub hash: [u8; 32],
+}
+```
+
+### FileReassembler
+
+Reassembles files from out-of-order chunks.
+
+```rust
+pub struct FileReassembler {
+    // Private fields
+}
+
+impl FileReassembler {
+    /// Creates a new reassembler.
+    ///
+    /// Pre-allocates the file to the expected size for faster writes.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path where the file will be written
+    /// * `total_size` - Expected total file size in bytes
+    /// * `chunk_size` - Size of each chunk in bytes
+    ///
+    /// # Performance
+    ///
+    /// Initialization is O(n) where n is total_chunks, but subsequent
+    /// missing_chunks() queries are O(m) where m is missing chunks.
+    pub fn new<P: AsRef<Path>>(
+        path: P,
+        total_size: u64,
+        chunk_size: usize,
+    ) -> io::Result<Self>;
+
+    /// Writes a chunk at a specific index.
+    ///
+    /// Supports out-of-order chunk writes for parallel downloads.
+    pub fn write_chunk(&mut self, chunk_index: u64, data: &[u8]) -> io::Result<()>;
+
+    /// Checks if a chunk has been received.
+    pub fn has_chunk(&self, chunk_index: u64) -> bool;
+
+    /// Returns missing chunk indices.
+    ///
+    /// # Performance
+    ///
+    /// O(m) where m is missing chunks, not O(n) total chunks.
+    pub fn missing_chunks(&self) -> Vec<u64>;
+
+    /// Returns missing chunks in sorted order.
+    pub fn missing_chunks_sorted(&self) -> Vec<u64>;
+
+    /// Returns count of missing chunks (O(1)).
+    pub fn missing_count(&self) -> u64;
+
+    /// Checks if a specific chunk is missing (O(1)).
+    pub fn is_chunk_missing(&self, chunk_index: u64) -> bool;
+
+    /// Returns number of received chunks.
+    pub fn received_count(&self) -> u64;
+
+    /// Returns progress (0.0 to 1.0).
+    pub fn progress(&self) -> f64;
+
+    /// Checks if all chunks have been received.
+    pub fn is_complete(&self) -> bool;
+
+    /// Syncs file to disk.
+    pub fn sync(&mut self) -> io::Result<()>;
+
+    /// Finalizes the file (fails if incomplete).
+    pub fn finalize(self) -> io::Result<()>;
+}
+```
+
+**Example:**
+```rust
+use wraith_files::chunker::{FileChunker, FileReassembler};
+use wraith_files::DEFAULT_CHUNK_SIZE;
+
+// Chunking a file
+let mut chunker = FileChunker::new("/path/to/file.dat", DEFAULT_CHUNK_SIZE)?;
+println!("File has {} chunks", chunker.num_chunks());
+
+// Read specific chunk
+let chunk_data = chunker.read_chunk_at(5)?;
+
+// Reassembly
+let mut reassembler = FileReassembler::new(
+    "/path/to/output.dat",
+    chunker.total_size(),
+    DEFAULT_CHUNK_SIZE,
+)?;
+
+// Write chunks (can be out-of-order)
+reassembler.write_chunk(5, &chunk_data)?;
+reassembler.write_chunk(0, &other_chunk)?;
+
+// Check progress
+println!("Progress: {:.1}%", reassembler.progress() * 100.0);
+println!("Missing: {} chunks", reassembler.missing_count());
+
+// Finalize when complete
+if reassembler.is_complete() {
+    reassembler.finalize()?;
+}
+```
+
+---
+
+## wraith-files: Tree Hashing
+
+### FileTreeHash
+
+BLAKE3 Merkle tree hash for file integrity verification.
+
+```rust
+#[derive(Debug, Clone)]
+pub struct FileTreeHash {
+    /// Merkle root hash
+    pub root: [u8; 32],
+    /// Chunk hashes (leaf nodes)
+    pub chunks: Vec<[u8; 32]>,
+}
+
+impl FileTreeHash {
+    /// Creates a new tree hash.
+    pub fn new(root: [u8; 32], chunks: Vec<[u8; 32]>) -> Self;
+
+    /// Returns number of chunks.
+    pub fn chunk_count(&self) -> usize;
+
+    /// Verifies a chunk against its expected hash.
+    pub fn verify_chunk(&self, chunk_index: usize, chunk_data: &[u8]) -> bool;
+
+    /// Returns chunk hash at index.
+    pub fn get_chunk_hash(&self, chunk_index: usize) -> Option<&[u8; 32]>;
+}
+
+/// Computes tree hash for a file.
+///
+/// # Arguments
+///
+/// * `path` - Path to the file
+/// * `chunk_size` - Size of each chunk in bytes
+///
+/// # Performance
+///
+/// Single-pass file read with streaming hash computation.
+/// Throughput: >3 GB/s (memory), >1 GB/s (file I/O).
+pub fn compute_tree_hash<P: AsRef<Path>>(
+    path: P,
+    chunk_size: usize,
+) -> io::Result<FileTreeHash>;
+
+/// Computes Merkle root from leaf hashes.
+///
+/// # Performance
+///
+/// Pre-allocates each tree level to minimize allocations.
+pub fn compute_merkle_root(leaves: &[[u8; 32]]) -> [u8; 32];
+
+/// Verifies a chunk against its expected hash in a tree.
+pub fn verify_chunk(
+    chunk_index: usize,
+    chunk_data: &[u8],
+    tree: &FileTreeHash,
+) -> bool;
+
+/// Computes tree hash from in-memory data.
+pub fn compute_tree_hash_from_data(data: &[u8], chunk_size: usize) -> FileTreeHash;
+```
+
+### IncrementalTreeHasher
+
+Streaming tree hasher for data received incrementally.
+
+```rust
+pub struct IncrementalTreeHasher {
+    // Private fields
+}
+
+impl IncrementalTreeHasher {
+    /// Creates a new incremental hasher.
+    ///
+    /// # Arguments
+    ///
+    /// * `chunk_size` - Size of each chunk in bytes
+    pub fn new(chunk_size: usize) -> Self;
+
+    /// Updates with new data.
+    ///
+    /// Data is buffered until a complete chunk is accumulated,
+    /// at which point it's hashed and added to the chunk list.
+    ///
+    /// # Performance
+    ///
+    /// Uses slice-based hashing to avoid allocation in the hot path.
+    pub fn update(&mut self, data: &[u8]);
+
+    /// Returns number of complete chunks processed.
+    pub fn chunk_count(&self) -> usize;
+
+    /// Returns buffered byte count (not yet hashed).
+    pub fn buffered_bytes(&self) -> usize;
+
+    /// Finalizes and returns the tree hash.
+    ///
+    /// Hashes any remaining buffered data and computes Merkle root.
+    pub fn finalize(self) -> FileTreeHash;
+}
+```
+
+**Example:**
+```rust
+use wraith_files::tree_hash::{
+    compute_tree_hash, verify_chunk, IncrementalTreeHasher,
+};
+use wraith_files::DEFAULT_CHUNK_SIZE;
+
+// Compute tree hash for a file
+let tree = compute_tree_hash("/path/to/file.dat", DEFAULT_CHUNK_SIZE)?;
+println!("Root hash: {:?}", tree.root);
+println!("Chunks: {}", tree.chunk_count());
+
+// Verify a chunk
+let chunk_data = vec![0u8; DEFAULT_CHUNK_SIZE];
+if tree.verify_chunk(0, &chunk_data) {
+    println!("Chunk 0 verified");
+} else {
+    println!("Chunk 0 FAILED verification");
+}
+
+// Incremental hashing (for streaming data)
+let mut hasher = IncrementalTreeHasher::new(DEFAULT_CHUNK_SIZE);
+
+// Feed data as it arrives
+hasher.update(&received_data_part1);
+hasher.update(&received_data_part2);
+hasher.update(&received_data_part3);
+
+// Finalize and get tree hash
+let tree = hasher.finalize();
+println!("Root hash: {:?}", tree.root);
+```
+
+---
+
 ## Feature Flags
 
 **Available features:**

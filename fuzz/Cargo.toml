@@ -1,0 +1,54 @@
+[package]
+name = "wraith-fuzz"
+version = "0.0.0"
+authors = ["WRAITH Protocol Contributors"]
+publish = false
+edition = "2024"
+rust-version = "1.85"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.3", features = ["derive"] }
+wraith-core = { path = "../crates/wraith-core" }
+wraith-crypto = { path = "../crates/wraith-crypto" }
+wraith-discovery = { path = "../crates/wraith-discovery" }
+wraith-obfuscation = { path = "../crates/wraith-obfuscation" }
+wraith-files = { path = "../crates/wraith-files" }
+
+[[bin]]
+name = "fuzz_frame_parser"
+path = "fuzz_targets/frame_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_dht_message"
+path = "fuzz_targets/dht_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_crypto"
+path = "fuzz_targets/crypto.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_padding"
+path = "fuzz_targets/padding.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_tree_hash"
+path = "fuzz_targets/tree_hash.rs"
+test = false
+doc = false
+bench = false

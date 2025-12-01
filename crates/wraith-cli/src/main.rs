@@ -1,15 +1,32 @@
 //! WRAITH Protocol CLI
 //!
 //! Wire-speed Resilient Authenticated Invisible Transfer Handler
+//!
+//! Security features:
+//! - Private key encryption with Argon2id KDF and ChaCha20-Poly1305
+//! - Path sanitization to prevent directory traversal attacks
+//! - Memory zeroization for sensitive data
 
 mod config;
 mod progress;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use zeroize::Zeroize;
 
 use config::Config;
 use progress::{TransferProgress, format_bytes};
+
+/// Encrypted private key file header magic bytes
+const ENCRYPTED_KEY_MAGIC: &[u8; 8] = b"WRAITH01";
+
+/// Argon2id parameters for key derivation
+const ARGON2_MEMORY_COST: u32 = 65536; // 64 MiB
+const ARGON2_TIME_COST: u32 = 3;
+const ARGON2_PARALLELISM: u32 = 4;
+const ARGON2_SALT_SIZE: usize = 16;
+const ARGON2_NONCE_SIZE: usize = 24; // XChaCha20-Poly1305 nonce
+const ARGON2_TAG_SIZE: usize = 16;
 
 /// WRAITH - Secure, fast, undetectable file transfer
 #[derive(Parser)]
@@ -131,6 +148,192 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Sanitize and validate a file path to prevent directory traversal attacks
+///
+/// # Security
+///
+/// This function:
+/// - Canonicalizes the path to resolve symlinks and relative components
+/// - Rejects paths containing '..' components
+/// - Ensures the path doesn't escape intended directories
+fn sanitize_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
+    // Check for obvious traversal attempts in the raw path
+    let path_str = path.to_string_lossy();
+    if path_str.contains("..") {
+        anyhow::bail!("Path traversal attempt detected: path contains '..'");
+    }
+
+    // Canonicalize if the path exists
+    if path.exists() {
+        let canonical = path.canonicalize()?;
+        tracing::debug!("Canonicalized path: {:?} -> {:?}", path, canonical);
+        Ok(canonical)
+    } else {
+        // For non-existent paths (e.g., output files), check the parent
+        if let Some(parent) = path.parent() {
+            if parent.exists() {
+                let canonical_parent = parent.canonicalize()?;
+                let file_name = path
+                    .file_name()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid path: no filename component"))?;
+                Ok(canonical_parent.join(file_name))
+            } else {
+                // Parent doesn't exist, just validate the path doesn't have traversal
+                Ok(path.clone())
+            }
+        } else {
+            Ok(path.clone())
+        }
+    }
+}
+
+/// Encrypt a private key with a passphrase using Argon2id KDF and XChaCha20-Poly1305
+///
+/// # Format
+///
+/// The encrypted file format is:
+/// - 8 bytes: Magic header "WRAITH01"
+/// - 16 bytes: Argon2 salt
+/// - 24 bytes: XChaCha20-Poly1305 nonce
+/// - N bytes: Encrypted private key (32 bytes + 16 byte auth tag)
+///
+/// # Security
+///
+/// - Uses Argon2id for memory-hard key derivation
+/// - XChaCha20-Poly1305 provides authenticated encryption
+/// - Salt and nonce are randomly generated for each encryption
+fn encrypt_private_key(private_key: &[u8; 32], passphrase: &str) -> anyhow::Result<Vec<u8>> {
+    use argon2::{Algorithm, Argon2, Params, Version};
+    use chacha20poly1305::{KeyInit, XChaCha20Poly1305, aead::Aead};
+    use rand_core::{OsRng, RngCore};
+
+    // Generate random salt and nonce
+    let mut salt = [0u8; ARGON2_SALT_SIZE];
+    let mut nonce = [0u8; ARGON2_NONCE_SIZE];
+    OsRng.fill_bytes(&mut salt);
+    OsRng.fill_bytes(&mut nonce);
+
+    // Derive encryption key using Argon2id
+    let params = Params::new(
+        ARGON2_MEMORY_COST,
+        ARGON2_TIME_COST,
+        ARGON2_PARALLELISM,
+        Some(32),
+    )
+    .map_err(|e| anyhow::anyhow!("Argon2 params error: {}", e))?;
+
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut derived_key = [0u8; 32];
+    argon2
+        .hash_password_into(passphrase.as_bytes(), &salt, &mut derived_key)
+        .map_err(|e| anyhow::anyhow!("Argon2 derivation failed: {}", e))?;
+
+    // Encrypt the private key
+    let cipher = XChaCha20Poly1305::new((&derived_key).into());
+    let ciphertext = cipher
+        .encrypt((&nonce).into(), private_key.as_ref())
+        .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
+
+    // Zeroize the derived key
+    derived_key.zeroize();
+
+    // Build output: magic + salt + nonce + ciphertext
+    let mut output = Vec::with_capacity(
+        ENCRYPTED_KEY_MAGIC.len() + ARGON2_SALT_SIZE + ARGON2_NONCE_SIZE + ciphertext.len(),
+    );
+    output.extend_from_slice(ENCRYPTED_KEY_MAGIC);
+    output.extend_from_slice(&salt);
+    output.extend_from_slice(&nonce);
+    output.extend_from_slice(&ciphertext);
+
+    Ok(output)
+}
+
+/// Decrypt an encrypted private key file
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file format is invalid (wrong magic header)
+/// - The passphrase is incorrect
+/// - The file is corrupted
+#[allow(dead_code)]
+fn decrypt_private_key(encrypted_data: &[u8], passphrase: &str) -> anyhow::Result<[u8; 32]> {
+    use argon2::{Algorithm, Argon2, Params, Version};
+    use chacha20poly1305::{KeyInit, XChaCha20Poly1305, aead::Aead};
+
+    let expected_min_size =
+        ENCRYPTED_KEY_MAGIC.len() + ARGON2_SALT_SIZE + ARGON2_NONCE_SIZE + 32 + ARGON2_TAG_SIZE;
+    if encrypted_data.len() < expected_min_size {
+        anyhow::bail!("Invalid encrypted key file: too short");
+    }
+
+    // Verify magic header
+    if &encrypted_data[..8] != ENCRYPTED_KEY_MAGIC {
+        anyhow::bail!("Invalid encrypted key file: wrong format");
+    }
+
+    // Extract salt, nonce, and ciphertext
+    let salt = &encrypted_data[8..8 + ARGON2_SALT_SIZE];
+    let nonce = &encrypted_data[8 + ARGON2_SALT_SIZE..8 + ARGON2_SALT_SIZE + ARGON2_NONCE_SIZE];
+    let ciphertext = &encrypted_data[8 + ARGON2_SALT_SIZE + ARGON2_NONCE_SIZE..];
+
+    // Derive decryption key using Argon2id
+    let params = Params::new(
+        ARGON2_MEMORY_COST,
+        ARGON2_TIME_COST,
+        ARGON2_PARALLELISM,
+        Some(32),
+    )
+    .map_err(|e| anyhow::anyhow!("Argon2 params error: {}", e))?;
+
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut derived_key = [0u8; 32];
+    argon2
+        .hash_password_into(passphrase.as_bytes(), salt, &mut derived_key)
+        .map_err(|e| anyhow::anyhow!("Argon2 derivation failed: {}", e))?;
+
+    // Decrypt the private key
+    let cipher = XChaCha20Poly1305::new((&derived_key).into());
+    let plaintext = cipher.decrypt(nonce.into(), ciphertext).map_err(|_| {
+        anyhow::anyhow!("Decryption failed: incorrect passphrase or corrupted file")
+    })?;
+
+    // Zeroize the derived key
+    derived_key.zeroize();
+
+    if plaintext.len() != 32 {
+        anyhow::bail!("Invalid decrypted key length");
+    }
+
+    let mut private_key = [0u8; 32];
+    private_key.copy_from_slice(&plaintext);
+
+    Ok(private_key)
+}
+
+/// Prompt for passphrase with confirmation
+fn prompt_passphrase(prompt: &str, confirm: bool) -> anyhow::Result<String> {
+    let passphrase = rpassword::prompt_password(prompt)?;
+
+    if passphrase.is_empty() {
+        anyhow::bail!("Passphrase cannot be empty");
+    }
+
+    if passphrase.len() < 8 {
+        anyhow::bail!("Passphrase must be at least 8 characters");
+    }
+
+    if confirm {
+        let confirm_pass = rpassword::prompt_password("Confirm passphrase: ")?;
+        if passphrase != confirm_pass {
+            anyhow::bail!("Passphrases do not match");
+        }
+    }
+
+    Ok(passphrase)
+}
+
 /// Send a file to a recipient
 async fn send_file(
     file: PathBuf,
@@ -139,6 +342,9 @@ async fn send_file(
     config: &Config,
 ) -> anyhow::Result<()> {
     tracing::info!("Sending {:?} to {} (mode: {})", file, recipient, mode);
+
+    // Sanitize file path to prevent directory traversal
+    let file = sanitize_path(&file)?;
 
     // Verify file exists
     if !file.exists() {
@@ -291,10 +497,18 @@ async fn list_peers(config: &Config) -> anyhow::Result<()> {
 }
 
 /// Generate a new identity keypair
+///
+/// # Security
+///
+/// - Private keys are encrypted with a passphrase before being written to disk
+/// - Uses Argon2id for key derivation (memory-hard, resistant to GPU attacks)
+/// - Uses XChaCha20-Poly1305 for authenticated encryption
+/// - Sensitive data is zeroized after use
 async fn generate_keypair(output: Option<String>, _config: &Config) -> anyhow::Result<()> {
     use wraith_crypto::signatures::SigningKey;
 
     println!("Generating new Ed25519 identity keypair...");
+    println!();
 
     let mut rng = rand_core::OsRng;
     let signing_key = SigningKey::generate(&mut rng);
@@ -303,21 +517,55 @@ async fn generate_keypair(output: Option<String>, _config: &Config) -> anyhow::R
     println!("Public key: {}", hex::encode(verifying_key.to_bytes()));
 
     if let Some(path) = output {
-        let output_path = PathBuf::from(path);
+        let output_path = PathBuf::from(&path);
+
+        // Sanitize output path
+        let output_path = sanitize_path(&output_path).unwrap_or(output_path);
 
         // Create parent directory if needed
         if let Some(parent) = output_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
 
-        // Save private key (simplified serialization)
-        let private_bytes = signing_key.to_bytes();
-        std::fs::write(&output_path, private_bytes)?;
+        // Prompt for encryption passphrase
+        println!();
+        println!("Your private key will be encrypted with a passphrase.");
+        println!("Choose a strong passphrase (minimum 8 characters).");
+        println!();
 
-        println!("Private key saved to: {}", output_path.display());
-        println!("\n⚠️  Keep this file secure! It contains your private key.");
+        let passphrase = prompt_passphrase("Enter passphrase: ", true)?;
+
+        // Get private key bytes
+        let mut private_bytes = signing_key.to_bytes();
+
+        // Encrypt the private key
+        let encrypted = encrypt_private_key(&private_bytes, &passphrase)?;
+
+        // Zeroize the plaintext private key
+        private_bytes.zeroize();
+
+        // Write encrypted key to file
+        std::fs::write(&output_path, &encrypted)?;
+
+        // Set restrictive file permissions on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = std::fs::Permissions::from_mode(0o600);
+            std::fs::set_permissions(&output_path, permissions)?;
+        }
+
+        println!();
+        println!("Encrypted private key saved to: {}", output_path.display());
+        println!();
+        println!("IMPORTANT:");
+        println!("  - Your private key is encrypted and protected by your passphrase");
+        println!("  - Keep your passphrase secure - it cannot be recovered if lost");
+        println!("  - Back up this file and your passphrase separately");
     } else {
-        println!("\n⚠️  Private key not saved (use --output to save)");
+        println!();
+        println!("WARNING: Private key not saved (use --output to save)");
+        println!("The key will be lost when this program exits.");
     }
 
     Ok(())

@@ -276,9 +276,71 @@ impl Config {
             );
         }
 
+        // Validate log level
+        let valid_log_levels = ["trace", "debug", "info", "warn", "error"];
+        if !valid_log_levels.contains(&self.logging.level.to_lowercase().as_str()) {
+            anyhow::bail!(
+                "Invalid log level: {}. Must be one of: {}",
+                self.logging.level,
+                valid_log_levels.join(", ")
+            );
+        }
+
         // Validate chunk size
         if self.transfer.chunk_size == 0 || self.transfer.chunk_size > 16 * 1024 * 1024 {
             anyhow::bail!("Chunk size must be between 1 and 16MB");
+        }
+
+        // Validate max concurrent transfers
+        if self.transfer.max_concurrent == 0 || self.transfer.max_concurrent > 1000 {
+            anyhow::bail!("Max concurrent transfers must be between 1 and 1000");
+        }
+
+        // Validate bootstrap nodes (must be valid host:port format)
+        for node in &self.discovery.bootstrap_nodes {
+            self.validate_host_port(node, "Bootstrap node")?;
+        }
+
+        // Validate relay servers (must be valid host:port format)
+        for server in &self.discovery.relay_servers {
+            self.validate_host_port(server, "Relay server")?;
+        }
+
+        Ok(())
+    }
+
+    /// Validate host:port format
+    fn validate_host_port(&self, addr: &str, name: &str) -> anyhow::Result<()> {
+        // Check for basic format: host:port
+        let parts: Vec<&str> = addr.rsplitn(2, ':').collect();
+        if parts.len() != 2 {
+            anyhow::bail!(
+                "{} '{}' missing port (expected format: host:port)",
+                name,
+                addr
+            );
+        }
+
+        let port_str = parts[0];
+        let host = parts[1];
+
+        // Validate port
+        let port: u16 = port_str
+            .parse()
+            .map_err(|_| anyhow::anyhow!("{} '{}' has invalid port: {}", name, addr, port_str))?;
+
+        if port == 0 {
+            anyhow::bail!("{} '{}' has invalid port: 0", name, addr);
+        }
+
+        // Validate host (basic check - not empty and doesn't contain dangerous chars)
+        if host.is_empty() {
+            anyhow::bail!("{} '{}' has empty hostname", name, addr);
+        }
+
+        // Check for path traversal in hostname
+        if host.contains("..") || host.contains('/') || host.contains('\\') {
+            anyhow::bail!("{} '{}' contains invalid characters", name, addr);
         }
 
         Ok(())

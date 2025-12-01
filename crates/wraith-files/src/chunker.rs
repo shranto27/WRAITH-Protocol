@@ -153,23 +153,36 @@ impl FileChunker {
 }
 
 /// File reassembler for receiving side
+///
+/// Supports out-of-order chunk writing for parallel downloads with O(1) chunk
+/// tracking and O(m) missing chunk queries where m is the number of missing chunks.
 pub struct FileReassembler {
     file: File,
     chunk_size: usize,
     total_chunks: u64,
     #[allow(dead_code)]
     total_size: u64,
+    /// Chunks that have been received (for quick lookup)
     received_chunks: HashSet<u64>,
+    /// Chunks that are still missing (for O(m) missing queries)
+    /// This is the inverse of received_chunks for optimal missing chunk iteration
+    missing_chunks_set: HashSet<u64>,
 }
 
 impl FileReassembler {
     /// Create a new reassembler
     ///
     /// Pre-allocates the file to the expected size for faster writes.
+    /// Initializes the missing_chunks_set with all chunk indices for O(m) queries.
     ///
     /// # Errors
     ///
     /// Returns an error if the file cannot be created or pre-allocated.
+    ///
+    /// # Performance
+    ///
+    /// Initialization is O(n) where n is total_chunks, but subsequent missing_chunks()
+    /// queries are O(m) where m is the number of missing chunks.
     pub fn new<P: AsRef<Path>>(path: P, total_size: u64, chunk_size: usize) -> io::Result<Self> {
         let file = OpenOptions::new()
             .write(true)
@@ -182,22 +195,31 @@ impl FileReassembler {
 
         let total_chunks = total_size.div_ceil(chunk_size as u64);
 
+        // Initialize missing set with all chunk indices
+        let missing_chunks_set: HashSet<u64> = (0..total_chunks).collect();
+
         Ok(Self {
             file,
             chunk_size,
             total_chunks,
             total_size,
             received_chunks: HashSet::new(),
+            missing_chunks_set,
         })
     }
 
     /// Write chunk at specific index
     ///
     /// Supports out-of-order chunk writes for parallel downloads.
+    /// Updates both received_chunks and missing_chunks_set for O(1) operations.
     ///
     /// # Errors
     ///
     /// Returns an error if the chunk index is invalid or writing fails.
+    ///
+    /// # Performance
+    ///
+    /// Both insert into received_chunks and remove from missing_chunks_set are O(1).
     pub fn write_chunk(&mut self, chunk_index: u64, data: &[u8]) -> io::Result<()> {
         if chunk_index >= self.total_chunks {
             return Err(io::Error::new(
@@ -210,7 +232,10 @@ impl FileReassembler {
         self.file.seek(SeekFrom::Start(offset))?;
         self.file.write_all(data)?;
 
-        self.received_chunks.insert(chunk_index);
+        // O(1) operations for both sets
+        if self.received_chunks.insert(chunk_index) {
+            self.missing_chunks_set.remove(&chunk_index);
+        }
 
         Ok(())
     }
@@ -222,11 +247,44 @@ impl FileReassembler {
     }
 
     /// Get missing chunk indices
+    ///
+    /// Returns chunk indices that have not yet been received.
+    ///
+    /// # Performance
+    ///
+    /// This is O(m) where m is the number of missing chunks, not O(n) where
+    /// n is total chunks. For large files with most chunks received, this is
+    /// significantly faster than iterating all chunks.
     #[must_use]
     pub fn missing_chunks(&self) -> Vec<u64> {
-        (0..self.total_chunks)
-            .filter(|i| !self.received_chunks.contains(i))
-            .collect()
+        self.missing_chunks_set.iter().copied().collect()
+    }
+
+    /// Get missing chunks sorted
+    ///
+    /// Returns missing chunk indices in ascending order.
+    /// Useful for sequential chunk requests.
+    #[must_use]
+    pub fn missing_chunks_sorted(&self) -> Vec<u64> {
+        let mut missing: Vec<u64> = self.missing_chunks_set.iter().copied().collect();
+        missing.sort_unstable();
+        missing
+    }
+
+    /// Get number of missing chunks
+    ///
+    /// O(1) operation using the missing_chunks_set.
+    #[must_use]
+    pub fn missing_count(&self) -> u64 {
+        self.missing_chunks_set.len() as u64
+    }
+
+    /// Check if a specific chunk is missing
+    ///
+    /// O(1) lookup operation.
+    #[must_use]
+    pub fn is_chunk_missing(&self, chunk_index: u64) -> bool {
+        self.missing_chunks_set.contains(&chunk_index)
     }
 
     /// Get number of received chunks

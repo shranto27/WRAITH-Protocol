@@ -2,10 +2,22 @@
 //!
 //! This module implements the STUN (Session Traversal Utilities for NAT) protocol
 //! for discovering server reflexive addresses and performing NAT type detection.
+//!
+//! # SEC-003: STUN Security Hardening
+//!
+//! This implementation includes RFC 5389 MESSAGE-INTEGRITY authentication using
+//! HMAC-SHA1, transaction ID validation, and fingerprint verification for secure
+//! STUN operations.
 
-use std::net::SocketAddr;
-use std::time::Duration;
+use hmac::{Hmac, Mac};
+use md5::Md5;
+use sha1::Sha1;
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
+use zeroize::Zeroizing;
 
 /// STUN magic cookie (0x2112A442)
 const MAGIC_COOKIE: u32 = 0x2112_A442;
@@ -76,6 +88,158 @@ impl StunMessageType {
     }
 }
 
+// ============================================================================
+// SEC-003: STUN Authentication and Security
+// ============================================================================
+
+/// STUN authentication credentials (SEC-003)
+///
+/// Provides MESSAGE-INTEGRITY authentication as per RFC 5389.
+/// Credentials are zeroized on drop to prevent memory disclosure.
+#[derive(Clone, Debug)]
+pub struct StunAuthentication {
+    /// Username for authentication
+    pub username: String,
+    /// Password (zeroized on drop)
+    password: Zeroizing<String>,
+    /// Realm for long-term credentials (optional)
+    pub realm: Option<String>,
+}
+
+impl StunAuthentication {
+    /// Create new STUN authentication credentials
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - Username
+    /// * `password` - Password (will be zeroized on drop)
+    /// * `realm` - Optional realm for long-term credentials
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::nat::StunAuthentication;
+    ///
+    /// let auth = StunAuthentication::new("user", "pass", Some("example.com".to_string()));
+    /// ```
+    #[must_use]
+    pub fn new(
+        username: impl Into<String>,
+        password: impl Into<String>,
+        realm: Option<String>,
+    ) -> Self {
+        Self {
+            username: username.into(),
+            password: Zeroizing::new(password.into()),
+            realm,
+        }
+    }
+
+    /// Derive HMAC key for MESSAGE-INTEGRITY
+    ///
+    /// For long-term credentials: MD5(username:realm:password)
+    /// For short-term credentials: password
+    fn derive_key(&self) -> Zeroizing<Vec<u8>> {
+        if let Some(realm) = &self.realm {
+            // Long-term credentials: MD5(username:realm:password)
+            use md5::Digest;
+            let mut hasher = Md5::new();
+            hasher.update(self.username.as_bytes());
+            hasher.update(b":");
+            hasher.update(realm.as_bytes());
+            hasher.update(b":");
+            hasher.update(self.password.as_bytes());
+            Zeroizing::new(hasher.finalize().to_vec())
+        } else {
+            // Short-term credentials: use password directly
+            Zeroizing::new(self.password.as_bytes().to_vec())
+        }
+    }
+}
+
+/// Rate limiter for STUN requests (SEC-003)
+///
+/// Limits requests per IP address to prevent abuse.
+#[derive(Clone)]
+pub struct StunRateLimiter {
+    /// Request timestamps per IP
+    requests: Arc<Mutex<HashMap<IpAddr, Vec<Instant>>>>,
+    /// Maximum requests per second
+    max_requests_per_second: usize,
+    /// Time window for rate limiting
+    window: Duration,
+}
+
+impl StunRateLimiter {
+    /// Create a new rate limiter
+    ///
+    /// # Arguments
+    ///
+    /// * `max_requests_per_second` - Maximum requests allowed per IP per second
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::nat::StunRateLimiter;
+    ///
+    /// let limiter = StunRateLimiter::new(10); // 10 requests per second
+    /// ```
+    #[must_use]
+    pub fn new(max_requests_per_second: usize) -> Self {
+        Self {
+            requests: Arc::new(Mutex::new(HashMap::new())),
+            max_requests_per_second,
+            window: Duration::from_secs(1),
+        }
+    }
+
+    /// Check if request from IP should be allowed
+    ///
+    /// # Arguments
+    ///
+    /// * `ip` - IP address of requester
+    ///
+    /// # Returns
+    ///
+    /// `true` if request is allowed, `false` if rate limit exceeded
+    pub fn allow_request(&self, ip: IpAddr) -> bool {
+        let mut requests = self.requests.lock().unwrap();
+        let now = Instant::now();
+
+        // Get or create request history for this IP
+        let history = requests.entry(ip).or_default();
+
+        // Remove old requests outside the window
+        history.retain(|&timestamp| now.duration_since(timestamp) < self.window);
+
+        // Check rate limit
+        if history.len() >= self.max_requests_per_second {
+            return false;
+        }
+
+        // Record this request
+        history.push(now);
+        true
+    }
+
+    /// Clear old entries from rate limiter (periodic cleanup)
+    pub fn cleanup(&self) {
+        let mut requests = self.requests.lock().unwrap();
+        let now = Instant::now();
+
+        requests.retain(|_, history| {
+            history.retain(|&timestamp| now.duration_since(timestamp) < self.window);
+            !history.is_empty()
+        });
+    }
+}
+
+impl Default for StunRateLimiter {
+    fn default() -> Self {
+        Self::new(10) // 10 requests per second by default
+    }
+}
+
 /// STUN attribute types
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StunAttribute {
@@ -83,9 +247,13 @@ pub enum StunAttribute {
     MappedAddress(SocketAddr),
     /// XOR-Mapped address (0x0020) - preferred over MAPPED-ADDRESS
     XorMappedAddress(SocketAddr),
+    /// Username (0x0006) - for authentication
+    Username(String),
+    /// Message integrity (0x0008) - HMAC-SHA1
+    MessageIntegrity([u8; 20]),
     /// Software identifier (0x8022)
     Software(String),
-    /// Fingerprint (0x8028)
+    /// Fingerprint (0x8028) - CRC-32
     Fingerprint(u32),
     /// Unknown attribute type
     Unknown(u16, Vec<u8>),
@@ -96,6 +264,8 @@ impl StunAttribute {
     fn attr_type(&self) -> u16 {
         match self {
             Self::MappedAddress(_) => 0x0001,
+            Self::Username(_) => 0x0006,
+            Self::MessageIntegrity(_) => 0x0008,
             Self::XorMappedAddress(_) => 0x0020,
             Self::Software(_) => 0x8022,
             Self::Fingerprint(_) => 0x8028,
@@ -158,6 +328,8 @@ impl StunAttribute {
 
                 value
             }
+            Self::Username(u) => u.as_bytes().to_vec(),
+            Self::MessageIntegrity(hmac) => hmac.to_vec(),
             Self::Software(s) => s.as_bytes().to_vec(),
             Self::Fingerprint(f) => f.to_be_bytes().to_vec(),
             Self::Unknown(_, data) => data.clone(),
@@ -168,6 +340,20 @@ impl StunAttribute {
     /// Decode attribute from bytes
     fn decode(attr_type: u16, value: &[u8], transaction_id: &[u8; 12]) -> Result<Self, StunError> {
         match attr_type {
+            0x0006 => {
+                // USERNAME
+                let s = String::from_utf8_lossy(value).to_string();
+                Ok(Self::Username(s))
+            }
+            0x0008 => {
+                // MESSAGE-INTEGRITY
+                if value.len() != 20 {
+                    return Err(StunError::InvalidAttribute);
+                }
+                let mut hmac = [0u8; 20];
+                hmac.copy_from_slice(value);
+                Ok(Self::MessageIntegrity(hmac))
+            }
             0x0020 => {
                 // XOR-MAPPED-ADDRESS
                 if value.len() < 4 {
@@ -211,6 +397,14 @@ impl StunAttribute {
                 // SOFTWARE
                 let s = String::from_utf8_lossy(value).to_string();
                 Ok(Self::Software(s))
+            }
+            0x8028 => {
+                // FINGERPRINT
+                if value.len() != 4 {
+                    return Err(StunError::InvalidAttribute);
+                }
+                let fingerprint = u32::from_be_bytes([value[0], value[1], value[2], value[3]]);
+                Ok(Self::Fingerprint(fingerprint))
             }
             _ => Ok(Self::Unknown(attr_type, value.to_vec())),
         }
@@ -379,6 +573,266 @@ impl StunMessage {
         }
         None
     }
+
+    // ========================================================================
+    // SEC-003: MESSAGE-INTEGRITY and FINGERPRINT Support
+    // ========================================================================
+
+    /// Add MESSAGE-INTEGRITY attribute (SEC-003)
+    ///
+    /// Computes HMAC-SHA1 over the message up to (but not including) the
+    /// MESSAGE-INTEGRITY attribute itself. Must be called before encoding.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth` - Authentication credentials
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::nat::{StunMessage, StunAuthentication};
+    ///
+    /// let mut msg = StunMessage::binding_request();
+    /// let auth = StunAuthentication::new("user", "pass", None);
+    /// msg.add_message_integrity(&auth);
+    /// ```
+    pub fn add_message_integrity(&mut self, auth: &StunAuthentication) {
+        // First, encode the message without MESSAGE-INTEGRITY
+        let mut temp_msg = self.clone();
+        temp_msg.attributes.retain(|attr| {
+            !matches!(attr, StunAttribute::MessageIntegrity(_))
+                && !matches!(attr, StunAttribute::Fingerprint(_))
+        });
+
+        // Encode message
+        let mut bytes = Vec::new();
+        let msg_type = self.message_type.encode(self.message_class);
+        bytes.extend_from_slice(&msg_type.to_be_bytes());
+
+        // Message Length placeholder (will include MESSAGE-INTEGRITY)
+        let length_offset = bytes.len();
+        bytes.extend_from_slice(&[0u8; 2]);
+
+        bytes.extend_from_slice(&MAGIC_COOKIE.to_be_bytes());
+        bytes.extend_from_slice(&self.transaction_id);
+
+        // Add existing attributes (except MESSAGE-INTEGRITY and FINGERPRINT)
+        for attr in &temp_msg.attributes {
+            bytes.extend_from_slice(&attr.encode(&self.transaction_id));
+        }
+
+        // Update message length to include MESSAGE-INTEGRITY (24 bytes: 4 header + 20 HMAC)
+        let msg_length = bytes.len() - HEADER_SIZE + 24;
+        bytes[length_offset..length_offset + 2].copy_from_slice(&(msg_length as u16).to_be_bytes());
+
+        // Compute HMAC-SHA1
+        let key = auth.derive_key();
+        type HmacSha1 = Hmac<Sha1>;
+        let mut mac = HmacSha1::new_from_slice(&key).expect("HMAC can take key of any size");
+        mac.update(&bytes);
+        let result = mac.finalize();
+        let hmac_bytes: [u8; 20] = result.into_bytes().into();
+
+        // Add MESSAGE-INTEGRITY attribute
+        self.attributes
+            .push(StunAttribute::MessageIntegrity(hmac_bytes));
+    }
+
+    /// Verify MESSAGE-INTEGRITY attribute (SEC-003)
+    ///
+    /// Validates that the MESSAGE-INTEGRITY HMAC is correct.
+    ///
+    /// # Arguments
+    ///
+    /// * `auth` - Authentication credentials
+    ///
+    /// # Errors
+    ///
+    /// Returns error if MESSAGE-INTEGRITY is missing or invalid
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::nat::{StunMessage, StunAuthentication};
+    ///
+    /// let mut msg = StunMessage::binding_request();
+    /// let auth = StunAuthentication::new("user", "pass", None);
+    /// msg.add_message_integrity(&auth);
+    ///
+    /// // Verify
+    /// assert!(msg.verify_message_integrity(&auth).is_ok());
+    /// ```
+    pub fn verify_message_integrity(&self, auth: &StunAuthentication) -> Result<(), StunError> {
+        // Find MESSAGE-INTEGRITY attribute
+        let mut msg_integrity_hmac = None;
+        let mut msg_integrity_index = 0;
+        for (i, attr) in self.attributes.iter().enumerate() {
+            if let StunAttribute::MessageIntegrity(hmac) = attr {
+                msg_integrity_hmac = Some(*hmac);
+                msg_integrity_index = i;
+                break;
+            }
+        }
+
+        let expected_hmac = msg_integrity_hmac.ok_or(StunError::MissingAttribute)?;
+
+        // Rebuild message up to MESSAGE-INTEGRITY
+        let mut temp_msg = self.clone();
+        temp_msg.attributes.truncate(msg_integrity_index);
+
+        let mut bytes = Vec::new();
+        let msg_type = temp_msg.message_type.encode(temp_msg.message_class);
+        bytes.extend_from_slice(&msg_type.to_be_bytes());
+
+        // Message Length (includes MESSAGE-INTEGRITY header + value)
+        let mut attr_length = 0;
+        for attr in &temp_msg.attributes {
+            let encoded = attr.encode(&temp_msg.transaction_id);
+            attr_length += encoded.len();
+        }
+        attr_length += 24; // MESSAGE-INTEGRITY attribute (4 + 20)
+
+        bytes.extend_from_slice(&(attr_length as u16).to_be_bytes());
+        bytes.extend_from_slice(&MAGIC_COOKIE.to_be_bytes());
+        bytes.extend_from_slice(&temp_msg.transaction_id);
+
+        for attr in &temp_msg.attributes {
+            bytes.extend_from_slice(&attr.encode(&temp_msg.transaction_id));
+        }
+
+        // Compute expected HMAC
+        let key = auth.derive_key();
+        type HmacSha1 = Hmac<Sha1>;
+        let mut mac = HmacSha1::new_from_slice(&key).expect("HMAC can take key of any size");
+        mac.update(&bytes);
+        let result = mac.finalize();
+        let computed_hmac: [u8; 20] = result.into_bytes().into();
+
+        if computed_hmac == expected_hmac {
+            Ok(())
+        } else {
+            Err(StunError::AuthenticationFailed)
+        }
+    }
+
+    /// Add FINGERPRINT attribute (SEC-003)
+    ///
+    /// Computes CRC-32 over the message and XORs with 0x5354554e.
+    /// Must be called after MESSAGE-INTEGRITY if both are used.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::nat::StunMessage;
+    ///
+    /// let mut msg = StunMessage::binding_request();
+    /// msg.add_fingerprint();
+    /// ```
+    pub fn add_fingerprint(&mut self) {
+        // Remove existing FINGERPRINT if present
+        self.attributes
+            .retain(|attr| !matches!(attr, StunAttribute::Fingerprint(_)));
+
+        // Encode message without FINGERPRINT
+        let mut bytes = Vec::new();
+        let msg_type = self.message_type.encode(self.message_class);
+        bytes.extend_from_slice(&msg_type.to_be_bytes());
+
+        // Message Length (will include FINGERPRINT)
+        let length_offset = bytes.len();
+        bytes.extend_from_slice(&[0u8; 2]);
+
+        bytes.extend_from_slice(&MAGIC_COOKIE.to_be_bytes());
+        bytes.extend_from_slice(&self.transaction_id);
+
+        for attr in &self.attributes {
+            bytes.extend_from_slice(&attr.encode(&self.transaction_id));
+        }
+
+        // Update length to include FINGERPRINT (8 bytes: 4 header + 4 CRC)
+        let msg_length = bytes.len() - HEADER_SIZE + 8;
+        bytes[length_offset..length_offset + 2].copy_from_slice(&(msg_length as u16).to_be_bytes());
+
+        // Compute CRC-32
+        let crc = Self::crc32(&bytes);
+        let fingerprint = crc ^ 0x5354_554e; // XOR with defined constant
+
+        self.attributes
+            .push(StunAttribute::Fingerprint(fingerprint));
+    }
+
+    /// Verify FINGERPRINT attribute (SEC-003)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if FINGERPRINT is missing or invalid
+    pub fn verify_fingerprint(&self) -> Result<(), StunError> {
+        // Find FINGERPRINT attribute (must be last)
+        let fingerprint_value = self
+            .attributes
+            .iter()
+            .rev()
+            .find_map(|attr| {
+                if let StunAttribute::Fingerprint(fp) = attr {
+                    Some(*fp)
+                } else {
+                    None
+                }
+            })
+            .ok_or(StunError::MissingAttribute)?;
+
+        // Rebuild message up to FINGERPRINT
+        let mut temp_msg = self.clone();
+        temp_msg
+            .attributes
+            .retain(|attr| !matches!(attr, StunAttribute::Fingerprint(_)));
+
+        let mut bytes = Vec::new();
+        let msg_type = temp_msg.message_type.encode(temp_msg.message_class);
+        bytes.extend_from_slice(&msg_type.to_be_bytes());
+
+        // Message Length
+        let mut attr_length = 0;
+        for attr in &temp_msg.attributes {
+            let encoded = attr.encode(&temp_msg.transaction_id);
+            attr_length += encoded.len();
+        }
+        attr_length += 8; // FINGERPRINT attribute
+
+        bytes.extend_from_slice(&(attr_length as u16).to_be_bytes());
+        bytes.extend_from_slice(&MAGIC_COOKIE.to_be_bytes());
+        bytes.extend_from_slice(&temp_msg.transaction_id);
+
+        for attr in &temp_msg.attributes {
+            bytes.extend_from_slice(&attr.encode(&temp_msg.transaction_id));
+        }
+
+        // Compute expected fingerprint
+        let crc = Self::crc32(&bytes);
+        let expected_fingerprint = crc ^ 0x5354_554e;
+
+        if expected_fingerprint == fingerprint_value {
+            Ok(())
+        } else {
+            Err(StunError::FingerprintMismatch)
+        }
+    }
+
+    /// Compute CRC-32 (polynomial 0x04C11DB7)
+    fn crc32(data: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFF_u32;
+        for &byte in data {
+            crc ^= u32::from(byte) << 24;
+            for _ in 0..8 {
+                if crc & 0x8000_0000 != 0 {
+                    crc = (crc << 1) ^ 0x04C1_1DB7;
+                } else {
+                    crc <<= 1;
+                }
+            }
+        }
+        !crc
+    }
 }
 
 /// STUN client for server reflexive address discovery
@@ -480,6 +934,12 @@ pub enum StunError {
     ErrorResponse,
     /// Missing required attribute
     MissingAttribute,
+    /// Authentication failed (SEC-003)
+    AuthenticationFailed,
+    /// Fingerprint mismatch (SEC-003)
+    FingerprintMismatch,
+    /// Rate limit exceeded (SEC-003)
+    RateLimitExceeded,
 }
 
 impl std::fmt::Display for StunError {
@@ -494,6 +954,9 @@ impl std::fmt::Display for StunError {
             Self::TransactionMismatch => write!(f, "Transaction ID mismatch"),
             Self::ErrorResponse => write!(f, "STUN error response"),
             Self::MissingAttribute => write!(f, "Missing required STUN attribute"),
+            Self::AuthenticationFailed => write!(f, "MESSAGE-INTEGRITY authentication failed"),
+            Self::FingerprintMismatch => write!(f, "FINGERPRINT verification failed"),
+            Self::RateLimitExceeded => write!(f, "Rate limit exceeded"),
         }
     }
 }
@@ -565,5 +1028,177 @@ mod tests {
     #[test]
     fn test_magic_cookie() {
         assert_eq!(MAGIC_COOKIE, 0x2112_A442);
+    }
+
+    // SEC-003: STUN Security Hardening Tests
+    #[test]
+    fn test_stun_authentication() {
+        let auth = StunAuthentication::new("testuser", "testpass", None);
+        assert_eq!(auth.username, "testuser");
+        assert_eq!(auth.realm, None);
+    }
+
+    #[test]
+    fn test_stun_authentication_with_realm() {
+        let auth = StunAuthentication::new("user", "pass", Some("example.com".to_string()));
+        assert_eq!(auth.username, "user");
+        assert_eq!(auth.realm, Some("example.com".to_string()));
+    }
+
+    #[test]
+    fn test_message_integrity_roundtrip() {
+        let mut msg = StunMessage::binding_request();
+        let auth = StunAuthentication::new("user", "pass", None);
+
+        msg.add_message_integrity(&auth);
+
+        // Should have MESSAGE-INTEGRITY attribute
+        let has_integrity = msg
+            .attributes
+            .iter()
+            .any(|attr| matches!(attr, StunAttribute::MessageIntegrity(_)));
+        assert!(has_integrity);
+
+        // Verify should pass
+        assert!(msg.verify_message_integrity(&auth).is_ok());
+    }
+
+    #[test]
+    fn test_message_integrity_wrong_password() {
+        let mut msg = StunMessage::binding_request();
+        let auth1 = StunAuthentication::new("user", "pass1", None);
+        let auth2 = StunAuthentication::new("user", "pass2", None);
+
+        msg.add_message_integrity(&auth1);
+
+        // Verify with wrong password should fail
+        assert!(msg.verify_message_integrity(&auth2).is_err());
+    }
+
+    #[test]
+    fn test_message_integrity_long_term_credentials() {
+        let mut msg = StunMessage::binding_request();
+        let auth = StunAuthentication::new("user", "pass", Some("example.com".to_string()));
+
+        msg.add_message_integrity(&auth);
+        assert!(msg.verify_message_integrity(&auth).is_ok());
+    }
+
+    #[test]
+    fn test_fingerprint_roundtrip() {
+        let mut msg = StunMessage::binding_request();
+        msg.add_fingerprint();
+
+        // Should have FINGERPRINT attribute
+        let has_fingerprint = msg
+            .attributes
+            .iter()
+            .any(|attr| matches!(attr, StunAttribute::Fingerprint(_)));
+        assert!(has_fingerprint);
+
+        // Verify should pass
+        assert!(msg.verify_fingerprint().is_ok());
+    }
+
+    #[test]
+    fn test_fingerprint_tampered_message() {
+        let mut msg = StunMessage::binding_request();
+        msg.add_fingerprint();
+
+        // Tamper with message
+        msg.add_attribute(StunAttribute::Software("tampered".to_string()));
+
+        // Fingerprint verification should fail
+        assert!(msg.verify_fingerprint().is_err());
+    }
+
+    #[test]
+    fn test_message_integrity_and_fingerprint() {
+        let mut msg = StunMessage::binding_request();
+        let auth = StunAuthentication::new("user", "pass", None);
+
+        // Add MESSAGE-INTEGRITY first, then FINGERPRINT
+        msg.add_message_integrity(&auth);
+        msg.add_fingerprint();
+
+        // Both should verify
+        assert!(msg.verify_message_integrity(&auth).is_ok());
+        assert!(msg.verify_fingerprint().is_ok());
+    }
+
+    #[test]
+    fn test_rate_limiter_allows_requests() {
+        let limiter = StunRateLimiter::new(5);
+        let ip = "192.168.1.1".parse().unwrap();
+
+        // First 5 requests should be allowed
+        for _ in 0..5 {
+            assert!(limiter.allow_request(ip));
+        }
+
+        // 6th request should be denied
+        assert!(!limiter.allow_request(ip));
+    }
+
+    #[test]
+    fn test_rate_limiter_different_ips() {
+        let limiter = StunRateLimiter::new(5);
+        let ip1 = "192.168.1.1".parse().unwrap();
+        let ip2 = "192.168.1.2".parse().unwrap();
+
+        // Each IP gets its own limit
+        for _ in 0..5 {
+            assert!(limiter.allow_request(ip1));
+            assert!(limiter.allow_request(ip2));
+        }
+
+        assert!(!limiter.allow_request(ip1));
+        assert!(!limiter.allow_request(ip2));
+    }
+
+    #[test]
+    fn test_rate_limiter_cleanup() {
+        let limiter = StunRateLimiter::new(10);
+        let ip = "192.168.1.1".parse().unwrap();
+
+        // Make some requests
+        for _ in 0..5 {
+            limiter.allow_request(ip);
+        }
+
+        // Cleanup should work
+        limiter.cleanup();
+
+        // Should still be able to track requests
+        assert!(limiter.allow_request(ip));
+    }
+
+    #[test]
+    fn test_crc32_computation() {
+        let data = b"hello world";
+        let crc = StunMessage::crc32(data);
+        // CRC-32 should be deterministic
+        assert_eq!(crc, StunMessage::crc32(data));
+    }
+
+    #[test]
+    fn test_username_attribute_encoding() {
+        let username = StunAttribute::Username("testuser".to_string());
+        let transaction_id = [0u8; 12];
+        let encoded = username.encode(&transaction_id);
+
+        // Should encode type, length, value, and padding
+        assert!(encoded.len() >= 4 + 8); // 4 byte header + 8 byte value
+    }
+
+    #[test]
+    fn test_message_integrity_attribute_encoding() {
+        let hmac = [42u8; 20];
+        let msg_integrity = StunAttribute::MessageIntegrity(hmac);
+        let transaction_id = [0u8; 12];
+        let encoded = msg_integrity.encode(&transaction_id);
+
+        // Should be 24 bytes: 4 byte header + 20 byte HMAC
+        assert_eq!(encoded.len(), 24);
     }
 }

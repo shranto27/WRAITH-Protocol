@@ -51,6 +51,7 @@ pub mod types;
 pub use hole_punch::{HolePuncher, PunchError};
 pub use ice::{Candidate, CandidateType, IceCandidate, IceGatherer};
 pub use stun::{
-    StunAttribute, StunClient, StunError, StunMessage, StunMessageClass, StunMessageType,
+    StunAttribute, StunAuthentication, StunClient, StunError, StunMessage, StunMessageClass,
+    StunMessageType, StunRateLimiter,
 };
 pub use types::{NatDetector, NatError, NatType};

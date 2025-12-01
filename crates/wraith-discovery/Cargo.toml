@@ -17,6 +17,10 @@ blake3 = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 bincode = { workspace = true }
+zeroize = { workspace = true }
+hmac = "0.12"
+sha1 = "0.10"
+md-5 = "0.10"
 
 [dev-dependencies]
 proptest = { workspace = true }

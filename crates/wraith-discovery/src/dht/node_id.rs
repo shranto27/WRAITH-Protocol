@@ -3,6 +3,12 @@
 //! This module provides the NodeId type, which is a 256-bit identifier used in
 //! the Kademlia DHT. NodeIds are derived from public keys using BLAKE3 hashing
 //! and use XOR distance metric for routing.
+//!
+//! # S/Kademlia Sybil Resistance
+//!
+//! This module implements crypto puzzle-based Sybil resistance as described in
+//! the S/Kademlia paper. NodeId generation requires computational work (proof-of-work),
+//! making it expensive to generate large numbers of fake identities.
 
 use blake3::Hasher;
 use rand::Rng;
@@ -10,11 +16,185 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 
+/// S/Kademlia crypto puzzle for Sybil resistance
+///
+/// Requires finding a nonce such that BLAKE3(public_key || nonce) has
+/// a specified number of leading zero bits. This makes NodeId generation
+/// computationally expensive, preventing Sybil attacks.
+#[derive(Clone, Debug)]
+pub struct SybilResistance {
+    /// Number of leading zero bits required (default: 20)
+    difficulty: usize,
+}
+
+impl SybilResistance {
+    /// Create a new Sybil resistance configuration
+    ///
+    /// # Arguments
+    ///
+    /// * `difficulty` - Number of leading zero bits required (recommended: 16-24)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::dht::SybilResistance;
+    ///
+    /// let resistance = SybilResistance::new(20);
+    /// ```
+    #[must_use]
+    pub const fn new(difficulty: usize) -> Self {
+        Self { difficulty }
+    }
+
+    /// Create default configuration (20-bit difficulty)
+    ///
+    /// A 20-bit puzzle requires ~1 million hash attempts on average,
+    /// taking approximately 1-2 seconds on a modern CPU.
+    #[must_use]
+    pub const fn default() -> Self {
+        Self::new(20)
+    }
+
+    /// Generate a NodeId with proof-of-work
+    ///
+    /// Finds a nonce such that BLAKE3(public_key || nonce) has the required
+    /// number of leading zero bits. The nonce is returned for verification.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - 32-byte public key
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (NodeId, nonce, puzzle_hash)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::dht::SybilResistance;
+    ///
+    /// let pubkey = [42u8; 32];
+    /// let resistance = SybilResistance::new(16); // Lower difficulty for testing
+    /// let (node_id, nonce, _) = resistance.generate_with_puzzle(&pubkey);
+    /// assert!(resistance.verify(&pubkey, &node_id, nonce).is_ok());
+    /// ```
+    #[must_use]
+    pub fn generate_with_puzzle(&self, public_key: &[u8; 32]) -> (NodeId, u64, [u8; 32]) {
+        let mut nonce = 0u64;
+        loop {
+            let mut hasher = Hasher::new();
+            hasher.update(public_key);
+            hasher.update(&nonce.to_le_bytes());
+            hasher.update(b"wraith-dht-puzzle");
+            let hash = hasher.finalize();
+            let hash_bytes = *hash.as_bytes();
+
+            // Check if hash meets difficulty requirement
+            if Self::count_leading_zeros(&hash_bytes) >= self.difficulty {
+                // Derive NodeId from puzzle hash
+                let mut node_hasher = Hasher::new();
+                node_hasher.update(&hash_bytes);
+                node_hasher.update(b"wraith-dht-node-id");
+                let node_id_hash = node_hasher.finalize();
+                let node_id = NodeId(*node_id_hash.as_bytes());
+                return (node_id, nonce, hash_bytes);
+            }
+
+            nonce += 1;
+        }
+    }
+
+    /// Verify a NodeId puzzle solution
+    ///
+    /// Validates that the nonce produces a hash with sufficient leading zeros
+    /// and that the NodeId is correctly derived from the puzzle hash.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - 32-byte public key
+    /// * `node_id` - Claimed NodeId
+    /// * `nonce` - Puzzle nonce
+    ///
+    /// # Errors
+    ///
+    /// Returns error if verification fails
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wraith_discovery::dht::SybilResistance;
+    ///
+    /// let pubkey = [42u8; 32];
+    /// let resistance = SybilResistance::new(16);
+    /// let (node_id, nonce, _) = resistance.generate_with_puzzle(&pubkey);
+    /// assert!(resistance.verify(&pubkey, &node_id, nonce).is_ok());
+    /// ```
+    pub fn verify(
+        &self,
+        public_key: &[u8; 32],
+        node_id: &NodeId,
+        nonce: u64,
+    ) -> Result<(), String> {
+        // Recompute puzzle hash
+        let mut hasher = Hasher::new();
+        hasher.update(public_key);
+        hasher.update(&nonce.to_le_bytes());
+        hasher.update(b"wraith-dht-puzzle");
+        let hash = hasher.finalize();
+        let hash_bytes = *hash.as_bytes();
+
+        // Verify difficulty
+        if Self::count_leading_zeros(&hash_bytes) < self.difficulty {
+            return Err(format!(
+                "Puzzle difficulty not met: expected {} zero bits",
+                self.difficulty
+            ));
+        }
+
+        // Verify NodeId derivation
+        let mut node_hasher = Hasher::new();
+        node_hasher.update(&hash_bytes);
+        node_hasher.update(b"wraith-dht-node-id");
+        let expected_node_id = NodeId(*node_hasher.finalize().as_bytes());
+
+        if *node_id != expected_node_id {
+            return Err("NodeId does not match puzzle solution".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Count leading zero bits in a byte array
+    fn count_leading_zeros(bytes: &[u8; 32]) -> usize {
+        let mut count = 0;
+        for byte in bytes {
+            if *byte == 0 {
+                count += 8;
+            } else {
+                count += byte.leading_zeros() as usize;
+                break;
+            }
+        }
+        count
+    }
+}
+
+impl Default for SybilResistance {
+    fn default() -> Self {
+        Self::default()
+    }
+}
+
 /// 256-bit node identifier for Kademlia DHT
 ///
 /// NodeIds are derived from public keys using BLAKE3 hash function.
 /// The XOR metric is used for distance calculation, which provides
 /// the symmetric and transitive properties required by Kademlia.
+///
+/// # S/Kademlia Support
+///
+/// NodeIds can be generated with proof-of-work puzzles for Sybil resistance.
+/// Use `SybilResistance::generate_with_puzzle()` for secure generation.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NodeId([u8; 32]);
 
@@ -383,5 +563,90 @@ mod tests {
         let display_str = format!("{}", id);
         assert!(debug_str.contains("abcdef"));
         assert!(display_str.contains("abcdef"));
+    }
+
+    // SEC-001: S/Kademlia Sybil Resistance Tests
+    #[test]
+    fn test_sybil_resistance_generate_and_verify() {
+        let pubkey = [42u8; 32];
+        let resistance = SybilResistance::new(12); // Lower difficulty for tests
+        let (node_id, nonce, puzzle_hash) = resistance.generate_with_puzzle(&pubkey);
+
+        // Verify the solution
+        assert!(resistance.verify(&pubkey, &node_id, nonce).is_ok());
+
+        // Verify puzzle hash has sufficient leading zeros
+        assert!(SybilResistance::count_leading_zeros(&puzzle_hash) >= 12);
+    }
+
+    #[test]
+    fn test_sybil_resistance_invalid_nonce() {
+        let pubkey = [42u8; 32];
+        let resistance = SybilResistance::new(12);
+        let (node_id, nonce, _) = resistance.generate_with_puzzle(&pubkey);
+
+        // Wrong nonce should fail verification
+        assert!(resistance.verify(&pubkey, &node_id, nonce + 1).is_err());
+    }
+
+    #[test]
+    fn test_sybil_resistance_invalid_node_id() {
+        let pubkey = [42u8; 32];
+        let resistance = SybilResistance::new(12);
+        let (_, nonce, _) = resistance.generate_with_puzzle(&pubkey);
+
+        // Wrong NodeId should fail verification
+        let wrong_node_id = NodeId::random();
+        assert!(resistance.verify(&pubkey, &wrong_node_id, nonce).is_err());
+    }
+
+    #[test]
+    fn test_sybil_resistance_different_difficulties() {
+        let pubkey = [42u8; 32];
+
+        // Test different difficulty levels
+        for difficulty in [8, 12, 16] {
+            let resistance = SybilResistance::new(difficulty);
+            let (node_id, nonce, puzzle_hash) = resistance.generate_with_puzzle(&pubkey);
+
+            // Verify solution
+            assert!(resistance.verify(&pubkey, &node_id, nonce).is_ok());
+
+            // Verify difficulty
+            assert!(SybilResistance::count_leading_zeros(&puzzle_hash) >= difficulty);
+        }
+    }
+
+    #[test]
+    fn test_sybil_resistance_count_leading_zeros() {
+        let mut bytes = [0u8; 32];
+        assert_eq!(SybilResistance::count_leading_zeros(&bytes), 256);
+
+        bytes[0] = 0b1000_0000;
+        assert_eq!(SybilResistance::count_leading_zeros(&bytes), 0);
+
+        bytes = [0u8; 32];
+        bytes[0] = 0b0100_0000;
+        assert_eq!(SybilResistance::count_leading_zeros(&bytes), 1);
+
+        bytes = [0u8; 32];
+        bytes[0] = 0b0000_0001;
+        assert_eq!(SybilResistance::count_leading_zeros(&bytes), 7);
+
+        bytes = [0u8; 32];
+        bytes[2] = 0b1000_0000;
+        assert_eq!(SybilResistance::count_leading_zeros(&bytes), 16);
+    }
+
+    #[test]
+    fn test_sybil_resistance_default() {
+        let resistance1 = SybilResistance::default();
+        let resistance2 = SybilResistance::new(20);
+
+        let pubkey = [42u8; 32];
+        let (node_id, nonce, _) = resistance2.generate_with_puzzle(&pubkey);
+
+        // Both should verify the same solution
+        assert!(resistance1.verify(&pubkey, &node_id, nonce).is_ok());
     }
 }

@@ -1,0 +1,25 @@
+# Gitleaks configuration for WRAITH Protocol
+# Suppresses false positives for cryptographic algorithm names
+
+[allowlist]
+  description = "Allowlist for WRAITH Protocol"
+
+  # Cryptographic algorithm names that appear in documentation
+  regexes = [
+    '''XChaCha20-Poly1305''',
+    '''ChaCha20-Poly1305''',
+    '''X25519''',
+    '''Ed25519''',
+    '''BLAKE3''',
+    '''Noise_XX''',
+    '''Elligator2''',
+  ]
+
+  # Paths containing documentation (not secrets)
+  paths = [
+    '''docs/.*\.md$''',
+    '''ref-docs/.*\.md$''',
+    '''to-dos/.*\.md$''',
+    '''.*README\.md$''',
+    '''.*CHANGELOG\.md$''',
+  ]

@@ -500,7 +500,7 @@ mod tests {
         let average_ms = average_us / 1000;
 
         // Average should be close to mean (within 20% due to sampling)
-        assert!(average_ms >= 80 && average_ms <= 120);
+        assert!((80..=120).contains(&average_ms));
     }
 
     #[test]
@@ -520,7 +520,7 @@ mod tests {
         let average_ms = average_us / 1000;
 
         // Average should be close to mean (within 30% due to exponential variance)
-        assert!(average_ms >= 35 && average_ms <= 65);
+        assert!((35..=65).contains(&average_ms));
     }
 
     #[test]
@@ -541,7 +541,7 @@ mod tests {
         let average_ms = average_us / 1000;
 
         // Average should be close to midpoint (50ms)
-        assert!(average_ms >= 45 && average_ms <= 55);
+        assert!((45..=55).contains(&average_ms));
     }
 
     #[test]

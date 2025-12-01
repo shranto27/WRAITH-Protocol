@@ -147,58 +147,11 @@ fn bench_file_reassembly(c: &mut Criterion) {
     group.finish();
 }
 
-/// Placeholder: Full transfer throughput benchmark
-/// Requires protocol integration (Phase 7)
-fn bench_transfer_throughput(_c: &mut Criterion) {
-    // Placeholder for full transfer benchmark
-    // Will be implemented in Phase 7
-
-    // Benchmark structure:
-    // - Setup sender and receiver nodes
-    // - Transfer files of various sizes (1MB, 10MB, 100MB, 1GB)
-    // - Measure throughput (bytes/sec)
-    // - Target: >300 Mbps on 1 Gbps LAN
-    // - Measure with different obfuscation levels
-}
-
-/// Placeholder: Transfer latency benchmark
-/// Requires protocol integration (Phase 7)
-fn bench_transfer_latency(_c: &mut Criterion) {
-    // Placeholder for latency benchmark
-    // Will be implemented in Phase 7
-
-    // Benchmark structure:
-    // - Measure round-trip time for chunk requests
-    // - Measure handshake latency
-    // - Measure initial chunk delivery time
-    // - Target: <10ms RTT on LAN
-}
-
-/// Placeholder: BBR utilization benchmark
-/// Requires protocol integration (Phase 7)
-fn bench_bbr_utilization(_c: &mut Criterion) {
-    // Placeholder for BBR benchmark
-    // Will be implemented in Phase 7
-
-    // Benchmark structure:
-    // - Transfer large file (1GB)
-    // - Measure bandwidth utilization over time
-    // - Verify BBR achieves >95% link utilization
-    // - Compare with and without BBR
-}
-
-/// Placeholder: Multi-peer speedup benchmark
-/// Requires protocol integration (Phase 7)
-fn bench_multi_peer_speedup(_c: &mut Criterion) {
-    // Placeholder for multi-peer benchmark
-    // Will be implemented in Phase 7
-
-    // Benchmark structure:
-    // - Transfer from 1, 2, 3, 4, 5 peers
-    // - Measure throughput for each
-    // - Verify linear speedup up to 5 peers
-    // - Measure coordination overhead
-}
+// Phase 7 benchmark placeholders:
+// - bench_transfer_throughput: Full transfer throughput (setup sender/receiver, 1MB-1GB files)
+// - bench_transfer_latency: RTT for chunk requests, handshake latency (target: <10ms LAN)
+// - bench_bbr_utilization: Bandwidth utilization (1GB file, target: >95% link utilization)
+// - bench_multi_peer_speedup: Multi-peer transfer (1-5 peers, linear speedup verification)
 
 criterion_group!(
     benches,

@@ -1,5 +1,5 @@
 // Integration tests for cross-crate interactions.
-//!
+//
 // Tests the integration between wraith-crypto and wraith-core crates,
 // verifying that cryptographic operations work correctly with frame
 // encoding/decoding and session management.

@@ -210,6 +210,10 @@ This release completes Phase 6, integrating all protocol components into a cohes
   - wraith-core: Added `transfer` module to public exports
 - **Test Configuration:**
   - Added `[[bench]]` section for transfer benchmarks in tests/Cargo.toml
+- **Phase 7 Planning (Post-Phase 6):**
+  - Added Section 7.3.4 End-to-End Benchmarks to phase-7-hardening.md (13 SP)
+  - Documented 4 benchmark functions for Phase 7 implementation
+  - Updated Phase 7 story points: 145 SP → 158 SP
 
 ### Fixed
 
@@ -217,6 +221,16 @@ This release completes Phase 6, integrating all protocol components into a cohes
   - All inner doc comments converted to regular comments in integration_tests.rs
   - Proper error handling in all CLI commands
   - Consistent use of `anyhow::Result` for error propagation
+- **Clippy Warnings Resolved (Post-Phase 6):**
+  - **dead_code:** Removed 4 unused Phase 7 placeholder benchmark functions (benches/transfer.rs)
+    - Converted `bench_transfer_throughput`, `bench_transfer_latency`, `bench_bbr_utilization`, `bench_multi_peer_speedup` to comments
+    - Functions preserved in phase-7-hardening.md (Section 7.3.4) for Phase 7 implementation
+  - **manual_abs_diff:** Replaced manual absolute difference with `Duration::abs_diff()` (crates/wraith-core/src/congestion.rs)
+    - Changed `if min_rtt > new_rtt { min_rtt - new_rtt } else { new_rtt - min_rtt }` to `min_rtt.abs_diff(new_rtt)`
+  - **manual_range_contains:** Replaced 3 manual range checks with `RangeInclusive::contains()` (crates/wraith-obfuscation/src/timing.rs)
+    - Changed `x >= min && x <= max` to `(min..=max).contains(&x)` for cleaner range validation
+  - **empty_docs:** Fixed empty doc comment (tests/integration_tests.rs)
+    - Changed `//!` to `//` for non-documentation comment
 
 ### Phase 6 Deliverables ✅
 

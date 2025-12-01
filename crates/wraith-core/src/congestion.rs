@@ -1298,11 +1298,7 @@ mod tests {
 
         // Allow 10% tolerance for timing variations
         let tolerance = expected / 10;
-        let diff = if actual_delay > expected {
-            actual_delay - expected
-        } else {
-            expected - actual_delay
-        };
+        let diff = actual_delay.abs_diff(expected);
 
         assert!(
             diff <= tolerance,

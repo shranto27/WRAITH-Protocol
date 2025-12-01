@@ -1,7 +1,7 @@
 # Phase 7: Hardening & Optimization Sprint Planning
 
 **Duration:** Weeks 37-44 (6-8 weeks)
-**Total Story Points:** 145
+**Total Story Points:** 158
 **Risk Level:** Medium (security critical, time-consuming)
 
 ---
@@ -590,7 +590,7 @@ proptest! {
 ### Sprint 7.3: Performance Optimization (Weeks 40-42)
 
 **Duration:** 2 weeks
-**Story Points:** 34
+**Story Points:** 47
 
 **7.3.1: Profiling & Hotspot Identification** (13 SP)
 
@@ -846,6 +846,308 @@ static GLOBAL_CONFIG: Lazy<Config> = Lazy::new(|| {
 - [ ] Iterator chains optimized
 - [ ] Lazy initialization for expensive operations
 - [ ] Benchmark improvements documented
+
+---
+
+**7.3.4: End-to-End Benchmarks** (13 SP)
+
+```rust
+// benches/transfer.rs
+// End-to-end performance benchmarks for WRAITH Protocol
+
+use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use wraith_core::Node;
+use std::path::Path;
+use tokio::runtime::Runtime;
+
+/// Benchmark: Full transfer throughput
+///
+/// Setup sender and receiver nodes, transfer files of various sizes,
+/// measure throughput (bytes/sec).
+///
+/// Target: >300 Mbps on 1 Gbps LAN
+/// Measures with different obfuscation levels
+fn bench_transfer_throughput(c: &mut Criterion) {
+    let mut group = c.benchmark_group("transfer_throughput");
+
+    let rt = Runtime::new().unwrap();
+    let file_sizes = vec![
+        ("1MB", 1_000_000),
+        ("10MB", 10_000_000),
+        ("100MB", 100_000_000),
+        ("1GB", 1_000_000_000),
+    ];
+
+    for (name, size) in file_sizes {
+        group.bench_with_input(BenchmarkId::new("throughput", name), &size, |b, &size| {
+            b.to_async(&rt).iter(|| async {
+                // Create sender and receiver nodes
+                let sender = Node::new_random().await.unwrap();
+                let receiver = Node::new_random().await.unwrap();
+
+                // Create test file
+                let test_file = create_test_file(size);
+
+                // Measure transfer time
+                let start = std::time::Instant::now();
+                let transfer_id = sender.send_file(
+                    &test_file,
+                    receiver.public_key()
+                ).await.unwrap();
+
+                sender.wait_for_transfer(transfer_id).await.unwrap();
+                let elapsed = start.elapsed();
+
+                // Calculate throughput
+                let throughput_mbps = (size as f64 * 8.0) / elapsed.as_secs_f64() / 1_000_000.0;
+                println!("Throughput: {:.2} Mbps", throughput_mbps);
+
+                black_box(throughput_mbps)
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark: Transfer latency
+///
+/// Measure round-trip time for chunk requests, handshake latency,
+/// and initial chunk delivery time.
+///
+/// Target: <10ms RTT on LAN
+fn bench_transfer_latency(c: &mut Criterion) {
+    let mut group = c.benchmark_group("transfer_latency");
+
+    let rt = Runtime::new().unwrap();
+
+    // Handshake latency
+    group.bench_function("handshake", |b| {
+        b.to_async(&rt).iter(|| async {
+            let node1 = Node::new_random().await.unwrap();
+            let node2 = Node::new_random().await.unwrap();
+
+            let start = std::time::Instant::now();
+            node1.establish_session(node2.public_key()).await.unwrap();
+            let elapsed = start.elapsed();
+
+            println!("Handshake latency: {:?}", elapsed);
+            black_box(elapsed)
+        });
+    });
+
+    // Chunk request RTT
+    group.bench_function("chunk_request_rtt", |b| {
+        b.to_async(&rt).iter(|| async {
+            let sender = Node::new_random().await.unwrap();
+            let receiver = Node::new_random().await.unwrap();
+
+            // Setup transfer
+            let test_file = create_test_file(1_000_000);
+            let transfer_id = sender.send_file(&test_file, receiver.public_key()).await.unwrap();
+
+            // Measure chunk request RTT
+            let start = std::time::Instant::now();
+            receiver.request_chunk(transfer_id, 0).await.unwrap();
+            let elapsed = start.elapsed();
+
+            println!("Chunk request RTT: {:?}", elapsed);
+            black_box(elapsed)
+        });
+    });
+
+    // Initial chunk delivery
+    group.bench_function("initial_chunk_delivery", |b| {
+        b.to_async(&rt).iter(|| async {
+            let sender = Node::new_random().await.unwrap();
+            let receiver = Node::new_random().await.unwrap();
+
+            let test_file = create_test_file(1_000_000);
+
+            let start = std::time::Instant::now();
+            let transfer_id = sender.send_file(&test_file, receiver.public_key()).await.unwrap();
+            receiver.wait_for_chunk(transfer_id, 0).await.unwrap();
+            let elapsed = start.elapsed();
+
+            println!("Initial chunk delivery: {:?}", elapsed);
+            black_box(elapsed)
+        });
+    });
+
+    group.finish();
+}
+
+/// Benchmark: BBR utilization
+///
+/// Transfer large file (1GB), measure bandwidth utilization over time,
+/// verify BBR achieves >95% link utilization.
+/// Compare with and without BBR.
+fn bench_bbr_utilization(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bbr_utilization");
+    group.sample_size(10); // Large transfers, fewer samples
+
+    let rt = Runtime::new().unwrap();
+
+    for enable_bbr in [false, true] {
+        let label = if enable_bbr { "bbr_enabled" } else { "bbr_disabled" };
+
+        group.bench_function(label, |b| {
+            b.to_async(&rt).iter(|| async {
+                let mut sender = Node::new_random().await.unwrap();
+                let receiver = Node::new_random().await.unwrap();
+
+                // Configure BBR
+                sender.set_congestion_control(enable_bbr).await;
+
+                // Create 1GB test file
+                let test_file = create_test_file(1_000_000_000);
+
+                // Track bandwidth over time
+                let start = std::time::Instant::now();
+                let transfer_id = sender.send_file(&test_file, receiver.public_key()).await.unwrap();
+
+                // Monitor utilization
+                let stats = sender.get_transfer_stats(transfer_id).await.unwrap();
+                sender.wait_for_transfer(transfer_id).await.unwrap();
+                let elapsed = start.elapsed();
+
+                let avg_throughput = (1_000_000_000.0 * 8.0) / elapsed.as_secs_f64();
+                let utilization = (avg_throughput / 1_000_000_000.0) * 100.0; // % of 1 Gbps
+
+                println!("{}: {:.2}% utilization, {:.2} Mbps", label, utilization, avg_throughput / 1_000_000.0);
+                black_box(utilization)
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark: Multi-peer speedup
+///
+/// Transfer from 1, 2, 3, 4, 5 peers, measure throughput for each,
+/// verify linear speedup up to 5 peers, measure coordination overhead.
+fn bench_multi_peer_speedup(c: &mut Criterion) {
+    let mut group = c.benchmark_group("multi_peer_speedup");
+    group.sample_size(10);
+
+    let rt = Runtime::new().unwrap();
+
+    for num_peers in [1, 2, 3, 4, 5] {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(num_peers),
+            &num_peers,
+            |b, &num_peers| {
+                b.to_async(&rt).iter(|| async {
+                    // Create receiver
+                    let receiver = Node::new_random().await.unwrap();
+
+                    // Create multiple sender nodes
+                    let mut senders = Vec::new();
+                    for _ in 0..num_peers {
+                        senders.push(Node::new_random().await.unwrap());
+                    }
+
+                    // Create test file (100MB shared across peers)
+                    let test_file = create_test_file(100_000_000);
+
+                    // Initiate multi-peer transfer
+                    let start = std::time::Instant::now();
+                    let transfer_id = receiver.start_multi_peer_download(
+                        &test_file,
+                        &senders.iter().map(|s| s.public_key()).collect::<Vec<_>>()
+                    ).await.unwrap();
+
+                    receiver.wait_for_transfer(transfer_id).await.unwrap();
+                    let elapsed = start.elapsed();
+
+                    let throughput_mbps = (100_000_000.0 * 8.0) / elapsed.as_secs_f64() / 1_000_000.0;
+                    let speedup = throughput_mbps / (100_000_000.0 * 8.0 / 1_000_000.0); // Relative to 1 peer baseline
+
+                    println!("{} peers: {:.2} Mbps ({:.2}x speedup)", num_peers, throughput_mbps, speedup);
+                    black_box((throughput_mbps, speedup))
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+// Helper function to create test files
+fn create_test_file(size: usize) -> std::path::PathBuf {
+    use std::io::Write;
+
+    let path = std::env::temp_dir().join(format!("wraith_bench_{}.dat", size));
+    let mut file = std::fs::File::create(&path).unwrap();
+
+    // Write random data
+    let mut data = vec![0u8; size.min(1_000_000)];
+    use rand::RngCore;
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let chunks = (size + data.len() - 1) / data.len();
+    for _ in 0..chunks {
+        file.write_all(&data).unwrap();
+    }
+
+    path
+}
+
+criterion_group!(
+    benches,
+    bench_transfer_throughput,
+    bench_transfer_latency,
+    bench_bbr_utilization,
+    bench_multi_peer_speedup
+);
+criterion_main!(benches);
+```
+
+**Implementation Notes:**
+
+These benchmarks were removed from `benches/transfer.rs` during code cleanup (dead_code warnings) and need to be re-implemented after Phase 6 integration is complete. They require:
+
+1. **Full protocol integration** - All components wired together (core + crypto + transport + obfuscation + discovery)
+2. **Node API implementation** - High-level `Node` struct with methods like:
+   - `new_random()` - Create node with random keypair
+   - `send_file()` - Initiate file transfer
+   - `wait_for_transfer()` - Block until transfer completes
+   - `establish_session()` - Noise handshake
+   - `request_chunk()` / `wait_for_chunk()` - Chunk-level operations
+   - `set_congestion_control()` - Enable/disable BBR
+   - `get_transfer_stats()` - Bandwidth/utilization metrics
+   - `start_multi_peer_download()` - Multi-source transfer
+3. **Test infrastructure** - Helper functions for creating test files and test networks
+
+**Performance Targets:**
+
+| Benchmark | Target | Measured Metric |
+|-----------|--------|-----------------|
+| **Throughput** | >300 Mbps on 1 Gbps LAN | bytes/sec across file sizes |
+| **Latency** | <10ms RTT on LAN | Handshake, chunk request, initial delivery |
+| **BBR Utilization** | >95% link utilization | Bandwidth vs capacity over 1GB transfer |
+| **Multi-Peer Speedup** | Linear up to 5 peers | Throughput scaling, coordination overhead |
+
+**Dependencies:**
+- Phase 6 integration complete (all components integrated)
+- Criterion 0.5+ for benchmarking framework
+- tokio async runtime
+- Full protocol stack functional
+
+**Acceptance Criteria:**
+- [ ] All four benchmark functions implemented
+- [ ] Benchmarks run successfully with `cargo bench`
+- [ ] Performance targets documented and measured
+- [ ] Results tracked over time (baseline vs optimized)
+- [ ] Regression detection in CI (optional)
+- [ ] Benchmark results published in documentation
+
+**Estimated Story Points:** 13 SP
+- 3 SP: Throughput benchmark (multiple file sizes, obfuscation levels)
+- 3 SP: Latency benchmark (handshake, RTT, initial delivery)
+- 4 SP: BBR utilization benchmark (continuous monitoring, comparison)
+- 3 SP: Multi-peer speedup benchmark (coordination, scaling verification)
 
 ---
 

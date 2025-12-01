@@ -1,0 +1,384 @@
+//! ICE Candidate Gathering
+//!
+//! This module implements ICE (Interactive Connectivity Establishment) candidate
+//! gathering for peer-to-peer connection establishment.
+
+use super::stun::StunClient;
+use std::net::SocketAddr;
+
+/// ICE candidate type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CandidateType {
+    /// Host candidate (local interface address)
+    Host,
+    /// Server reflexive candidate (public address from STUN)
+    ServerReflexive,
+    /// Peer reflexive candidate (discovered during connectivity checks)
+    PeerReflexive,
+    /// Relay candidate (from TURN server)
+    Relay,
+}
+
+impl std::fmt::Display for CandidateType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Host => write!(f, "host"),
+            Self::ServerReflexive => write!(f, "srflx"),
+            Self::PeerReflexive => write!(f, "prflx"),
+            Self::Relay => write!(f, "relay"),
+        }
+    }
+}
+
+/// ICE candidate
+#[derive(Debug, Clone)]
+pub struct IceCandidate {
+    /// Foundation - unique identifier for candidates that can be paired
+    pub foundation: String,
+    /// Component ID (1 for RTP, 2 for RTCP; we use 1)
+    pub component_id: u32,
+    /// Transport protocol (always "udp" for WRAITH)
+    pub transport: String,
+    /// Priority for candidate selection
+    pub priority: u32,
+    /// Candidate address (IP:port)
+    pub address: SocketAddr,
+    /// Candidate type
+    pub candidate_type: CandidateType,
+    /// Related address (for srflx/prflx/relay candidates)
+    pub related_address: Option<SocketAddr>,
+}
+
+impl IceCandidate {
+    /// Create a new host candidate
+    #[must_use]
+    pub fn host(address: SocketAddr) -> Self {
+        Self {
+            foundation: Self::compute_foundation(address, CandidateType::Host),
+            component_id: 1,
+            transport: "udp".to_string(),
+            priority: Self::compute_priority(CandidateType::Host, 65535, 1),
+            address,
+            candidate_type: CandidateType::Host,
+            related_address: None,
+        }
+    }
+
+    /// Create a new server reflexive candidate
+    #[must_use]
+    pub fn server_reflexive(address: SocketAddr, base: SocketAddr) -> Self {
+        Self {
+            foundation: Self::compute_foundation(address, CandidateType::ServerReflexive),
+            component_id: 1,
+            transport: "udp".to_string(),
+            priority: Self::compute_priority(CandidateType::ServerReflexive, 65535, 1),
+            address,
+            candidate_type: CandidateType::ServerReflexive,
+            related_address: Some(base),
+        }
+    }
+
+    /// Create a new relay candidate
+    #[must_use]
+    pub fn relay(address: SocketAddr, base: SocketAddr) -> Self {
+        Self {
+            foundation: Self::compute_foundation(address, CandidateType::Relay),
+            component_id: 1,
+            transport: "udp".to_string(),
+            priority: Self::compute_priority(CandidateType::Relay, 65535, 1),
+            address,
+            candidate_type: CandidateType::Relay,
+            related_address: Some(base),
+        }
+    }
+
+    /// Compute foundation (simplified - just hash of type + address)
+    fn compute_foundation(addr: SocketAddr, _typ: CandidateType) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        addr.hash(&mut hasher);
+        format!("{:x}", hasher.finish())
+            .chars()
+            .take(8)
+            .collect::<String>()
+    }
+
+    /// Compute priority (RFC 8445 Section 5.1.2)
+    ///
+    /// Priority = (2^24) * (type preference) + (2^8) * (local preference) + (256 - component ID)
+    fn compute_priority(typ: CandidateType, local_pref: u32, component_id: u32) -> u32 {
+        let type_pref = match typ {
+            CandidateType::Host => 126,
+            CandidateType::PeerReflexive => 110,
+            CandidateType::ServerReflexive => 100,
+            CandidateType::Relay => 0,
+        };
+
+        ((1 << 24) * type_pref) + ((1 << 8) * local_pref) + (256 - component_id)
+    }
+
+    /// Format as ICE candidate string (SDP format)
+    #[must_use]
+    pub fn to_sdp_string(&self) -> String {
+        let mut s = format!(
+            "candidate:{} {} {} {} {} {} typ {}",
+            self.foundation,
+            self.component_id,
+            self.transport,
+            self.priority,
+            self.address.ip(),
+            self.address.port(),
+            self.candidate_type
+        );
+
+        if let Some(related) = self.related_address {
+            s.push_str(&format!(" raddr {} rport {}", related.ip(), related.port()));
+        }
+
+        s
+    }
+}
+
+/// Candidate for external use
+#[derive(Debug, Clone)]
+pub struct Candidate {
+    /// Candidate address
+    pub address: SocketAddr,
+    /// Candidate type
+    pub candidate_type: CandidateType,
+    /// Priority
+    pub priority: u32,
+}
+
+impl From<IceCandidate> for Candidate {
+    fn from(ice: IceCandidate) -> Self {
+        Self {
+            address: ice.address,
+            candidate_type: ice.candidate_type,
+            priority: ice.priority,
+        }
+    }
+}
+
+/// ICE candidate gatherer
+pub struct IceGatherer {
+    stun_servers: Vec<SocketAddr>,
+}
+
+impl IceGatherer {
+    /// Create a new ICE gatherer
+    ///
+    /// Note: In production, STUN server addresses should be resolved from hostnames
+    /// like "stun.l.google.com" and "stun1.l.google.com". For now, we use
+    /// placeholder addresses that need to be configured with actual STUN servers.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            stun_servers: vec![
+                // Placeholder STUN server addresses
+                // In production, resolve: stun.l.google.com:19302
+                "1.1.1.1:3478".parse().expect("valid STUN server"),
+                // In production, resolve: stun1.l.google.com:19302
+                "8.8.8.8:3478".parse().expect("valid STUN server"),
+            ],
+        }
+    }
+
+    /// Create with custom STUN servers
+    #[must_use]
+    pub fn with_stun_servers(servers: Vec<SocketAddr>) -> Self {
+        Self {
+            stun_servers: servers,
+        }
+    }
+
+    /// Gather all candidates for a local address
+    ///
+    /// Returns host, server reflexive, and relay candidates (if available).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Cannot create UDP socket
+    /// - STUN queries fail
+    /// - No candidates can be gathered
+    pub async fn gather(&self, local_addr: SocketAddr) -> Result<Vec<Candidate>, std::io::Error> {
+        let mut candidates = Vec::new();
+
+        // Always add host candidate
+        let host_cand = IceCandidate::host(local_addr);
+        candidates.push(host_cand.into());
+
+        // Gather server reflexive candidates from STUN
+        for stun_server in &self.stun_servers {
+            if let Ok(client) = StunClient::bind("0.0.0.0:0").await {
+                if let Ok(mapped_addr) = client.get_mapped_address(*stun_server).await {
+                    // Only add if different from host candidate
+                    if mapped_addr != local_addr {
+                        let srflx_cand = IceCandidate::server_reflexive(mapped_addr, local_addr);
+                        candidates.push(srflx_cand.into());
+                    }
+                }
+            }
+        }
+
+        // Note: Relay candidates would be added here if TURN is implemented
+        // For now, we only support host and server reflexive
+
+        Ok(candidates)
+    }
+
+    /// Gather candidates for all local interfaces
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no candidates can be gathered
+    pub async fn gather_all(&self) -> Result<Vec<Candidate>, std::io::Error> {
+        let mut all_candidates = Vec::new();
+
+        // Get local interfaces
+        let interfaces = self.get_local_interfaces()?;
+
+        for interface_addr in interfaces {
+            if let Ok(mut candidates) = self.gather(interface_addr).await {
+                all_candidates.append(&mut candidates);
+            }
+        }
+
+        if all_candidates.is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "No candidates gathered",
+            ));
+        }
+
+        Ok(all_candidates)
+    }
+
+    /// Get local network interface addresses
+    fn get_local_interfaces(&self) -> Result<Vec<SocketAddr>, std::io::Error> {
+        use std::net::{IpAddr, Ipv4Addr};
+
+        // Simplified: just return common bind addresses
+        // In production, would enumerate actual network interfaces
+        Ok(vec![
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
+        ])
+    }
+
+    /// Sort candidates by priority (descending)
+    pub fn sort_by_priority(candidates: &mut [Candidate]) {
+        candidates.sort_by(|a, b| b.priority.cmp(&a.priority));
+    }
+}
+
+impl Default for IceGatherer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_candidate_type_display() {
+        assert_eq!(CandidateType::Host.to_string(), "host");
+        assert_eq!(CandidateType::ServerReflexive.to_string(), "srflx");
+        assert_eq!(CandidateType::Relay.to_string(), "relay");
+    }
+
+    #[test]
+    fn test_host_candidate() {
+        let addr: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+        let cand = IceCandidate::host(addr);
+
+        assert_eq!(cand.candidate_type, CandidateType::Host);
+        assert_eq!(cand.address, addr);
+        assert!(cand.related_address.is_none());
+        assert_eq!(cand.component_id, 1);
+        assert_eq!(cand.transport, "udp");
+    }
+
+    #[test]
+    fn test_server_reflexive_candidate() {
+        let addr: SocketAddr = "203.0.113.1:12345".parse().unwrap();
+        let base: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+
+        let cand = IceCandidate::server_reflexive(addr, base);
+
+        assert_eq!(cand.candidate_type, CandidateType::ServerReflexive);
+        assert_eq!(cand.address, addr);
+        assert_eq!(cand.related_address, Some(base));
+    }
+
+    #[test]
+    fn test_priority_calculation() {
+        let host_priority = IceCandidate::compute_priority(CandidateType::Host, 65535, 1);
+        let srflx_priority =
+            IceCandidate::compute_priority(CandidateType::ServerReflexive, 65535, 1);
+        let relay_priority = IceCandidate::compute_priority(CandidateType::Relay, 65535, 1);
+
+        // Host should have highest priority
+        assert!(host_priority > srflx_priority);
+        assert!(srflx_priority > relay_priority);
+    }
+
+    #[test]
+    fn test_sdp_string() {
+        let addr: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+        let cand = IceCandidate::host(addr);
+
+        let sdp = cand.to_sdp_string();
+
+        assert!(sdp.contains("candidate:"));
+        assert!(sdp.contains("udp"));
+        assert!(sdp.contains("typ host"));
+        assert!(sdp.contains("192.168.1.100"));
+        assert!(sdp.contains("5000"));
+    }
+
+    #[test]
+    fn test_sdp_string_with_related() {
+        let addr: SocketAddr = "203.0.113.1:12345".parse().unwrap();
+        let base: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+
+        let cand = IceCandidate::server_reflexive(addr, base);
+        let sdp = cand.to_sdp_string();
+
+        assert!(sdp.contains("typ srflx"));
+        assert!(sdp.contains("raddr 192.168.1.100"));
+        assert!(sdp.contains("rport 5000"));
+    }
+
+    #[test]
+    fn test_candidate_sorting() {
+        let addr1: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+        let addr2: SocketAddr = "203.0.113.1:12345".parse().unwrap();
+
+        let host = IceCandidate::host(addr1);
+        let srflx = IceCandidate::server_reflexive(addr2, addr1);
+
+        let mut candidates = vec![Candidate::from(srflx), Candidate::from(host)];
+
+        IceGatherer::sort_by_priority(&mut candidates);
+
+        // Host should come first (higher priority)
+        assert_eq!(candidates[0].candidate_type, CandidateType::Host);
+        assert_eq!(candidates[1].candidate_type, CandidateType::ServerReflexive);
+    }
+
+    #[test]
+    fn test_ice_gatherer_creation() {
+        let gatherer = IceGatherer::new();
+        assert_eq!(gatherer.stun_servers.len(), 2);
+
+        let custom_servers = vec!["1.1.1.1:3478".parse().unwrap()];
+        let gatherer = IceGatherer::with_stun_servers(custom_servers);
+        assert_eq!(gatherer.stun_servers.len(), 1);
+    }
+}

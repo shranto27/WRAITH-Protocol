@@ -38,6 +38,12 @@ pub mod dht;
 pub mod nat;
 pub mod relay;
 
+// Re-export commonly used types
+pub use nat::{
+    Candidate, CandidateType, HolePuncher, IceGatherer, NatDetector, NatError, NatType, PunchError,
+    StunClient, StunError,
+};
+
 /// Peer endpoint information
 #[derive(Debug, Clone)]
 pub struct PeerEndpoint {

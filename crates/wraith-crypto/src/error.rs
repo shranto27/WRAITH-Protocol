@@ -69,4 +69,16 @@ pub enum CryptoError {
     /// Invalid public key
     #[error("invalid public key")]
     InvalidPublicKey,
+
+    /// Invalid parameter
+    #[error("invalid parameter: {0}")]
+    InvalidParameter(String),
+
+    /// Random number generation failed with details
+    #[error("random generation failed: {0}")]
+    RandomGenerationFailed(String),
+
+    /// Invalid key material (corrupted or wrong format)
+    #[error("invalid key material")]
+    InvalidKeyMaterial,
 }

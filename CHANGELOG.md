@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Security Audit Template (DOC-004, 4 SP)**: Comprehensive review checklist
   - 10 sections: crypto, memory, side-channels, network, dependencies, etc.
   - Penetration testing scope, fuzzing/sanitizer commands
+- **Private Key Encryption (SEC-001, 13 SP)**: Argon2id + XChaCha20-Poly1305
+  - `encrypted_keys.rs` module (705 LOC, 16 tests)
+  - Argon2id key derivation with configurable parameters (OWASP-recommended defaults)
+  - XChaCha20-Poly1305 AEAD encryption for private keys
+  - `EncryptedPrivateKey` struct with binary serialization
+  - `DecryptedPrivateKey` wrapper with `ZeroizeOnDrop`
+  - Passphrase rotation via `change_passphrase()`
+  - Security presets: `low_security()`, `default()`, `high_security()`
 
 ### Changed
 - **BLAKE3 SIMD (PERF-001, 8 SP)**: rayon + neon features
@@ -23,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - Refactoring analysis (18 priorities, complexity metrics)
 
-**Story Points: 31 SP**
+**Story Points: 44 SP**
 
 ## [0.7.0] - 2025-12-01
 

@@ -8,6 +8,7 @@
 //! - Elligator2 encoding for key indistinguishability
 //! - Forward secrecy key ratcheting
 //! - Secure random number generation
+//! - Password-based private key encryption (Argon2id + XChaCha20-Poly1305)
 //!
 //! ## Cryptographic Suite
 //!
@@ -19,6 +20,7 @@
 //! | Hash | BLAKE3 | 128-bit collision |
 //! | KDF | HKDF-BLAKE3 | 128-bit |
 //! | Signatures | Ed25519 | 128-bit |
+//! | Key Encryption | Argon2id + XChaCha20-Poly1305 | 256-bit |
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -27,6 +29,7 @@
 pub mod aead;
 pub mod constant_time;
 pub mod elligator;
+pub mod encrypted_keys;
 pub mod error;
 pub mod hash;
 pub mod noise;

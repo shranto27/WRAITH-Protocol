@@ -1672,7 +1672,6 @@ fn test_full_protocol_integration() {
     use wraith_core::{FrameBuilder, FrameType};
     use wraith_crypto::aead::SessionCrypto;
     use wraith_crypto::noise::{NoiseHandshake, NoiseKeypair};
-    use wraith_files::DEFAULT_CHUNK_SIZE;
     use wraith_files::chunker::FileChunker;
     use wraith_files::tree_hash::compute_tree_hash;
     use wraith_obfuscation::{PaddingEngine, PaddingMode};

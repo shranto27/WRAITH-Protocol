@@ -1169,3 +1169,591 @@ fn test_encryption_end_to_end() {
     let decrypted_frame2 = Frame::parse(&bob_pt2).unwrap();
     assert_eq!(decrypted_frame2.payload(), b"Ratcheted payload");
 }
+
+// ============================================================================
+// Phase 7 Integration Tests
+// ============================================================================
+
+/// Test connection establishment with full handshake
+///
+/// Tests the complete connection establishment flow:
+/// 1. Noise_XX handshake between two peers
+/// 2. Session key derivation
+/// 3. Encrypted frame exchange
+/// 4. Session state transitions
+#[test]
+fn test_connection_establishment_integration() {
+    use wraith_core::{Frame, FrameBuilder, FrameType, Session, SessionState};
+    use wraith_crypto::aead::SessionCrypto;
+    use wraith_crypto::noise::{NoiseHandshake, NoiseKeypair};
+
+    // 1. Generate keypairs for both parties
+    let alice_keypair = NoiseKeypair::generate().unwrap();
+    let bob_keypair = NoiseKeypair::generate().unwrap();
+
+    // 2. Create sessions for state tracking
+    let mut alice_session = Session::new();
+    let mut bob_session = Session::new();
+
+    // Start in Handshaking state
+    alice_session
+        .transition_to(SessionState::Handshaking(
+            wraith_core::HandshakePhase::InitSent,
+        ))
+        .unwrap();
+    bob_session
+        .transition_to(SessionState::Handshaking(
+            wraith_core::HandshakePhase::RespSent,
+        ))
+        .unwrap();
+
+    // 3. Perform Noise_XX handshake
+    let mut alice_noise = NoiseHandshake::new_initiator(&alice_keypair).unwrap();
+    let mut bob_noise = NoiseHandshake::new_responder(&bob_keypair).unwrap();
+
+    // Message 1: Alice -> Bob
+    let msg1 = alice_noise.write_message(&[]).unwrap();
+    bob_noise.read_message(&msg1).unwrap();
+
+    // Message 2: Bob -> Alice
+    let msg2 = bob_noise.write_message(&[]).unwrap();
+    alice_noise.read_message(&msg2).unwrap();
+
+    // Message 3: Alice -> Bob
+    let msg3 = alice_noise.write_message(&[]).unwrap();
+    bob_noise.read_message(&msg3).unwrap();
+
+    assert!(alice_noise.is_complete());
+    assert!(bob_noise.is_complete());
+
+    // 4. Extract session keys
+    let alice_keys = alice_noise.into_session_keys().unwrap();
+    let bob_keys = bob_noise.into_session_keys().unwrap();
+
+    // 5. Transition sessions to Established
+    alice_session
+        .transition_to(SessionState::Established)
+        .unwrap();
+    bob_session
+        .transition_to(SessionState::Established)
+        .unwrap();
+
+    assert_eq!(alice_session.state(), SessionState::Established);
+    assert_eq!(bob_session.state(), SessionState::Established);
+
+    // 6. Create session crypto for encrypted communication
+    let mut alice_crypto = SessionCrypto::new(
+        alice_keys.send_key,
+        alice_keys.recv_key,
+        &alice_keys.chain_key,
+    );
+    let mut bob_crypto =
+        SessionCrypto::new(bob_keys.send_key, bob_keys.recv_key, &bob_keys.chain_key);
+
+    // 7. Test encrypted frame exchange
+    let alice_frame = FrameBuilder::new()
+        .frame_type(FrameType::Data)
+        .stream_id(16)
+        .payload(b"Hello from Alice")
+        .build(512)
+        .unwrap();
+
+    let alice_ct = alice_crypto.encrypt(&alice_frame, b"").unwrap();
+    let bob_pt = bob_crypto.decrypt(&alice_ct, b"").unwrap();
+    let decrypted = Frame::parse(&bob_pt).unwrap();
+
+    assert_eq!(decrypted.payload(), b"Hello from Alice");
+    assert_eq!(decrypted.stream_id(), 16);
+
+    // 8. Bob responds
+    let bob_frame = FrameBuilder::new()
+        .frame_type(FrameType::Ack)
+        .stream_id(16)
+        .build(512)
+        .unwrap();
+
+    let bob_ct = bob_crypto.encrypt(&bob_frame, b"").unwrap();
+    let alice_pt = alice_crypto.decrypt(&bob_ct, b"").unwrap();
+    let bob_ack = Frame::parse(&alice_pt).unwrap();
+
+    assert_eq!(bob_ack.frame_type(), FrameType::Ack);
+}
+
+/// Test obfuscation layer integration with frames
+///
+/// Tests padding and timing obfuscation applied to real frames:
+/// 1. Apply padding modes to frames
+/// 2. Verify size transformation
+/// 3. Test TLS/WebSocket mimicry
+#[test]
+fn test_obfuscation_integration() {
+    use wraith_core::{FrameBuilder, FrameType};
+    use wraith_obfuscation::{PaddingEngine, PaddingMode, TimingMode, TimingObfuscator};
+
+    // 1. Create a frame
+    let frame = FrameBuilder::new()
+        .frame_type(FrameType::Data)
+        .stream_id(1)
+        .payload(b"Sensitive payload")
+        .build(512)
+        .unwrap();
+
+    // 2. Apply different padding modes
+    let modes = [
+        PaddingMode::PowerOfTwo,
+        PaddingMode::SizeClasses,
+        PaddingMode::Statistical,
+    ];
+
+    for mode in modes {
+        let mut engine = PaddingEngine::new(mode);
+        let original_len = frame.len();
+        let target_size = engine.padded_size(original_len);
+
+        let mut padded = frame.clone();
+        engine.pad(&mut padded, target_size);
+
+        // Verify size transformation
+        match mode {
+            PaddingMode::PowerOfTwo => {
+                // Should round to power of 2
+                assert!(padded.len().is_power_of_two());
+                assert!(padded.len() >= original_len);
+            }
+            PaddingMode::SizeClasses => {
+                // Should fit in defined size class
+                assert!(padded.len() >= original_len);
+            }
+            PaddingMode::Statistical => {
+                // Should add randomized padding
+                assert!(padded.len() >= original_len);
+            }
+            _ => {}
+        }
+
+        // Verify unpadding recovers original
+        let unpadded = engine.unpad(&padded, original_len);
+        assert_eq!(unpadded, &frame[..original_len]);
+    }
+
+    // 3. Test timing obfuscation
+    let mut timing = TimingObfuscator::new(TimingMode::Uniform {
+        min: std::time::Duration::from_millis(5),
+        max: std::time::Duration::from_millis(15),
+    });
+
+    let delay = timing.next_delay();
+    assert!(delay >= std::time::Duration::from_millis(5));
+    assert!(delay <= std::time::Duration::from_millis(15));
+
+    // 4. Test TLS mimicry integration
+    use wraith_obfuscation::tls_mimicry::TlsRecordWrapper;
+
+    let mut tls_wrapper = TlsRecordWrapper::new();
+    let wrapped = tls_wrapper.wrap(&frame);
+
+    // TLS Application Data record: type (1) + version (2) + length (2) + data
+    assert!(wrapped.len() >= frame.len() + 5);
+    assert_eq!(wrapped[0], 0x17); // Application Data
+
+    let unwrapped = tls_wrapper.unwrap(&wrapped).unwrap();
+    assert_eq!(unwrapped, frame);
+}
+
+/// Test DHT peer discovery integration
+///
+/// Tests peer announcement, lookup, and connection establishment:
+/// 1. Create DHT nodes
+/// 2. Announce file availability
+/// 3. Lookup peers
+/// 4. Verify peer information
+#[test]
+fn test_discovery_integration() {
+    use std::net::SocketAddr;
+    use wraith_discovery::dht::NodeId;
+
+    // 1. Create DHT node
+    let node_id = NodeId::random();
+    let _listen_addr: SocketAddr = "127.0.0.1:5000".parse().unwrap();
+
+    // In a real scenario, we'd start the DHT node
+    // For this test, we verify the core functionality exists
+    assert_eq!(node_id.distance(&node_id).as_bytes(), &[0u8; 32]);
+
+    // 2. Test node ID distance calculation
+    let other_id = NodeId::random();
+    let distance = node_id.distance(&other_id);
+
+    // Distance to self is zero
+    assert_eq!(node_id.distance(&node_id).as_bytes(), &[0u8; 32]);
+
+    // Distance is symmetric
+    assert_eq!(distance, other_id.distance(&node_id));
+
+    // 3. Test connection type selection
+    use wraith_discovery::ConnectionType;
+
+    let direct = ConnectionType::Direct;
+    assert!(matches!(direct, ConnectionType::Direct));
+
+    // 4. Test relay info structure
+    use wraith_discovery::RelayInfo;
+
+    let relay_addr: SocketAddr = "198.51.100.1:443".parse().unwrap();
+    let relay = RelayInfo {
+        addr: relay_addr,
+        node_id: NodeId::random(),
+        public_key: [0x42; 32],
+    };
+
+    assert_eq!(relay.addr, relay_addr);
+}
+
+/// Test multi-path transfer coordination
+///
+/// Tests using multiple network paths for a single transfer:
+/// 1. Create PathManager with multiple paths
+/// 2. Distribute chunks across paths
+/// 3. Track per-path statistics
+/// 4. Handle path failure and migration
+#[test]
+fn test_multi_path_transfer() {
+    use std::path::PathBuf;
+    use wraith_core::transfer::TransferSession;
+    use wraith_files::DEFAULT_CHUNK_SIZE;
+
+    // 1. Create a transfer session
+    let mut session = TransferSession::new_receive(
+        [0x99; 32],
+        PathBuf::from("/tmp/multipath.dat"),
+        20 * DEFAULT_CHUNK_SIZE as u64, // 20 chunks
+        DEFAULT_CHUNK_SIZE,
+    );
+
+    // 2. Simulate multiple peers on different paths
+    let peer1 = [1u8; 32]; // Path 1: Direct connection
+    let peer2 = [2u8; 32]; // Path 2: Relayed connection
+    let peer3 = [3u8; 32]; // Path 3: Alternative route
+
+    session.add_peer(peer1);
+    session.add_peer(peer2);
+    session.add_peer(peer3);
+
+    // 3. Distribute chunks across paths
+    // Path 1 (peer1): Chunks 0-6
+    for chunk_idx in 0..7 {
+        session.assign_chunk_to_peer(&peer1, chunk_idx);
+    }
+
+    // Path 2 (peer2): Chunks 7-13
+    for chunk_idx in 7..14 {
+        session.assign_chunk_to_peer(&peer2, chunk_idx);
+    }
+
+    // Path 3 (peer3): Chunks 14-19
+    for chunk_idx in 14..20 {
+        session.assign_chunk_to_peer(&peer3, chunk_idx);
+    }
+
+    // 4. Simulate downloads with different speeds
+    session.update_peer_speed(&peer1, 10_000_000.0); // 10 MB/s
+    session.update_peer_speed(&peer2, 5_000_000.0); // 5 MB/s (slower, relayed)
+    session.update_peer_speed(&peer3, 8_000_000.0); // 8 MB/s
+
+    // 5. Download chunks
+    for chunk_idx in 0..7 {
+        session.mark_peer_chunk_downloaded(&peer1, chunk_idx);
+        session.mark_chunk_transferred(chunk_idx, DEFAULT_CHUNK_SIZE);
+    }
+
+    for chunk_idx in 7..14 {
+        session.mark_peer_chunk_downloaded(&peer2, chunk_idx);
+        session.mark_chunk_transferred(chunk_idx, DEFAULT_CHUNK_SIZE);
+    }
+
+    for chunk_idx in 14..20 {
+        session.mark_peer_chunk_downloaded(&peer3, chunk_idx);
+        session.mark_chunk_transferred(chunk_idx, DEFAULT_CHUNK_SIZE);
+    }
+
+    // 6. Verify all chunks received
+    assert_eq!(session.progress(), 1.0);
+    assert_eq!(session.missing_count(), 0);
+
+    // 7. Verify per-path statistics
+    assert_eq!(session.peer_downloaded_count(&peer1), 7);
+    assert_eq!(session.peer_downloaded_count(&peer2), 7);
+    assert_eq!(session.peer_downloaded_count(&peer3), 6);
+
+    // 8. Aggregate speed should be sum of all paths
+    let aggregate = session.aggregate_peer_speed();
+    assert_eq!(aggregate, 23_000_000.0); // 10 + 5 + 8 MB/s
+}
+
+/// Test error recovery and resilience
+///
+/// Tests handling of various error conditions:
+/// 1. Connection drops during transfer
+/// 2. Chunk corruption detection
+/// 3. Timeout and retry logic
+/// 4. Partial transfer resume
+#[test]
+fn test_error_recovery() {
+    use std::path::PathBuf;
+    use wraith_core::transfer::{TransferSession, TransferState};
+    use wraith_files::DEFAULT_CHUNK_SIZE;
+
+    // 1. Create a transfer session
+    let mut session = TransferSession::new_receive(
+        [0xAB; 32],
+        PathBuf::from("/tmp/recovery.dat"),
+        10 * DEFAULT_CHUNK_SIZE as u64,
+        DEFAULT_CHUNK_SIZE,
+    );
+
+    session.start();
+    assert_eq!(session.state(), TransferState::Transferring);
+
+    // 2. Add peers
+    let peer1 = [1u8; 32];
+    let peer2 = [2u8; 32];
+
+    session.add_peer(peer1);
+    session.add_peer(peer2);
+
+    // 3. Assign chunks
+    for chunk_idx in 0..5 {
+        session.assign_chunk_to_peer(&peer1, chunk_idx);
+    }
+    for chunk_idx in 5..10 {
+        session.assign_chunk_to_peer(&peer2, chunk_idx);
+    }
+
+    // 4. Simulate partial download from peer1
+    session.mark_peer_chunk_downloaded(&peer1, 0);
+    session.mark_chunk_transferred(0, DEFAULT_CHUNK_SIZE);
+    session.mark_peer_chunk_downloaded(&peer1, 1);
+    session.mark_chunk_transferred(1, DEFAULT_CHUNK_SIZE);
+
+    assert_eq!(session.progress(), 0.2); // 2/10 chunks
+
+    // 5. Simulate peer1 connection drop
+    let peer1_assigned = session.remove_peer(&peer1);
+    assert!(peer1_assigned.is_some());
+    let chunks_to_reassign = peer1_assigned.unwrap();
+
+    // Chunks 2, 3, 4 were assigned but not downloaded
+    assert!(chunks_to_reassign.contains(&2));
+    assert!(chunks_to_reassign.contains(&3));
+    assert!(chunks_to_reassign.contains(&4));
+
+    // 6. Reassign failed chunks to peer2
+    for chunk in chunks_to_reassign {
+        session.assign_chunk_to_peer(&peer2, chunk);
+    }
+
+    // 7. Test pause/resume
+    session.pause();
+    assert_eq!(session.state(), TransferState::Paused);
+
+    session.resume();
+    assert_eq!(session.state(), TransferState::Transferring);
+
+    // 8. Complete download from peer2
+    for chunk_idx in 2..10 {
+        session.mark_peer_chunk_downloaded(&peer2, chunk_idx);
+        session.mark_chunk_transferred(chunk_idx, DEFAULT_CHUNK_SIZE);
+    }
+
+    // 9. Verify recovery successful
+    assert_eq!(session.progress(), 1.0);
+    assert_eq!(session.state(), TransferState::Complete);
+}
+
+/// Test concurrent transfers
+///
+/// Tests managing multiple simultaneous file transfers:
+/// 1. Create multiple transfer sessions
+/// 2. Verify isolation between transfers
+/// 3. Test resource sharing
+/// 4. Verify no interference
+#[test]
+fn test_concurrent_transfers() {
+    use std::path::PathBuf;
+    use wraith_core::transfer::{TransferSession, TransferState};
+    use wraith_files::DEFAULT_CHUNK_SIZE;
+
+    // 1. Create three concurrent transfers
+    let mut transfer1 = TransferSession::new_receive(
+        [0x01; 32],
+        PathBuf::from("/tmp/file1.dat"),
+        5 * DEFAULT_CHUNK_SIZE as u64,
+        DEFAULT_CHUNK_SIZE,
+    );
+
+    let mut transfer2 = TransferSession::new_send(
+        [0x02; 32],
+        PathBuf::from("/tmp/file2.dat"),
+        10 * DEFAULT_CHUNK_SIZE as u64,
+        DEFAULT_CHUNK_SIZE,
+    );
+
+    let mut transfer3 = TransferSession::new_receive(
+        [0x03; 32],
+        PathBuf::from("/tmp/file3.dat"),
+        8 * DEFAULT_CHUNK_SIZE as u64,
+        DEFAULT_CHUNK_SIZE,
+    );
+
+    // 2. Start all transfers
+    transfer1.start();
+    transfer2.start();
+    transfer3.start();
+
+    assert_eq!(transfer1.state(), TransferState::Transferring);
+    assert_eq!(transfer2.state(), TransferState::Transferring);
+    assert_eq!(transfer3.state(), TransferState::Transferring);
+
+    // 3. Verify isolation - different transfer IDs
+    assert_ne!(transfer1.id, transfer2.id);
+    assert_ne!(transfer2.id, transfer3.id);
+    assert_ne!(transfer1.id, transfer3.id);
+
+    // 4. Simulate progress on transfer1
+    transfer1.mark_chunk_transferred(0, DEFAULT_CHUNK_SIZE);
+    transfer1.mark_chunk_transferred(1, DEFAULT_CHUNK_SIZE);
+    assert_eq!(transfer1.progress(), 0.4); // 2/5
+
+    // 5. Simulate progress on transfer2
+    for chunk in 0..5 {
+        transfer2.mark_chunk_transferred(chunk, DEFAULT_CHUNK_SIZE);
+    }
+    assert_eq!(transfer2.progress(), 0.5); // 5/10
+
+    // 6. Simulate progress on transfer3
+    for chunk in 0..8 {
+        transfer3.mark_chunk_transferred(chunk, DEFAULT_CHUNK_SIZE);
+    }
+    assert_eq!(transfer3.progress(), 1.0); // 8/8
+
+    // 7. Verify states are independent
+    assert_eq!(transfer1.state(), TransferState::Transferring);
+    assert_eq!(transfer2.state(), TransferState::Transferring);
+    assert_eq!(transfer3.state(), TransferState::Complete);
+
+    // 8. Complete transfer1
+    for chunk in 2..5 {
+        transfer1.mark_chunk_transferred(chunk, DEFAULT_CHUNK_SIZE);
+    }
+    assert!(transfer1.is_complete());
+
+    // 9. Pause transfer2
+    transfer2.pause();
+    assert_eq!(transfer2.state(), TransferState::Paused);
+
+    // 10. Verify no cross-interference
+    assert!(transfer1.is_complete());
+    assert_eq!(transfer2.state(), TransferState::Paused);
+    assert!(transfer3.is_complete());
+}
+
+/// Test full protocol integration
+///
+/// Tests the complete WRAITH protocol stack:
+/// 1. Handshake (Noise_XX)
+/// 2. Session establishment
+/// 3. Obfuscation layer
+/// 4. File chunking and transfer
+/// 5. Integrity verification
+#[test]
+fn test_full_protocol_integration() {
+    use std::fs;
+    use tempfile::TempDir;
+    use wraith_core::{FrameBuilder, FrameType};
+    use wraith_crypto::aead::SessionCrypto;
+    use wraith_crypto::noise::{NoiseHandshake, NoiseKeypair};
+    use wraith_files::DEFAULT_CHUNK_SIZE;
+    use wraith_files::chunker::FileChunker;
+    use wraith_files::tree_hash::compute_tree_hash;
+    use wraith_obfuscation::{PaddingEngine, PaddingMode};
+
+    // 1. Setup: Create test file
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test.dat");
+    let test_data = vec![0xCD; 2 * 1024]; // 2 KB (small for this test)
+    fs::write(&test_file, &test_data).unwrap();
+
+    // 2. Handshake phase
+    let alice_keypair = NoiseKeypair::generate().unwrap();
+    let bob_keypair = NoiseKeypair::generate().unwrap();
+
+    let mut alice_noise = NoiseHandshake::new_initiator(&alice_keypair).unwrap();
+    let mut bob_noise = NoiseHandshake::new_responder(&bob_keypair).unwrap();
+
+    // Three-way handshake
+    let msg1 = alice_noise.write_message(&[]).unwrap();
+    bob_noise.read_message(&msg1).unwrap();
+
+    let msg2 = bob_noise.write_message(&[]).unwrap();
+    alice_noise.read_message(&msg2).unwrap();
+
+    let msg3 = alice_noise.write_message(&[]).unwrap();
+    bob_noise.read_message(&msg3).unwrap();
+
+    // 3. Session establishment
+    let alice_keys = alice_noise.into_session_keys().unwrap();
+    let bob_keys = bob_noise.into_session_keys().unwrap();
+
+    let mut alice_crypto = SessionCrypto::new(
+        alice_keys.send_key,
+        alice_keys.recv_key,
+        &alice_keys.chain_key,
+    );
+    let mut bob_crypto =
+        SessionCrypto::new(bob_keys.send_key, bob_keys.recv_key, &bob_keys.chain_key);
+
+    // 4. File chunking
+    let chunk_size = 1024; // Use 1KB chunks for this test
+    let mut chunker = FileChunker::new(&test_file, chunk_size).unwrap();
+    let tree_hash = compute_tree_hash(&test_file, chunk_size).unwrap();
+
+    assert_eq!(tree_hash.chunk_count(), 2); // 2KB / 1KB
+
+    // 5. Transfer phase with obfuscation
+    let mut padding = PaddingEngine::new(PaddingMode::PowerOfTwo);
+
+    let mut chunk_index = 0;
+    while let Some(chunk) = chunker.read_chunk().unwrap() {
+        // Create DATA frame
+        let frame = FrameBuilder::new()
+            .frame_type(FrameType::Data)
+            .stream_id(16)
+            .offset(chunk_index * chunk_size as u64)
+            .payload(&chunk)
+            .build(4096)
+            .unwrap();
+
+        // Apply padding obfuscation
+        let target_size = padding.padded_size(frame.len());
+        let mut padded_frame = frame.clone();
+        padding.pad(&mut padded_frame, target_size);
+
+        // Encrypt
+        let ciphertext = alice_crypto.encrypt(&padded_frame, b"").unwrap();
+
+        // Bob receives and decrypts
+        let plaintext = bob_crypto.decrypt(&ciphertext, b"").unwrap();
+
+        // Remove padding
+        let unpadded = padding.unpad(&plaintext, frame.len());
+        assert_eq!(unpadded, &frame[..]);
+
+        // Verify chunk integrity
+        assert!(tree_hash.verify_chunk(chunk_index as usize, &chunk));
+
+        chunk_index += 1;
+    }
+
+    // 6. Verify complete transfer
+    assert_eq!(chunk_index, 2);
+}

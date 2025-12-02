@@ -37,6 +37,6 @@ pub mod replay;
 pub mod session;
 
 // Re-export all public types for backward compatibility
-pub use cipher::{AeadCipher, AeadKey, Nonce, Tag, KEY_SIZE, NONCE_SIZE, TAG_SIZE};
+pub use cipher::{AeadCipher, AeadKey, KEY_SIZE, NONCE_SIZE, Nonce, TAG_SIZE, Tag};
 pub use replay::ReplayProtection;
 pub use session::{BufferPool, SessionCrypto};

@@ -45,6 +45,7 @@
 //! # }
 //! ```
 
+#[cfg(target_os = "linux")]
 use std::collections::HashMap;
 use std::io;
 use thiserror::Error;

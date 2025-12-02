@@ -3,9 +3,9 @@
 //! Provides bidirectional encrypted communication with automatic nonce
 //! management, replay protection, and key-committing AEAD.
 
-use crate::CryptoError;
 use super::cipher::{AeadKey, Nonce};
 use super::replay::ReplayProtection;
+use crate::CryptoError;
 use zeroize::ZeroizeOnDrop;
 
 /// Reusable buffer pool to avoid allocation in hot path.

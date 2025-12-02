@@ -948,7 +948,7 @@ fn test_relay_fallback() {
     use wraith_discovery::{ConnectionType, RelayInfo};
 
     // 1. Attempt direct connection (simulated failure)
-    let direct_connection = ConnectionType::Direct;
+    let _direct_connection = ConnectionType::Direct;
     let direct_available = false; // Simulate NAT/firewall blocking
 
     // 2. Fall back to relay

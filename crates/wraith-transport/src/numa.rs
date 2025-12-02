@@ -156,7 +156,9 @@ pub unsafe fn allocate_on_node(size: usize, _node: usize) -> Option<*mut u8> {
     use std::alloc::{Layout, alloc};
 
     let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).ok()?;
-    let ptr = alloc(layout);
+    // SAFETY: Layout is valid (created from `from_size_align` which validated alignment).
+    // Caller is responsible for deallocating with `deallocate_on_node`.
+    let ptr = unsafe { alloc(layout) };
 
     if ptr.is_null() { None } else { Some(ptr) }
 }
@@ -194,8 +196,10 @@ pub unsafe fn deallocate_on_node(ptr: *mut u8, size: usize) {
     if !ptr.is_null() {
         // SAFETY: Layout matches the allocation from allocate_on_node (non-Linux path).
         // Pointer and size must be valid from original allocation (enforced by caller).
-        let layout = Layout::from_size_align_unchecked(size, std::mem::align_of::<u8>());
-        dealloc(ptr, layout);
+        // The alignment is always valid (1 for u8).
+        let layout = unsafe { Layout::from_size_align_unchecked(size, std::mem::align_of::<u8>()) };
+        // SAFETY: ptr was allocated with the same layout via allocate_on_node.
+        unsafe { dealloc(ptr, layout) };
     }
 }
 

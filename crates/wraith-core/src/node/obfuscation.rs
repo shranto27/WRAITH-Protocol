@@ -546,4 +546,222 @@ mod tests {
         assert_eq!(stats.wrapped_packets, 0);
         assert_eq!(stats.avg_padded_size, 0);
     }
+
+    #[tokio::test]
+    async fn test_cover_traffic_config_default() {
+        use crate::node::config::{CoverTrafficConfig, CoverTrafficDistribution};
+
+        let config = CoverTrafficConfig::default();
+
+        assert!(!config.enabled);
+        assert_eq!(config.rate, 10.0);
+        assert_eq!(config.distribution, CoverTrafficDistribution::Constant);
+    }
+
+    #[tokio::test]
+    async fn test_obfuscation_pipeline_none() {
+        // Test with no obfuscation (default config)
+        let node = Node::new_random().await.unwrap();
+        let data = vec![1, 2, 3, 4, 5];
+
+        // Apply obfuscation should not change data with None mode
+        let mut padded = data.clone();
+        node.apply_obfuscation(&mut padded).unwrap();
+        assert_eq!(padded, data);
+
+        // Wrap protocol should not change data with None mode
+        let wrapped = node.wrap_protocol(&data).unwrap();
+        assert_eq!(wrapped, data);
+
+        // Unwrap protocol should not change data with None mode
+        let unwrapped = node.unwrap_protocol(&wrapped).unwrap();
+        assert_eq!(unwrapped, data);
+    }
+
+    #[tokio::test]
+    async fn test_timing_delay_fixed() {
+        use crate::node::config::{NodeConfig, ObfuscationConfig, TimingMode};
+        use std::time::Duration;
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                timing_mode: TimingMode::Fixed(Duration::from_millis(10)),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+        let delay = node.get_timing_delay();
+
+        assert_eq!(delay, Duration::from_millis(10));
+    }
+
+    #[tokio::test]
+    async fn test_timing_delay_uniform() {
+        use crate::node::config::{NodeConfig, ObfuscationConfig, TimingMode};
+        use std::time::Duration;
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                timing_mode: TimingMode::Uniform {
+                    min: Duration::from_millis(5),
+                    max: Duration::from_millis(15),
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+
+        // Test multiple samples to verify range
+        for _ in 0..10 {
+            let delay = node.get_timing_delay();
+            assert!(delay >= Duration::from_millis(5));
+            assert!(delay <= Duration::from_millis(15));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_padding_power_of_two() {
+        use crate::node::config::{NodeConfig, ObfuscationConfig, PaddingMode};
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                padding_mode: PaddingMode::PowerOfTwo,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+
+        // 100 bytes should pad to 128
+        let mut data = vec![0u8; 100];
+        node.apply_obfuscation(&mut data).unwrap();
+        assert_eq!(data.len(), 128);
+
+        // 200 bytes should pad to 256
+        let mut data = vec![0u8; 200];
+        node.apply_obfuscation(&mut data).unwrap();
+        assert_eq!(data.len(), 256);
+    }
+
+    #[tokio::test]
+    async fn test_padding_size_classes() {
+        use crate::node::config::{NodeConfig, ObfuscationConfig, PaddingMode};
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                padding_mode: PaddingMode::SizeClasses,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+
+        // 100 bytes should pad to 256
+        let mut data = vec![0u8; 100];
+        node.apply_obfuscation(&mut data).unwrap();
+        assert_eq!(data.len(), 256);
+
+        // 300 bytes should pad to 512
+        let mut data = vec![0u8; 300];
+        node.apply_obfuscation(&mut data).unwrap();
+        assert_eq!(data.len(), 512);
+    }
+
+    #[tokio::test]
+    async fn test_tls_wrap_unwrap_roundtrip() {
+        use crate::node::config::{MimicryMode, NodeConfig, ObfuscationConfig};
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                mimicry_mode: MimicryMode::Tls,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+
+        let wrapped = node.wrap_protocol(&data).unwrap();
+        let unwrapped = node.unwrap_protocol(&wrapped).unwrap();
+
+        assert_eq!(unwrapped, data);
+    }
+
+    #[tokio::test]
+    async fn test_websocket_wrap_unwrap_roundtrip() {
+        use crate::node::config::{MimicryMode, NodeConfig, ObfuscationConfig};
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                mimicry_mode: MimicryMode::WebSocket,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+
+        let wrapped = node.wrap_protocol(&data).unwrap();
+        let unwrapped = node.unwrap_protocol(&wrapped).unwrap();
+
+        assert_eq!(unwrapped, data);
+    }
+
+    #[tokio::test]
+    async fn test_doh_wrap_unwrap_roundtrip() {
+        use crate::node::config::{MimicryMode, NodeConfig, ObfuscationConfig};
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                mimicry_mode: MimicryMode::DoH,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+
+        let wrapped = node.wrap_protocol(&data).unwrap();
+        let unwrapped = node.unwrap_protocol(&wrapped).unwrap();
+
+        assert_eq!(unwrapped, data);
+    }
+
+    #[tokio::test]
+    async fn test_full_obfuscation_pipeline() {
+        use crate::node::config::{MimicryMode, NodeConfig, ObfuscationConfig, PaddingMode};
+
+        let config = NodeConfig {
+            obfuscation: ObfuscationConfig {
+                padding_mode: PaddingMode::SizeClasses,
+                mimicry_mode: MimicryMode::Tls,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let node = Node::new_with_config(config).await.unwrap();
+        let original_data = vec![1, 2, 3, 4, 5];
+
+        // Apply full pipeline
+        let mut padded = original_data.clone();
+        node.apply_obfuscation(&mut padded).unwrap();
+        assert!(padded.len() >= original_data.len()); // Padded
+
+        let wrapped = node.wrap_protocol(&padded).unwrap();
+        assert!(wrapped.len() > padded.len()); // TLS header added
+
+        // Verify unwrap recovers padded data
+        let unwrapped = node.unwrap_protocol(&wrapped).unwrap();
+        assert_eq!(unwrapped, padded);
+    }
 }

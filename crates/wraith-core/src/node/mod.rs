@@ -46,6 +46,7 @@ pub mod config;
 pub mod connection;
 pub mod discovery;
 pub mod error;
+pub mod file_transfer;
 pub mod nat;
 #[allow(clippy::module_inception)]
 pub mod node;
@@ -57,8 +58,8 @@ pub use config::NodeConfig;
 pub use connection::{HealthMetrics, HealthStatus};
 pub use discovery::{NatType, NodeCapabilities, PeerAnnouncement, PeerInfo};
 pub use error::NodeError;
+pub use file_transfer::FileMetadata;
 pub use nat::{CandidateType, IceCandidate};
 pub use node::Node;
 pub use obfuscation::{ObfuscationStats, Protocol};
 pub use session::PeerConnection;
-pub use transfer::FileMetadata;

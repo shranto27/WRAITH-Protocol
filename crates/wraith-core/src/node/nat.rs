@@ -46,24 +46,31 @@ impl Node {
     ///
     /// Returns error if STUN queries fail or no STUN servers configured.
     pub async fn detect_nat_type(&self) -> Result<NatType, NodeError> {
-        tracing::debug!("Detecting NAT type via STUN");
+        tracing::debug!("Detecting NAT type via discovery manager");
 
-        // TODO: Integrate with wraith-discovery::StunClient
-        // For now, return a placeholder:
-        //
-        // let stun_servers = &self.inner.config.discovery.stun_servers;
-        // if stun_servers.is_empty() {
-        //     return Err(NodeError::NatTraversal("No STUN servers configured".to_string()));
-        // }
-        //
-        // let stun_client = StunClient::new(stun_servers);
-        // stun_client
-        //     .detect_nat_type()
-        //     .await
-        //     .map_err(|e| NodeError::NatTraversal(e.to_string()))
+        // Get discovery manager
+        let discovery = {
+            let guard = self.inner.discovery.lock().await;
+            guard
+                .as_ref()
+                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .clone()
+        };
 
-        // Placeholder: assume no NAT for development
-        Ok(NatType::None)
+        // Query NAT type from discovery manager
+        match discovery.nat_type().await {
+            Some(discovery_nat_type) => {
+                // Convert from wraith-discovery NatType to wraith-core NatType
+                let nat_type = NatType::from(discovery_nat_type);
+                tracing::info!("Detected NAT type: {:?}", nat_type);
+                Ok(nat_type)
+            }
+            None => {
+                // NAT detection not run or failed
+                tracing::warn!("NAT type not detected, assuming None");
+                Ok(NatType::None)
+            }
+        }
     }
 
     /// Attempt NAT traversal to connect to peer
@@ -369,17 +376,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_nat_type() {
-        let node = Node::new_random().await.unwrap();
+        let node = Node::new_random_with_port(0).await.unwrap();
+        node.start().await.unwrap();
+
         let result = node.detect_nat_type().await;
 
         assert!(result.is_ok());
-        // Placeholder returns None
+        // Should return None when NAT detection hasn't run or failed
         assert_eq!(result.unwrap(), NatType::None);
+
+        node.stop().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_gather_ice_candidates() {
-        let node = Node::new_random().await.unwrap();
+        let node = Node::new_random_with_port(0).await.unwrap();
         let result = node.gather_ice_candidates().await;
 
         assert!(result.is_ok());
@@ -396,7 +407,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_prioritize_candidates() {
-        let node = Node::new_random().await.unwrap();
+        let node = Node::new_random_with_port(0).await.unwrap();
 
         let local = vec![
             IceCandidate {
@@ -429,7 +440,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_exchange_candidates() {
-        let node = Node::new_random().await.unwrap();
+        let node = Node::new_random_with_port(0).await.unwrap();
 
         let peer = PeerInfo {
             peer_id: [42u8; 32],

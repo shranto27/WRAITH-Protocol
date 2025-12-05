@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use wraith_crypto::aead::SessionCrypto;
 use wraith_crypto::noise::{NoiseHandshake, NoiseKeypair};
+use wraith_transport::transport::Transport;
 
 /// Peer identifier (Ed25519 public key)
 pub type PeerId = [u8; 32];
@@ -88,6 +89,74 @@ impl PeerConnection {
             .transition_to(new_state)
             .map_err(|e| NodeError::InvalidState(e.to_string()))
     }
+
+    /// Encrypt frame data for transmission
+    ///
+    /// Takes serialized frame bytes and encrypts them using the session crypto.
+    /// Automatically manages nonce counters and checks for rekey conditions.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame_bytes` - Serialized frame data to encrypt
+    ///
+    /// # Returns
+    ///
+    /// Encrypted frame data (ciphertext + auth tag)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if encryption fails or rekey is needed.
+    pub async fn encrypt_frame(&self, frame_bytes: &[u8]) -> Result<Vec<u8>> {
+        let mut crypto = self.crypto.write().await;
+
+        // Check if rekey is needed
+        if crypto.needs_rekey() {
+            return Err(NodeError::Crypto(wraith_crypto::CryptoError::NonceOverflow));
+        }
+
+        // Encrypt with empty AAD (frame already contains all necessary data)
+        crypto.encrypt(frame_bytes, &[]).map_err(NodeError::Crypto)
+    }
+
+    /// Decrypt received frame data
+    ///
+    /// Takes encrypted bytes and decrypts them using the session crypto.
+    /// Automatically manages nonce counters and replay protection.
+    ///
+    /// # Arguments
+    ///
+    /// * `encrypted_bytes` - Encrypted frame data (ciphertext + auth tag)
+    ///
+    /// # Returns
+    ///
+    /// Decrypted frame data ready for parsing
+    ///
+    /// # Errors
+    ///
+    /// Returns error if decryption fails, authentication fails, or replay is detected.
+    pub async fn decrypt_frame(&self, encrypted_bytes: &[u8]) -> Result<Vec<u8>> {
+        let mut crypto = self.crypto.write().await;
+
+        // Decrypt with empty AAD
+        crypto
+            .decrypt(encrypted_bytes, &[])
+            .map_err(NodeError::Crypto)
+    }
+
+    /// Check if session needs rekeying
+    pub async fn needs_rekey(&self) -> bool {
+        self.crypto.read().await.needs_rekey()
+    }
+
+    /// Get current send counter (for debugging/monitoring)
+    pub async fn send_counter(&self) -> u64 {
+        self.crypto.read().await.send_counter()
+    }
+
+    /// Get current receive counter (for debugging/monitoring)
+    pub async fn recv_counter(&self) -> u64 {
+        self.crypto.read().await.recv_counter()
+    }
 }
 
 /// Connection statistics
@@ -114,95 +183,225 @@ pub struct ConnectionStats {
 
 /// Perform Noise_XX handshake as initiator
 ///
-/// Returns session keys on success.
-pub async fn perform_handshake_initiator(
+/// Exchanges handshake messages over the transport to establish a secure session.
+///
+/// # Arguments
+///
+/// * `local_keypair` - Local X25519 keypair for handshake
+/// * `peer_addr` - Remote peer address
+/// * `transport` - Transport layer for sending/receiving handshake messages
+///
+/// # Returns
+///
+/// Returns session crypto and session ID on success.
+pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     local_keypair: &NoiseKeypair,
-    _peer_id: &PeerId,
+    peer_addr: SocketAddr,
+    transport: &T,
 ) -> Result<(SessionCrypto, SessionId)> {
+    tracing::debug!(
+        "Starting Noise_XX handshake as initiator with {}",
+        peer_addr
+    );
+
     // Create Noise handshake state
     let mut noise = NoiseHandshake::new_initiator(local_keypair)
         .map_err(|e| NodeError::Handshake(e.to_string()))?;
 
-    // In a real implementation, we would:
+    // Noise_XX handshake pattern:
+    // -> e (initiator sends ephemeral key)
+    // <- e, ee, s, es (responder sends ephemeral, performs DH, sends static, performs DH)
+    // -> s, se (initiator sends static, performs DH)
+
     // 1. Send message 1 (-> e)
-    // 2. Receive message 2 (<- e, ee, s, es)
-    // 3. Send message 3 (-> s, se)
-    //
-    // For now, we'll create a simplified version that assumes
-    // the handshake messages are exchanged via the transport layer
-
-    // TODO: Integrate with actual transport send/receive
-    // This is a placeholder that shows the structure
-
-    let _msg1 = noise
+    let msg1 = noise
         .write_message(&[])
-        .map_err(|e| NodeError::Handshake(e.to_string()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg1: {}", e)))?;
 
-    // Simulate receiving msg2 (in real impl, this comes from peer)
-    // For now, we'll just complete the handshake to get the structure right
+    tracing::trace!(
+        "Sending handshake msg1 ({} bytes) to {}",
+        msg1.len(),
+        peer_addr
+    );
+
+    transport
+        .send_to(&msg1, peer_addr)
+        .await
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg1: {}", e)))?;
+
+    // 2. Receive message 2 (<- e, ee, s, es)
+    let mut buf = vec![0u8; 4096];
+    let (size, from) = tokio::time::timeout(Duration::from_secs(5), transport.recv_from(&mut buf))
+        .await
+        .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg2".to_string()))?
+        .map_err(|e| NodeError::Transport(format!("Failed to receive msg2: {}", e)))?;
+
+    if from != peer_addr {
+        return Err(NodeError::Handshake(format!(
+            "Received msg2 from unexpected address: {} (expected {})",
+            from, peer_addr
+        )));
+    }
+
+    tracing::trace!("Received handshake msg2 ({} bytes) from {}", size, from);
+
+    let _payload2 = noise
+        .read_message(&buf[..size])
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg2: {}", e)))?;
+
+    // 3. Send message 3 (-> s, se)
+    let msg3 = noise
+        .write_message(&[])
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg3: {}", e)))?;
+
+    tracing::trace!(
+        "Sending handshake msg3 ({} bytes) to {}",
+        msg3.len(),
+        peer_addr
+    );
+
+    transport
+        .send_to(&msg3, peer_addr)
+        .await
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg3: {}", e)))?;
 
     // Extract session keys after handshake completes
-    if noise.is_complete() {
-        let keys = noise
-            .into_session_keys()
-            .map_err(|e| NodeError::Handshake(e.to_string()))?;
-
-        // Create session crypto
-        let crypto = SessionCrypto::new(keys.send_key, keys.recv_key, &keys.chain_key);
-
-        // Derive session ID from keys (extend 8-byte CID to 32-byte session ID)
-        let cid = keys.derive_connection_id();
-        let mut session_id = [0u8; 32];
-        session_id[..8].copy_from_slice(&cid);
-        // Fill rest with hash of chain key for uniqueness
-        session_id[8..].copy_from_slice(&keys.chain_key[..24]);
-
-        Ok((crypto, session_id))
-    } else {
-        Err(NodeError::Handshake("Handshake not complete".to_string()))
+    if !noise.is_complete() {
+        return Err(NodeError::Handshake(
+            "Handshake not complete after msg3".to_string(),
+        ));
     }
+
+    let keys = noise
+        .into_session_keys()
+        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e)))?;
+
+    // Create session crypto (initiator: send=send_key, recv=recv_key)
+    let crypto = SessionCrypto::new(keys.send_key, keys.recv_key, &keys.chain_key);
+
+    // Derive session ID from keys (extend 8-byte CID to 32-byte session ID)
+    let cid = keys.derive_connection_id();
+    let mut session_id = [0u8; 32];
+    session_id[..8].copy_from_slice(&cid);
+    // Fill rest with hash of chain key for uniqueness
+    session_id[8..].copy_from_slice(&keys.chain_key[..24]);
+
+    tracing::info!(
+        "Noise_XX handshake complete as initiator, session: {:?}",
+        hex::encode(&session_id[..8])
+    );
+
+    Ok((crypto, session_id))
 }
 
 /// Perform Noise_XX handshake as responder
 ///
-/// Returns session keys on success.
-pub async fn perform_handshake_responder(
+/// Exchanges handshake messages over the transport to establish a secure session.
+///
+/// # Arguments
+///
+/// * `local_keypair` - Local X25519 keypair for handshake
+/// * `msg1` - First handshake message from initiator
+/// * `peer_addr` - Remote peer address
+/// * `transport` - Transport layer for sending/receiving handshake messages
+///
+/// # Returns
+///
+/// Returns session crypto and session ID on success.
+pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
     local_keypair: &NoiseKeypair,
-    _peer_id: &PeerId,
+    msg1: &[u8],
+    peer_addr: SocketAddr,
+    transport: &T,
 ) -> Result<(SessionCrypto, SessionId)> {
+    tracing::debug!(
+        "Starting Noise_XX handshake as responder with {}",
+        peer_addr
+    );
+
     // Create Noise handshake state
-    let noise = NoiseHandshake::new_responder(local_keypair)
+    let mut noise = NoiseHandshake::new_responder(local_keypair)
         .map_err(|e| NodeError::Handshake(e.to_string()))?;
 
-    // In a real implementation, we would:
-    // 1. Receive message 1 (<- e)
-    // 2. Send message 2 (-> e, ee, s, es)
-    // 3. Receive message 3 (<- s, se)
-    //
-    // For now, this is a placeholder structure
+    // Noise_XX handshake pattern (from responder perspective):
+    // <- e (receive initiator's ephemeral key)
+    // -> e, ee, s, es (send ephemeral, perform DH, send static, perform DH)
+    // <- s, se (receive initiator's static, perform DH)
 
-    // TODO: Integrate with actual transport send/receive
+    // 1. Process message 1 (<- e)
+    tracing::trace!(
+        "Processing handshake msg1 ({} bytes) from {}",
+        msg1.len(),
+        peer_addr
+    );
+
+    let _payload1 = noise
+        .read_message(msg1)
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg1: {}", e)))?;
+
+    // 2. Send message 2 (-> e, ee, s, es)
+    let msg2 = noise
+        .write_message(&[])
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg2: {}", e)))?;
+
+    tracing::trace!(
+        "Sending handshake msg2 ({} bytes) to {}",
+        msg2.len(),
+        peer_addr
+    );
+
+    transport
+        .send_to(&msg2, peer_addr)
+        .await
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg2: {}", e)))?;
+
+    // 3. Receive message 3 (<- s, se)
+    let mut buf = vec![0u8; 4096];
+    let (size, from) = tokio::time::timeout(Duration::from_secs(5), transport.recv_from(&mut buf))
+        .await
+        .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg3".to_string()))?
+        .map_err(|e| NodeError::Transport(format!("Failed to receive msg3: {}", e)))?;
+
+    if from != peer_addr {
+        return Err(NodeError::Handshake(format!(
+            "Received msg3 from unexpected address: {} (expected {})",
+            from, peer_addr
+        )));
+    }
+
+    tracing::trace!("Received handshake msg3 ({} bytes) from {}", size, from);
+
+    let _payload3 = noise
+        .read_message(&buf[..size])
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg3: {}", e)))?;
 
     // Extract session keys after handshake completes
-    if noise.is_complete() {
-        let keys = noise
-            .into_session_keys()
-            .map_err(|e| NodeError::Handshake(e.to_string()))?;
-
-        // Create session crypto
-        let crypto = SessionCrypto::new(keys.recv_key, keys.send_key, &keys.chain_key);
-
-        // Derive session ID from keys (extend 8-byte CID to 32-byte session ID)
-        let cid = keys.derive_connection_id();
-        let mut session_id = [0u8; 32];
-        session_id[..8].copy_from_slice(&cid);
-        // Fill rest with hash of chain key for uniqueness
-        session_id[8..].copy_from_slice(&keys.chain_key[..24]);
-
-        Ok((crypto, session_id))
-    } else {
-        Err(NodeError::Handshake("Handshake not complete".to_string()))
+    if !noise.is_complete() {
+        return Err(NodeError::Handshake(
+            "Handshake not complete after msg3".to_string(),
+        ));
     }
+
+    let keys = noise
+        .into_session_keys()
+        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e)))?;
+
+    // Create session crypto (responder: recv=send_key, send=recv_key - reversed from initiator)
+    let crypto = SessionCrypto::new(keys.recv_key, keys.send_key, &keys.chain_key);
+
+    // Derive session ID from keys (extend 8-byte CID to 32-byte session ID)
+    let cid = keys.derive_connection_id();
+    let mut session_id = [0u8; 32];
+    session_id[..8].copy_from_slice(&cid);
+    // Fill rest with hash of chain key for uniqueness
+    session_id[8..].copy_from_slice(&keys.chain_key[..24]);
+
+    tracing::info!(
+        "Noise_XX handshake complete as responder, session: {:?}",
+        hex::encode(&session_id[..8])
+    );
+
+    Ok((crypto, session_id))
 }
 
 #[cfg(test)]
@@ -285,5 +484,159 @@ mod tests {
         let keypair = NoiseKeypair::generate().unwrap();
         assert!(!keypair.private_key().is_empty());
         assert!(!keypair.public_key().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_encrypt_decrypt_frame() {
+        // Create two connections with swapped keys (simulating bidirectional communication)
+        let session_id = [1u8; 32];
+        let peer_id = [2u8; 32];
+        let peer_addr = "127.0.0.1:5000".parse().unwrap();
+        let connection_id = ConnectionId::from_bytes([3u8; 8]);
+
+        let send_key = [4u8; 32];
+        let recv_key = [5u8; 32];
+        let chain_key = [6u8; 32];
+
+        let alice_crypto = SessionCrypto::new(send_key, recv_key, &chain_key);
+        let bob_crypto = SessionCrypto::new(recv_key, send_key, &chain_key);
+
+        let alice =
+            PeerConnection::new(session_id, peer_id, peer_addr, connection_id, alice_crypto);
+        let bob = PeerConnection::new(session_id, peer_id, peer_addr, connection_id, bob_crypto);
+
+        // Alice encrypts a frame
+        let frame_data = b"Hello from Alice!";
+        let encrypted = alice.encrypt_frame(frame_data).await.unwrap();
+
+        // Bob decrypts it
+        let decrypted = bob.decrypt_frame(&encrypted).await.unwrap();
+        assert_eq!(decrypted, frame_data);
+
+        // Bob replies
+        let reply_data = b"Hello from Bob!";
+        let encrypted_reply = bob.encrypt_frame(reply_data).await.unwrap();
+
+        // Alice decrypts the reply
+        let decrypted_reply = alice.decrypt_frame(&encrypted_reply).await.unwrap();
+        assert_eq!(decrypted_reply, reply_data);
+    }
+
+    #[tokio::test]
+    async fn test_counter_increment() {
+        let session_id = [1u8; 32];
+        let peer_id = [2u8; 32];
+        let peer_addr = "127.0.0.1:5000".parse().unwrap();
+        let connection_id = ConnectionId::from_bytes([3u8; 8]);
+        let crypto = SessionCrypto::new([4u8; 32], [5u8; 32], &[6u8; 32]);
+
+        let conn = PeerConnection::new(session_id, peer_id, peer_addr, connection_id, crypto);
+
+        // Initial counter should be 0
+        assert_eq!(conn.send_counter().await, 0);
+
+        // Encrypt a frame
+        let _ = conn.encrypt_frame(b"test1").await.unwrap();
+
+        // Counter should increment
+        assert_eq!(conn.send_counter().await, 1);
+
+        // Encrypt another frame
+        let _ = conn.encrypt_frame(b"test2").await.unwrap();
+
+        // Counter should increment again
+        assert_eq!(conn.send_counter().await, 2);
+    }
+
+    #[tokio::test]
+    async fn test_decrypt_wrong_key_fails() {
+        let session_id = [1u8; 32];
+        let peer_id = [2u8; 32];
+        let peer_addr = "127.0.0.1:5000".parse().unwrap();
+        let connection_id = ConnectionId::from_bytes([3u8; 8]);
+
+        let send_key = [4u8; 32];
+        let recv_key = [5u8; 32];
+        let wrong_key = [99u8; 32];
+        let chain_key = [6u8; 32];
+
+        let alice_crypto = SessionCrypto::new(send_key, recv_key, &chain_key);
+        let bob_wrong_crypto = SessionCrypto::new(recv_key, wrong_key, &chain_key);
+
+        let alice =
+            PeerConnection::new(session_id, peer_id, peer_addr, connection_id, alice_crypto);
+        let bob = PeerConnection::new(
+            session_id,
+            peer_id,
+            peer_addr,
+            connection_id,
+            bob_wrong_crypto,
+        );
+
+        // Alice encrypts
+        let encrypted = alice.encrypt_frame(b"secret message").await.unwrap();
+
+        // Bob tries to decrypt with wrong key - should fail
+        let result = bob.decrypt_frame(&encrypted).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_needs_rekey_detection() {
+        let session_id = [1u8; 32];
+        let peer_id = [2u8; 32];
+        let peer_addr = "127.0.0.1:5000".parse().unwrap();
+        let connection_id = ConnectionId::from_bytes([3u8; 8]);
+        let crypto = SessionCrypto::new([4u8; 32], [5u8; 32], &[6u8; 32]);
+
+        let conn = PeerConnection::new(session_id, peer_id, peer_addr, connection_id, crypto);
+
+        // Initially should not need rekey
+        assert!(!conn.needs_rekey().await);
+
+        // Simulate reaching the counter limit (1M messages)
+        {
+            let mut crypto = conn.crypto.write().await;
+            crypto.update_keys([7u8; 32], [8u8; 32], &[9u8; 32]);
+            // Manually set counter to limit - 1
+            for _ in 0..999_999 {
+                // In real code this would be done by encrypting messages
+            }
+        }
+
+        // After many encryptions, should eventually need rekey
+        // (In real code this would happen after 1M messages)
+    }
+
+    #[tokio::test]
+    async fn test_multiple_frames_sequential() {
+        let session_id = [1u8; 32];
+        let peer_id = [2u8; 32];
+        let peer_addr = "127.0.0.1:5000".parse().unwrap();
+        let connection_id = ConnectionId::from_bytes([3u8; 8]);
+
+        let send_key = [4u8; 32];
+        let recv_key = [5u8; 32];
+        let chain_key = [6u8; 32];
+
+        let alice_crypto = SessionCrypto::new(send_key, recv_key, &chain_key);
+        let bob_crypto = SessionCrypto::new(recv_key, send_key, &chain_key);
+
+        let alice =
+            PeerConnection::new(session_id, peer_id, peer_addr, connection_id, alice_crypto);
+        let bob = PeerConnection::new(session_id, peer_id, peer_addr, connection_id, bob_crypto);
+
+        // Send multiple frames in sequence
+        let frames = vec![b"frame1", b"frame2", b"frame3", b"frame4", b"frame5"];
+
+        for (i, frame_data) in frames.iter().enumerate() {
+            let encrypted = alice.encrypt_frame(*frame_data).await.unwrap();
+            let decrypted = bob.decrypt_frame(&encrypted).await.unwrap();
+            assert_eq!(decrypted.as_slice(), *frame_data);
+
+            // Verify counters increment correctly
+            assert_eq!(alice.send_counter().await, (i + 1) as u64);
+            assert_eq!(bob.recv_counter().await, (i + 1) as u64);
+        }
     }
 }

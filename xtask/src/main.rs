@@ -71,7 +71,7 @@ fn run_command(program: &str, args: &[&str]) -> anyhow::Result<()> {
     let status = Command::new(program).args(args).status()?;
 
     if !status.success() {
-        anyhow::bail!("{} {:?} failed", program, args);
+        anyhow::bail!("{program} {args:?} failed");
     }
 
     Ok(())

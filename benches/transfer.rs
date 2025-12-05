@@ -169,7 +169,6 @@ fn bench_transfer_throughput(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
                 rt.block_on(async {
-                    use std::fs;
                     use tempfile::NamedTempFile;
                     use wraith_core::node::Node;
 
@@ -239,7 +238,6 @@ fn bench_transfer_latency(c: &mut Criterion) {
     c.bench_function("small_file_transfer_latency", |b| {
         b.iter(|| {
             rt.block_on(async {
-                use std::fs;
                 use tempfile::NamedTempFile;
                 use wraith_core::node::Node;
 
@@ -292,7 +290,7 @@ fn bench_bbr_utilization(c: &mut Criterion) {
                 // Update bandwidth estimation
                 let delivered = 1400 * (i + 1); // MTU-sized packets
                 let interval = std::time::Duration::from_micros(1000);
-                bbr.update_bandwidth(delivered as u64, interval);
+                bbr.update_bandwidth(delivered, interval);
             }
 
             black_box(bbr.cwnd())
@@ -359,7 +357,6 @@ fn bench_multi_peer_speedup(c: &mut Criterion) {
             |b, &num_peers| {
                 b.iter(|| {
                     rt.block_on(async {
-                        use std::fs;
                         use tempfile::NamedTempFile;
                         use wraith_core::node::Node;
 

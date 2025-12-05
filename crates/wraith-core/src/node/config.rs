@@ -35,6 +35,10 @@ pub struct NodeConfig {
 impl Default for NodeConfig {
     fn default() -> Self {
         Self {
+            // Use port 0 (auto-select) in tests to avoid port conflicts
+            #[cfg(test)]
+            listen_addr: "0.0.0.0:0".parse().unwrap(),
+            #[cfg(not(test))]
             listen_addr: "0.0.0.0:8420".parse().unwrap(),
             transport: TransportConfig::default(),
             obfuscation: ObfuscationConfig::default(),
@@ -91,6 +95,9 @@ pub struct ObfuscationConfig {
 
     /// Protocol mimicry mode
     pub mimicry_mode: MimicryMode,
+
+    /// Cover traffic configuration
+    pub cover_traffic: CoverTrafficConfig,
 }
 
 impl Default for ObfuscationConfig {
@@ -99,8 +106,48 @@ impl Default for ObfuscationConfig {
             padding_mode: PaddingMode::None,
             timing_mode: TimingMode::None,
             mimicry_mode: MimicryMode::None,
+            cover_traffic: CoverTrafficConfig::default(),
         }
     }
+}
+
+/// Cover traffic configuration
+#[derive(Debug, Clone)]
+pub struct CoverTrafficConfig {
+    /// Enable cover traffic generation
+    pub enabled: bool,
+
+    /// Target packets per second
+    pub rate: f64,
+
+    /// Traffic distribution pattern
+    pub distribution: CoverTrafficDistribution,
+}
+
+impl Default for CoverTrafficConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            rate: 10.0, // 10 packets per second
+            distribution: CoverTrafficDistribution::Constant,
+        }
+    }
+}
+
+/// Cover traffic distribution patterns
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CoverTrafficDistribution {
+    /// Constant rate
+    Constant,
+    /// Poisson distribution (lambda = rate)
+    Poisson,
+    /// Uniform distribution with jitter
+    Uniform {
+        /// Minimum delay in milliseconds
+        min_ms: u64,
+        /// Maximum delay in milliseconds
+        max_ms: u64,
+    },
 }
 
 /// Padding modes

@@ -290,8 +290,8 @@ impl NoiseHandshake {
     pub fn write_message(&mut self, payload: &[u8]) -> Result<Vec<u8>, NoiseError> {
         // Validate state
         match (self.role, self.phase) {
-            (Role::Initiator, HandshakePhase::Initial | HandshakePhase::Message2Complete)
-            | (Role::Responder, HandshakePhase::Message1Complete) => {}
+            (Role::Initiator, HandshakePhase::Initial | HandshakePhase::Message2Complete) => {}
+            (Role::Responder, HandshakePhase::Message1Complete) => {}
             _ => return Err(NoiseError::InvalidState),
         }
 
@@ -320,8 +320,8 @@ impl NoiseHandshake {
     pub fn read_message(&mut self, message: &[u8]) -> Result<Vec<u8>, NoiseError> {
         // Validate state
         match (self.role, self.phase) {
-            (Role::Responder, HandshakePhase::Initial | HandshakePhase::Message2Complete)
-            | (Role::Initiator, HandshakePhase::Message1Complete) => {}
+            (Role::Responder, HandshakePhase::Initial | HandshakePhase::Message2Complete) => {}
+            (Role::Initiator, HandshakePhase::Message1Complete) => {}
             _ => return Err(NoiseError::InvalidState),
         }
 

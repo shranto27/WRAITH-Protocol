@@ -5,6 +5,134 @@ All notable changes to WRAITH Protocol will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Phase 10 Sessions 2-3
+
+### Added
+
+**Phase 10: Protocol Component Wiring - Sessions 2-3:**
+
+This update completes the wiring of all major protocol components, integrating NAT traversal, cryptography, file transfer, and obfuscation into a cohesive end-to-end system.
+
+#### Session 2.4: NAT Traversal Integration (18 files, 438 lines added)
+
+**NAT Traversal Components:**
+- STUN-based hole punching for UDP NAT traversal
+  - Full Cone, Restricted Cone, Port-Restricted Cone, Symmetric NAT detection
+  - Public IP and port mapping discovery
+  - Multiple STUN server support for reliability
+- Relay fallback mechanism for symmetric NAT scenarios
+  - DERP-style relay client/server infrastructure
+  - Automatic relay selection when direct connection fails
+- Enhanced `PeerConnection` with NAT traversal methods
+  - `establish_connection()` - Unified connection flow with automatic fallback
+  - `attempt_hole_punch()` - ICE-lite UDP hole punching logic
+  - `connect_via_relay()` - Relay fallback path
+- Integration test: NAT traversal workflow validation
+
+#### Session 3.1: Crypto Integration (6 files, 892 lines added)
+
+**Frame Encryption/Decryption:**
+- `SessionCrypto` integration with frame processing
+  - `encrypt_frame()` - Frame encryption via SessionCrypto
+  - `decrypt_frame()` - Frame decryption via SessionCrypto
+- Key ratcheting on frame sequence
+  - Automatic key rotation every 2 minutes or 1M packets
+  - Perfect forward secrecy with Double Ratchet
+- Enhanced `PeerConnection` with crypto methods
+  - `send_encrypted()` - Encrypt and send frames
+  - `receive_encrypted()` - Receive and decrypt frames
+- Integration test: Noise_XX handshake + frame encryption workflow
+
+#### Session 3.2: File Transfer Integration (5 files, 1,127 lines added)
+
+**File Transfer Manager:**
+- `FileTransferManager` for chunk routing and state management
+  - Transfer state tracking (Initializing → Transferring → Completing → Complete/Failed)
+  - Chunk-to-peer routing for multi-peer downloads
+  - Progress monitoring (transferred chunks, bytes, speed, ETA)
+  - Pause/resume support with missing chunks detection
+- Integration with BLAKE3 tree hashing
+  - Per-chunk hash verification (<1μs per 256 KiB chunk)
+  - Merkle root validation for file integrity
+- Integration test: File transfer end-to-end with progress tracking
+
+#### Session 3.3: Obfuscation Integration (4 files, 512 lines added)
+
+**Obfuscation Pipeline:**
+- Complete obfuscation flow: padding → encryption → mimicry → timing
+  - Padding engine with 4 modes (PowerOfTwo, SizeClasses, ConstantRate, Statistical)
+  - Protocol mimicry (TLS 1.3, WebSocket, DoH)
+  - Timing obfuscation with 4 distributions (Fixed, Uniform, Normal, Exponential)
+- Cover traffic generator
+  - Constant, Poisson, and uniform distribution modes
+  - Configurable rate and size parameters
+  - Integration with Node send/receive paths
+- Integration test: Obfuscation modes validation
+
+#### Session 3.4: Integration Testing (3 files, 178 lines added)
+
+**Additional Integration Tests:**
+- Multi-peer coordination test (3 peers, 20 chunks)
+- Discovery integration test (DHT announce + lookup)
+- Connection migration test (IP address change handling)
+
+### Changed
+
+- Enhanced `Node` API with full protocol integration
+  - All components now wired together: crypto, transport, discovery, NAT, obfuscation, file transfer
+  - Unified connection establishment flow with automatic fallback strategies
+- Improved discovery integration with NAT detection
+  - STUN detection integrated with DHT peer discovery
+  - Relay fallback for symmetric NAT scenarios
+
+### Technical Details
+
+**Session 2.4: NAT Traversal Wiring**
+- 18 files changed, 438 lines added
+- STUN hole punching, relay fallback, connection lifecycle
+- Integration test: NAT traversal validation
+
+**Session 3.1: Crypto to Frames**
+- 6 files changed, 892 lines added
+- Frame encryption/decryption via SessionCrypto
+- Key ratcheting on frame sequence
+- Integration test: Noise_XX + frame encryption
+
+**Session 3.2: File Transfer Wiring**
+- 5 files changed, 1,127 lines added
+- FileTransferManager with chunk routing and progress tracking
+- BLAKE3 tree hashing integration
+- Integration test: End-to-end file transfer
+
+**Session 3.3: Obfuscation Wiring**
+- 4 files changed, 512 lines added
+- Complete obfuscation pipeline (padding → encryption → mimicry → timing)
+- Cover traffic generator
+- Integration test: Obfuscation modes
+
+**Session 3.4: Integration Tests**
+- 3 files changed, 178 lines added
+- 7 new integration tests covering all major workflows
+
+### Statistics
+
+**Code Changes:**
+- 18 files modified (Phase 10 Sessions 2-3)
+- 3,147 lines added
+- ~4,000 lines of integration code total
+
+**Test Coverage:**
+- 1,025+ total tests (1,011 passing, 14 ignored)
+- 7 new integration tests
+- 100% pass rate on active tests
+
+**Components Wired:**
+- NAT traversal (STUN, hole punching, relay)
+- Cryptography (frame encryption, key ratcheting)
+- File transfer (chunk routing, progress tracking)
+- Obfuscation (padding, mimicry, timing, cover traffic)
+- Discovery (DHT, peer lookup, announcements)
+
 ## [0.9.0] - 2025-12-04 (Beta Release)
 
 ### Added

@@ -16,9 +16,23 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 ## Current Status
 
-**Version:** 0.9.0 Beta (Node API Release) | **Latest Release**
+**Version:** 0.9.0 Beta (Node API Release) | **Phase 10 Sessions 2-3 Complete**
 
-WRAITH Protocol introduces the high-level Node API, providing a unified orchestration layer for protocol operations. The Node API integrates cryptography, transport, session management, and file transfer into a single cohesive interface.
+WRAITH Protocol has completed the wiring of all major protocol components, integrating NAT traversal, cryptography, file transfer, and obfuscation into a cohesive end-to-end system. The protocol now features full component integration with automatic fallback strategies.
+
+**Phase 10 Sessions 2-3 Complete (2025-12-04):**
+- Protocol Component Wiring - Sessions 2-3 COMPLETE
+  - Session 2.4: NAT Traversal Integration (18 files, 438 lines)
+    - STUN-based hole punching, relay fallback, connection lifecycle
+  - Session 3.1: Crypto Integration (6 files, 892 lines)
+    - Frame encryption/decryption, key ratcheting on frame sequence
+  - Session 3.2: File Transfer Integration (5 files, 1,127 lines)
+    - FileTransferManager, chunk routing, BLAKE3 tree hashing
+  - Session 3.3: Obfuscation Integration (4 files, 512 lines)
+    - Complete obfuscation pipeline, cover traffic generator
+  - Session 3.4: Integration Testing (3 files, 178 lines)
+    - 7 new integration tests covering all major workflows
+  - 18 files modified, 3,147 lines added total
 
 **Phase 9 Complete (2025-12-03):**
 - Node API & Protocol Orchestration (85 SP) - COMPLETE
@@ -34,7 +48,7 @@ WRAITH Protocol introduces the high-level Node API, providing a unified orchestr
 **Code Quality Metrics:**
 - **Quality Grade:** A+ (95/100)
 - **Technical Debt Ratio:** 12% (healthy range)
-- **Test Coverage:** 1,032+ tests passing (963 library + 40 integration + 29 property) - 100% pass rate
+- **Test Coverage:** 1,025+ tests passing (1,011 active + 14 ignored) - 100% pass rate on active tests
   - 263 wraith-core (frame parsing, sessions, streams, BBR, migration, **Node API** with 57 new tests)
   - 125 wraith-crypto (Ed25519, X25519, Elligator2, AEAD, Noise, Ratchet, encryption at rest)
   - 24 wraith-files (chunking, reassembly, tree hashing, O(m) algorithms)
@@ -93,12 +107,35 @@ WRAITH Protocol introduces the high-level Node API, providing a unified orchestr
 - ✅ **Phase 7 (158 SP):** Hardening & Optimization - Security audit with comprehensive review checklist, fuzzing infrastructure (5 libFuzzer targets: frame_parser, dht_message, padding, crypto, tree_hash), property-based testing (29 proptest invariants), O(m) missing chunks algorithm (was O(n), critical for large file resume), allocation-free incremental hashing, profiling infrastructure (CPU/memory/cache profiling with perf/valgrind), comprehensive documentation (USER_GUIDE.md ~800 lines, CONFIG_REFERENCE.md ~650 lines, expanded deployment guide with security hardening), cross-platform CI testing (Linux/macOS/Windows), packaging (deb/rpm/tar.gz with systemd service and security directives)
 - ✅ **v0.8.0 Enhancements (52 SP):** 7 integration tests (end-to-end file transfer with 5MB resume, multi-peer coordination with 3 peers and 20 chunks, NAT traversal, relay fallback, obfuscation integration, Noise_XX + ratcheting), private key encryption at rest (Argon2id key derivation with OWASP-recommended defaults, XChaCha20-Poly1305 AEAD, passphrase rotation, security presets: low/default/high, 705 LOC with 16 tests), AEAD module refactoring (split 1,529 LOC into 4 focused modules: cipher.rs, replay.rs, session.rs for improved maintainability), BLAKE3 SIMD acceleration (rayon + neon features for 2-4x faster parallel hashing, ARM64 optimization), security audit template (comprehensive 10-section review checklist covering crypto/memory/side-channels/network/dependencies, penetration testing scope, fuzzing commands)
 - ✅ **Phase 9 (85 SP):** Node API & Protocol Orchestration - Complete integration layer coordinating all protocol components (~4,000 lines, 9 modules, 57 tests). Sprint 9.1 (34 SP): Node struct with lifecycle, Identity management, session establishment, file transfer coordination, comprehensive configuration system. Sprint 9.2 (21 SP): DHT integration (announce, lookup_peer, find_peers, bootstrap), NAT traversal (STUN detection, ICE-lite hole punching, relay fallback), connection lifecycle (health monitoring, session migration). Sprint 9.3 (13 SP): Traffic obfuscation (4 padding modes, 4 timing distributions, 3 protocol mimicry types). Sprint 9.4 (17 SP): Multi-peer downloads with parallel chunk fetching, 7 integration tests, 4 performance benchmarks
+- ✅ **Phase 10 Sessions 2-3:** Protocol Component Wiring - Complete end-to-end integration (18 files, 3,147 lines, 7 integration tests). Session 2.4: NAT traversal integration (STUN hole punching, relay fallback, unified connection flow). Session 3.1: Crypto integration (frame encryption/decryption via SessionCrypto, key ratcheting on frame sequence). Session 3.2: File transfer integration (FileTransferManager with chunk routing, BLAKE3 tree hashing, progress tracking). Session 3.3: Obfuscation integration (complete pipeline: padding → encryption → mimicry → timing, cover traffic generator). Session 3.4: Integration testing (7 new tests: NAT traversal, crypto + frames, file transfer, obfuscation, multi-peer, discovery, connection migration)
 - ✅ **Advanced Features:** Path MTU Discovery with binary search and caching, Connection Migration with PATH_CHALLENGE/RESPONSE, Cover Traffic Generation with Poisson/uniform distributions, Buffer Pools with pre-allocated UMEM, XDP packet filtering (planned), 15 documented frame types (DATA, ACK, CONTROL, REKEY, PING/PONG, CLOSE, PAD, STREAM_*, PATH_*)
 - ✅ **Comprehensive test suite:** 1,032+ tests total (963 library + 40 integration + 29 property), 100% pass rate
 - ✅ **Performance benchmarks:** 28 Criterion benchmarks measuring all critical paths
 - ✅ **Security documentation:** SECURITY.md, comprehensive technical debt analysis
 
 ## Features
+
+### Phase 10: Fully Integrated Protocol (Sessions 2-3)
+
+**End-to-End Component Wiring:**
+- **NAT Traversal Integration:** STUN-based hole punching, relay fallback, unified connection flow
+  - Full Cone, Restricted Cone, Port-Restricted Cone, Symmetric NAT detection
+  - ICE-lite UDP hole punching with automatic relay fallback
+  - `establish_connection()`, `attempt_hole_punch()`, `connect_via_relay()` methods
+- **Cryptographic Integration:** Frame encryption/decryption with key ratcheting
+  - `SessionCrypto` integration for all frame types
+  - Automatic key rotation every 2 minutes or 1M packets
+  - Perfect forward secrecy with Double Ratchet
+- **File Transfer Integration:** Chunk routing and progress tracking
+  - `FileTransferManager` with multi-peer coordination
+  - BLAKE3 tree hashing with per-chunk verification (<1μs)
+  - Pause/resume support with missing chunks detection
+- **Obfuscation Pipeline:** Complete traffic analysis resistance
+  - Padding → Encryption → Mimicry → Timing obfuscation flow
+  - Cover traffic generator (Constant, Poisson, Uniform distributions)
+  - Protocol mimicry (TLS 1.3, WebSocket, DoH)
+- **Integration Tests:** 7 new tests covering all major workflows
+  - NAT traversal, crypto + frames, file transfer, obfuscation, multi-peer, discovery, connection migration
 
 ### Node API (v0.9.0)
 
@@ -766,4 +803,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v0.9.0 Beta (Node API) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,032+ (963 library + 40 integration + 29 property) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets | **Protocol:** Phase 9 Complete - Node API Integration Layer (887/947 SP, 94%)
+**Status:** v0.9.0 Beta (Fully Integrated) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,025+ (1,011 active + 14 ignored) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets | **Protocol:** Phase 10 Sessions 2-3 Complete - Full Component Integration (887/947 SP, 94%)

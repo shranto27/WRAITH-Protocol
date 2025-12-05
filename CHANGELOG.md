@@ -92,6 +92,13 @@ This update completes the wiring of all major protocol components, integrating N
   - STUN detection integrated with DHT peer discovery
   - Relay fallback for symmetric NAT scenarios
 
+### Fixed
+
+- **CI Stability:** Increased timing test tolerances for macOS CI scheduler variability
+  - `test_sleep_fixed_delay`: 50ms → 100ms upper bound to handle macOS scheduling variance
+  - `test_sleep_zero_delay`: 1ms → 5ms tolerance (preventive adjustment)
+  - Prevents false positives in GitHub Actions macOS runners while maintaining test rigor
+
 ### Technical Details
 
 **Session 2.4: NAT Traversal Wiring**

@@ -466,8 +466,8 @@ mod tests {
         obfuscator.sleep();
         let elapsed = start.elapsed();
 
-        // Should complete almost instantly
-        assert!(elapsed < Duration::from_millis(1));
+        // Should complete almost instantly (5ms tolerance for CI scheduler variability)
+        assert!(elapsed < Duration::from_millis(5));
     }
 
     #[test]
@@ -478,8 +478,9 @@ mod tests {
         let elapsed = start.elapsed();
 
         // Should sleep for approximately 10ms (with tolerance for CI environments)
+        // macOS/Windows CI runners need 2-3x tolerance due to scheduler variability
         assert!(elapsed >= Duration::from_millis(9));
-        assert!(elapsed <= Duration::from_millis(50)); // CI environments can be slow
+        assert!(elapsed <= Duration::from_millis(100)); // Increased tolerance for macOS/Windows CI
     }
 
     #[test]

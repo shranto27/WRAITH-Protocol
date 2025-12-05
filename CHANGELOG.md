@@ -5,7 +5,7 @@ All notable changes to WRAITH Protocol will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] - 2025-12-03 (Beta Release)
+## [0.9.0] - 2025-12-04 (Beta Release)
 
 ### Added
 
@@ -155,7 +155,7 @@ This release introduces the high-level Node API, providing a unified orchestrati
 
 ### Testing
 
-- **791+ tests passing** (57 new Node API tests across all sprints)
+- **1,032+ tests passing** (57 new Node API tests across all sprints)
   - **Sprint 9.1:** 10 tests (node creation, lifecycle, sessions)
   - **Sprint 9.2:** 28 tests (discovery, NAT, connection lifecycle)
   - **Sprint 9.3:** 11 tests (obfuscation modes, timing, mimicry)
@@ -176,7 +176,7 @@ This release introduces the high-level Node API, providing a unified orchestrati
 ### Metrics
 
 - **New Code:** ~4,000 lines of Rust across 9 modules
-- **Tests:** 791+ total (722 library + 40 integration + 29 property)
+- **Tests:** 1,032+ total (963 library + 40 integration + 29 property)
 - **Story Points:** 85/85 (100% - Phase 9 COMPLETE)
 - **Quality:** Zero warnings, all tests passing, comprehensive documentation
 

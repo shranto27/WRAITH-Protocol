@@ -34,7 +34,7 @@ WRAITH Protocol introduces the high-level Node API, providing a unified orchestr
 **Code Quality Metrics:**
 - **Quality Grade:** A+ (95/100)
 - **Technical Debt Ratio:** 12% (healthy range)
-- **Test Coverage:** 791+ tests passing (722 library + 40 integration + 29 property) - 100% pass rate
+- **Test Coverage:** 1,032+ tests passing (963 library + 40 integration + 29 property) - 100% pass rate
   - 263 wraith-core (frame parsing, sessions, streams, BBR, migration, **Node API** with 57 new tests)
   - 125 wraith-crypto (Ed25519, X25519, Elligator2, AEAD, Noise, Ratchet, encryption at rest)
   - 24 wraith-files (chunking, reassembly, tree hashing, O(m) algorithms)
@@ -94,7 +94,7 @@ WRAITH Protocol introduces the high-level Node API, providing a unified orchestr
 - ✅ **v0.8.0 Enhancements (52 SP):** 7 integration tests (end-to-end file transfer with 5MB resume, multi-peer coordination with 3 peers and 20 chunks, NAT traversal, relay fallback, obfuscation integration, Noise_XX + ratcheting), private key encryption at rest (Argon2id key derivation with OWASP-recommended defaults, XChaCha20-Poly1305 AEAD, passphrase rotation, security presets: low/default/high, 705 LOC with 16 tests), AEAD module refactoring (split 1,529 LOC into 4 focused modules: cipher.rs, replay.rs, session.rs for improved maintainability), BLAKE3 SIMD acceleration (rayon + neon features for 2-4x faster parallel hashing, ARM64 optimization), security audit template (comprehensive 10-section review checklist covering crypto/memory/side-channels/network/dependencies, penetration testing scope, fuzzing commands)
 - ✅ **Phase 9 (85 SP):** Node API & Protocol Orchestration - Complete integration layer coordinating all protocol components (~4,000 lines, 9 modules, 57 tests). Sprint 9.1 (34 SP): Node struct with lifecycle, Identity management, session establishment, file transfer coordination, comprehensive configuration system. Sprint 9.2 (21 SP): DHT integration (announce, lookup_peer, find_peers, bootstrap), NAT traversal (STUN detection, ICE-lite hole punching, relay fallback), connection lifecycle (health monitoring, session migration). Sprint 9.3 (13 SP): Traffic obfuscation (4 padding modes, 4 timing distributions, 3 protocol mimicry types). Sprint 9.4 (17 SP): Multi-peer downloads with parallel chunk fetching, 7 integration tests, 4 performance benchmarks
 - ✅ **Advanced Features:** Path MTU Discovery with binary search and caching, Connection Migration with PATH_CHALLENGE/RESPONSE, Cover Traffic Generation with Poisson/uniform distributions, Buffer Pools with pre-allocated UMEM, XDP packet filtering (planned), 15 documented frame types (DATA, ACK, CONTROL, REKEY, PING/PONG, CLOSE, PAD, STREAM_*, PATH_*)
-- ✅ **Comprehensive test suite:** 791+ tests total (722 library + 40 integration + 29 property), 100% pass rate
+- ✅ **Comprehensive test suite:** 1,032+ tests total (963 library + 40 integration + 29 property), 100% pass rate
 - ✅ **Performance benchmarks:** 28 Criterion benchmarks measuring all critical paths
 - ✅ **Security documentation:** SECURITY.md, comprehensive technical debt analysis
 
@@ -766,4 +766,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v0.9.0 Beta (Node API) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 791+ (722 library + 40 integration + 29 property) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets | **Protocol:** Phase 9 Complete - Node API Integration Layer (887/947 SP, 94%)
+**Status:** v0.9.0 Beta (Node API) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,032+ (963 library + 40 integration + 29 property) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets | **Protocol:** Phase 9 Complete - Node API Integration Layer (887/947 SP, 94%)

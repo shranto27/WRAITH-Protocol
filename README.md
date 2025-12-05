@@ -395,6 +395,33 @@ WRAITH-Protocol/
 └── xtask/                       # Build automation
 ```
 
+## Documentation Structure
+
+WRAITH Protocol's documentation is organized across several directories to improve navigability and maintainability:
+
+```
+docs/
+├── technical/          # Technical debt analysis, refactoring documentation
+├── engineering/        # Release guides, engineering practices
+├── architecture/       # System architecture documentation
+└── progress/           # Development progress reports
+
+to-dos/
+├── protocol/           # Phase planning, sprint documentation
+└── completed/          # Completed phase summaries
+
+ref-docs/               # Protocol specifications and technical details
+```
+
+**Documentation Highlights:**
+- **9 files reorganized** with git history preserved
+- **Technical debt analysis** moved to docs/technical/ for better discoverability
+- **Phase planning** consolidated in to-dos/protocol/
+- **Completed sessions** archived in to-dos/completed/ for reference
+- **README files** added to each new directory explaining their purpose
+
+See the [Documentation](docs/) section below for comprehensive guides and API references.
+
 ## Client Applications
 
 WRAITH Protocol powers a comprehensive ecosystem of secure applications across 3 priority tiers:
@@ -570,12 +597,12 @@ See [Python Tooling Guide](docs/engineering/python-tooling.md) for detailed docu
 - [Documentation Status](docs/DOCUMENTATION_STATUS.md)
 
 ### Technical Debt & Quality
-- [Technical Debt Analysis](to-dos/technical-debt/technical-debt-analysis.md) - Comprehensive code quality assessment
-- [Technical Debt Action Plan](to-dos/technical-debt/technical-debt-action-plan.md) - Prioritized remediation strategy
-- [Technical Debt TODO List](to-dos/technical-debt/technical-debt-todo-list.md) - Actionable tracking checklist
-- [Pre-Phase 5 Review Summary](to-dos/technical-debt/pre-phase-5-review-summary.md) - Phase 5 readiness assessment (15 items analyzed)
-- [Implementation Report](to-dos/technical-debt/IMPLEMENTATION-REPORT.md) - Detailed findings and recommendations
-- [Phase 4 Technical Debt](to-dos/technical-debt/phase-4-tech-debt.md) - Phase 4 technical debt tracking
+- [Technical Debt Analysis](docs/technical/technical-debt-analysis.md) - Comprehensive code quality assessment
+- [Technical Debt Action Plan](docs/technical/technical-debt-action-plan.md) - Prioritized remediation strategy
+- [Technical Debt TODO List](docs/technical/technical-debt-todo-list.md) - Actionable tracking checklist
+- [Pre-Phase 5 Review Summary](docs/technical/pre-phase-5-review-summary.md) - Phase 5 readiness assessment (15 items analyzed)
+- [Implementation Report](docs/technical/IMPLEMENTATION-REPORT.md) - Detailed findings and recommendations
+- [Phase 4 Technical Debt](docs/technical/phase-4-tech-debt.md) - Phase 4 technical debt tracking
 - **Current Metrics:** Grade A (92/100), 14% debt ratio, 607 tests, zero blocking items for Phase 5
 
 ### Security Testing

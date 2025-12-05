@@ -78,6 +78,13 @@ This update completes the wiring of all major protocol components, integrating N
 
 ### Changed
 
+- Reorganized root-level documentation (9 files moved with git history preserved)
+  - Technical debt analysis → docs/technical/
+  - Release quickstart → docs/engineering/
+  - Phase planning → to-dos/protocol/
+  - Completed sessions → to-dos/completed/
+  - Added README files for new documentation directories
+  - Updated CLAUDE.md with new directory structure
 - Enhanced `Node` API with full protocol integration
   - All components now wired together: crypto, transport, discovery, NAT, obfuscation, file transfer
   - Unified connection establishment flow with automatic fallback strategies

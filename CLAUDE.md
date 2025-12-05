@@ -6,7 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WRAITH (Wire-speed Resilient Authenticated Invisible Transfer Handler) is a decentralized secure file transfer protocol. This repository contains the Rust implementation along with design specifications.
 
-**Current Status:** Initial implementation scaffolding complete, core modules need implementation.
+**Current Status:** Version 0.9.0 Beta - Phase 10 Sessions 2-3 Complete (Node API orchestration layer, discovery integration, NAT traversal, crypto integration, file transfer integration, obfuscation integration, comprehensive integration testing)
+
+**Current Metrics:**
+- **Tests:** 1,025+ tests passing (1,011 active + 14 ignored) - 100% pass rate on active tests
+- **Code Volume:** ~36,600 lines of Rust code (~28,700 LOC + ~7,900 comments) across 7 active crates
+- **Documentation:** 60+ files, 45,000+ lines including user guides, API reference, architecture docs
 
 ## Build & Development Commands
 
@@ -40,16 +45,34 @@ cargo run -p wraith-cli -- --help
 
 ```
 WRAITH-Protocol/
-├── crates/
-│   ├── wraith-core/        # Frame encoding, session state, congestion control
+├── crates/                 # Rust workspace crates
+│   ├── wraith-core/        # Frame encoding, session state, congestion control, Node API
 │   ├── wraith-crypto/      # Noise handshake, AEAD, Elligator2, ratcheting
 │   ├── wraith-transport/   # AF_XDP, io_uring, UDP sockets
-│   ├── wraith-obfuscation/ # Padding, timing, cover traffic
+│   ├── wraith-obfuscation/ # Padding, timing, protocol mimicry
 │   ├── wraith-discovery/   # DHT, relay, NAT traversal
 │   ├── wraith-files/       # Chunking, integrity, transfer state
 │   ├── wraith-cli/         # Command-line interface (wraith binary)
 │   └── wraith-xdp/         # eBPF/XDP programs (Linux-only, excluded from default build)
 ├── xtask/                  # Build automation (cargo xtask <cmd>)
+├── docs/                   # Documentation
+│   ├── architecture/       # Architecture documentation
+│   ├── clients/            # Client application specs
+│   ├── engineering/        # Release guides, engineering docs
+│   ├── integration/        # Integration guides
+│   ├── operations/         # Operations and deployment guides
+│   ├── runbooks/           # Operational runbooks
+│   ├── security/           # Security documentation
+│   ├── technical/          # Technical debt analysis, refactoring docs
+│   ├── testing/            # Testing guides and strategies
+│   ├── CONFIG_REFERENCE.md # Configuration reference
+│   └── USER_GUIDE.md       # User guide
+├── to-dos/                 # Project planning and task tracking
+│   ├── protocol/           # Phase planning and progress documents
+│   ├── completed/          # Completed phase summaries
+│   ├── technical-debt/     # Technical debt tracking
+│   ├── ROADMAP.md          # Project roadmap
+│   └── ROADMAP-clients.md  # Client applications roadmap
 ├── ref-docs/               # Protocol specifications
 │   ├── protocol_technical_details.md
 │   └── protocol_implementation_guide.md
@@ -91,7 +114,7 @@ Six-layer design (bottom to top):
 ### Target Platform
 - Linux 6.2+ (for AF_XDP, io_uring)
 - Primary: x86_64, Secondary: aarch64
-- Rust 1.75+ (2021 Edition)
+- Rust 1.85+ (2024 Edition, MSRV: 1.85)
 
 ### Key Dependencies
 - `chacha20poly1305`, `x25519-dalek`, `blake3` - Cryptography
@@ -105,13 +128,15 @@ Thread-per-core with no locks in hot path. Sessions pinned to cores, NUMA-aware 
 
 ## Implementation Status
 
-| Crate | Status | Notes |
-|-------|--------|-------|
-| wraith-core | Scaffolded | Frame parsing works, session/stream need impl |
-| wraith-crypto | Scaffolded | AEAD works, Noise handshake needs impl |
-| wraith-transport | Scaffolded | UDP fallback, io_uring stub |
-| wraith-obfuscation | Scaffolded | Padding modes, timing stubs |
-| wraith-discovery | Scaffolded | DHT key derivation, relay stub |
-| wraith-files | Scaffolded | Chunker, hasher work |
-| wraith-cli | Scaffolded | CLI structure, no functionality |
-| wraith-xdp | Not started | Requires eBPF toolchain |
+| Crate | Status | Tests | Notes |
+|-------|--------|-------|-------|
+| wraith-core | ✅ Complete | 263 | Frame parsing (SIMD), sessions, streams, BBR, migration, Node API orchestration |
+| wraith-crypto | ✅ Complete | 125 | Ed25519, X25519+Elligator2, XChaCha20-Poly1305, BLAKE3, Noise_XX, Double Ratchet |
+| wraith-transport | ✅ Complete | 33 | AF_XDP zero-copy, io_uring, UDP, worker pools, NUMA-aware |
+| wraith-obfuscation | ✅ Complete | 154 | Padding (5 modes), timing (5 distributions), TLS/WebSocket/DoH mimicry |
+| wraith-discovery | ✅ Complete | 15 | Privacy-enhanced Kademlia DHT, STUN, ICE, DERP-style relay |
+| wraith-files | ✅ Complete | 24 | io_uring file I/O, chunking, BLAKE3 tree hashing, reassembly |
+| wraith-cli | ✅ Complete | 0 | Full CLI with config, progress display, send/receive/daemon commands |
+| wraith-xdp | Not started | 0 | Requires eBPF toolchain (future phase) |
+
+**Total:** 1,025+ tests across all crates and integration tests

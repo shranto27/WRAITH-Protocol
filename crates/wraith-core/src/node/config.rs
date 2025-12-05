@@ -1,5 +1,8 @@
 //! Node configuration
 
+use crate::node::circuit_breaker::CircuitBreakerConfig;
+use crate::node::health::HealthConfig;
+use crate::node::rate_limiter::RateLimitConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -30,6 +33,15 @@ pub struct NodeConfig {
 
     /// Logging configuration
     pub logging: LoggingConfig,
+
+    /// Rate limiting configuration
+    pub rate_limiting: RateLimitConfig,
+
+    /// Health monitoring configuration
+    pub health: HealthConfig,
+
+    /// Circuit breaker configuration
+    pub circuit_breaker: CircuitBreakerConfig,
 }
 
 impl Default for NodeConfig {
@@ -45,6 +57,9 @@ impl Default for NodeConfig {
             discovery: DiscoveryConfig::default(),
             transfer: TransferConfig::default(),
             logging: LoggingConfig::default(),
+            rate_limiting: RateLimitConfig::default(),
+            health: HealthConfig::default(),
+            circuit_breaker: CircuitBreakerConfig::default(),
         }
     }
 }

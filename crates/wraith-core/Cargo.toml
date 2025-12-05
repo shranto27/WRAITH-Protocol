@@ -27,10 +27,13 @@ rand = { workspace = true }
 rand_distr = { workspace = true }
 hex = { workspace = true }
 blake3 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
 criterion = { workspace = true }
+tempfile = "3.8"
 
 [[bench]]
 name = "frame_bench"

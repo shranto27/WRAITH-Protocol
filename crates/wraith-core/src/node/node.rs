@@ -204,7 +204,7 @@ impl Node {
     /// Get node's public key (node ID - Ed25519)
     ///
     /// Returns the Ed25519 public key used as the node's identifier.
-    /// For session lookups, use [`x25519_public_key`] instead since
+    /// For session lookups, use [`Self::x25519_public_key`] instead since
     /// sessions are stored using X25519 keys from the Noise handshake.
     pub fn node_id(&self) -> &[u8; 32] {
         self.inner.identity.public_key()
@@ -229,15 +229,37 @@ impl Node {
     /// when binding to port 0 (automatic port selection) to discover the actual
     /// port assigned by the operating system.
     ///
+    /// # Note
+    ///
+    /// If the node is bound to the unspecified address (0.0.0.0 or ::), this method
+    /// returns a loopback address (127.0.0.1 or ::1) with the actual port. This ensures
+    /// the returned address can be used as a destination for connecting to the node.
+    ///
     /// # Errors
     ///
     /// Returns error if the transport is not initialized (node not started).
     pub async fn listen_addr(&self) -> Result<SocketAddr> {
         let transport = self.inner.transport.lock().await;
         match transport.as_ref() {
-            Some(t) => t
-                .local_addr()
-                .map_err(|e| NodeError::Transport(format!("Failed to get local address: {}", e))),
+            Some(t) => {
+                let mut addr = t.local_addr().map_err(|e| {
+                    NodeError::Transport(format!("Failed to get local address: {}", e))
+                })?;
+
+                // If bound to unspecified address (0.0.0.0 or ::), replace with loopback
+                // so the returned address can be used as a destination for connections
+                if addr.ip().is_unspecified() {
+                    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+                    let loopback = if addr.is_ipv4() {
+                        IpAddr::V4(Ipv4Addr::LOCALHOST)
+                    } else {
+                        IpAddr::V6(Ipv6Addr::LOCALHOST)
+                    };
+                    addr.set_ip(loopback);
+                }
+
+                Ok(addr)
+            }
             None => Err(NodeError::InvalidState(
                 "Transport not initialized".to_string(),
             )),
@@ -866,7 +888,7 @@ impl Node {
 
     /// Establish session with peer at known address
     ///
-    /// Similar to [`establish_session`], but allows specifying the peer's address
+    /// Similar to [`Self::establish_session`], but allows specifying the peer's address
     /// directly instead of relying on DHT lookup. This is useful for testing,
     /// loopback scenarios, or when the peer's address is known in advance.
     ///
@@ -878,7 +900,7 @@ impl Node {
     /// # Note
     ///
     /// Sessions are stored using the peer's X25519 public key from the Noise handshake,
-    /// not the passed-in Ed25519 key. Use [`x25519_public_key`] to get a node's X25519
+    /// not the passed-in Ed25519 key. Use [`Self::x25519_public_key`] to get a node's X25519
     /// identity for session lookups.
     ///
     /// # Errors

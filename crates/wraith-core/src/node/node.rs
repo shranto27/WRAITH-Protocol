@@ -3,6 +3,7 @@
 use crate::node::config::NodeConfig;
 use crate::node::error::{NodeError, Result};
 use crate::node::file_transfer::FileTransferContext;
+use crate::node::routing::{RoutingTable, extract_connection_id};
 use crate::node::session::{PeerConnection, PeerId, SessionId};
 use crate::transfer::TransferSession;
 use crate::{ConnectionId, HandshakePhase, SessionState};
@@ -74,6 +75,10 @@ pub(crate) struct NodeInner {
     /// Active sessions (peer_id -> connection)
     /// Uses DashMap for lock-free concurrent access
     pub(crate) sessions: Arc<DashMap<PeerId, Arc<PeerConnection>>>,
+
+    /// Packet routing table (Connection ID -> PeerConnection)
+    /// Enables O(1) packet routing without session iteration
+    pub(crate) routing: Arc<RoutingTable>,
 
     /// Active file transfers (transfer_id -> transfer context)
     /// Uses DashMap for lock-free concurrent access
@@ -176,6 +181,7 @@ impl Node {
             identity: Arc::new(identity),
             config,
             sessions: Arc::new(DashMap::new()),
+            routing: Arc::new(RoutingTable::new()),
             transfers: Arc::new(DashMap::new()),
             running: Arc::new(AtomicBool::new(false)),
             transport: Arc::new(Mutex::new(None)),
@@ -296,6 +302,16 @@ impl Node {
                 tracing::warn!("Error closing session: {}", e);
             }
         }
+
+        // Clear routing table
+        let routing_stats = self.inner.routing.stats();
+        self.inner.routing.clear();
+        tracing::debug!(
+            "Cleared routing table ({} routes, {} lookups, {:.1}% hit rate)",
+            routing_stats.active_routes,
+            routing_stats.total_lookups,
+            routing_stats.hit_rate()
+        );
 
         // Close transport
         if let Some(transport) = self.inner.transport.lock().await.take() {
@@ -478,24 +494,37 @@ impl Node {
         }
     }
 
-    /// Handle incoming packet with obfuscation unwrapping
+    /// Handle incoming packet with Connection ID routing
     ///
+    /// Uses Connection ID from packet header for O(1) session lookup.
     /// Unwraps protocol mimicry, decrypts, and routes packets to appropriate handlers.
     async fn handle_incoming_packet(&self, data: Vec<u8>, from: SocketAddr) -> Result<()> {
         // 1. Unwrap protocol mimicry (TLS/WebSocket/DoH)
         let unwrapped = self.unwrap_protocol(&data)?;
 
-        // Find session for this peer address
-        let connection = self
-            .inner
-            .sessions
-            .iter()
-            .find(|entry| entry.value().peer_addr == from)
-            .map(|entry| Arc::clone(entry.value()));
+        // 2. Extract Connection ID from packet header (first 8 bytes)
+        let connection_id = match extract_connection_id(&unwrapped) {
+            Some(cid) => cid,
+            None => {
+                tracing::trace!(
+                    "Packet too short for Connection ID ({} bytes) from {}",
+                    unwrapped.len(),
+                    from
+                );
+                return Ok(());
+            }
+        };
+
+        // 3. Route packet using Connection ID (O(1) lookup)
+        let connection = self.inner.routing.lookup(connection_id);
 
         if let Some(conn) = connection {
-            // 2. Decrypt the packet (padding is stripped during decryption or frame parsing)
-            match conn.decrypt_frame(&unwrapped).await {
+            // Update last activity timestamp
+            conn.touch();
+
+            // 4. Decrypt the packet (skip Connection ID header)
+            let encrypted_payload = &unwrapped[8..];
+            match conn.decrypt_frame(encrypted_payload).await {
                 Ok(frame_bytes) => {
                     let node = self.clone();
                     tokio::spawn(async move {
@@ -505,12 +534,22 @@ impl Node {
                     });
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to decrypt packet from {}: {}", from, e);
+                    tracing::warn!(
+                        "Failed to decrypt packet from {} (cid={:016x}): {}",
+                        from,
+                        connection_id,
+                        e
+                    );
                 }
             }
         } else {
-            // No established session - could be handshake initiation
-            tracing::trace!("Received {} bytes from unknown peer {}", data.len(), from);
+            // No route for this Connection ID - could be handshake initiation
+            tracing::trace!(
+                "No route for Connection ID {:016x} from {} ({} bytes)",
+                connection_id,
+                from,
+                data.len()
+            );
             // TODO: Handle handshake initiation
         }
 
@@ -654,12 +693,19 @@ impl Node {
 
         // Store session
         let connection_arc = Arc::new(connection);
-        self.inner.sessions.insert(*peer_id, connection_arc);
+        self.inner
+            .sessions
+            .insert(*peer_id, Arc::clone(&connection_arc));
+
+        // Add route to routing table for Connection ID-based packet routing
+        let cid_u64 = u64::from_be_bytes(connection_id_bytes);
+        self.inner.routing.add_route(cid_u64, connection_arc);
 
         tracing::info!(
-            "Session established with peer {}, session: {}",
+            "Session established with peer {}, session: {}, route: {:016x}",
             hex::encode(peer_id),
-            hex::encode(&session_id[..8])
+            hex::encode(&session_id[..8]),
+            cid_u64
         );
 
         Ok(session_id)
@@ -686,8 +732,16 @@ impl Node {
     /// Close session with peer
     pub async fn close_session(&self, peer_id: &PeerId) -> Result<()> {
         if let Some((_, connection)) = self.inner.sessions.remove(peer_id) {
+            // Remove route from routing table
+            let cid_u64 = connection.connection_id.as_u64();
+            self.inner.routing.remove_route(cid_u64);
+
             connection.transition_to(SessionState::Closed).await?;
-            tracing::info!("Session closed with peer {:?}", peer_id);
+            tracing::info!(
+                "Session closed with peer {:?}, route {:016x} removed",
+                peer_id,
+                cid_u64
+            );
             Ok(())
         } else {
             Err(NodeError::SessionNotFound(*peer_id))
@@ -701,6 +755,19 @@ impl Node {
             .iter()
             .map(|entry| *entry.key())
             .collect()
+    }
+
+    /// Get routing statistics
+    ///
+    /// Returns statistics about packet routing performance including
+    /// active routes, total lookups, and hit rate.
+    pub fn routing_stats(&self) -> crate::node::routing::RoutingStats {
+        self.inner.routing.stats()
+    }
+
+    /// Get number of active routes
+    pub fn active_route_count(&self) -> usize {
+        self.inner.routing.route_count()
     }
 
     /// Send file to peer

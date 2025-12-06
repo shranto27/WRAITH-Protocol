@@ -57,6 +57,7 @@ pub mod obfuscation;
 pub mod padding_strategy;
 pub mod rate_limiter;
 pub mod resume;
+pub mod routing;
 pub mod session;
 pub mod transfer;
 
@@ -79,4 +80,5 @@ pub use padding_strategy::{
 };
 pub use rate_limiter::{RateLimitConfig, RateLimitMetrics, RateLimiter};
 pub use resume::{ResumeManager, ResumeState};
+pub use routing::{RoutingStats, RoutingTable, extract_connection_id};
 pub use session::PeerConnection;

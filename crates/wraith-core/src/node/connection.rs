@@ -200,7 +200,8 @@ impl Node {
     /// Returns health status and metrics for a specific peer.
     pub async fn get_connection_health(&self, peer_id: &PeerId) -> Option<HealthMetrics> {
         if let Some(session) = self.inner.sessions.get(peer_id) {
-            let idle_time = session.last_activity.elapsed();
+            let idle_time_ms = session.idle_duration_ms();
+            let idle_time = std::time::Duration::from_millis(idle_time_ms);
             let idle_timeout = self.inner.config.transport.idle_timeout;
 
             let status = if idle_time > idle_timeout {
@@ -234,7 +235,8 @@ impl Node {
 
         for entry in self.inner.sessions.iter() {
             let (peer_id, session) = entry.pair();
-            let idle_time = session.last_activity.elapsed();
+            let idle_time_ms = session.idle_duration_ms();
+            let idle_time = std::time::Duration::from_millis(idle_time_ms);
             let idle_timeout = self.inner.config.transport.idle_timeout;
 
             let status = if idle_time > idle_timeout {

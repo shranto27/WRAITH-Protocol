@@ -4,7 +4,8 @@ use crate::node::error::{NodeError, Result};
 use crate::{ConnectionId, Session, SessionState};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use wraith_crypto::aead::SessionCrypto;
 use wraith_crypto::noise::{NoiseHandshake, NoiseKeypair};
@@ -41,8 +42,17 @@ pub struct PeerConnection {
     /// Connection statistics
     pub stats: ConnectionStats,
 
-    /// Last activity timestamp
-    pub last_activity: Instant,
+    /// Last activity timestamp (milliseconds since UNIX epoch)
+    /// Uses AtomicU64 for lock-free updates from routing table lookups
+    last_activity_ms: AtomicU64,
+}
+
+/// Get current time as milliseconds since UNIX epoch
+fn current_time_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 impl PeerConnection {
@@ -62,18 +72,32 @@ impl PeerConnection {
             session: Arc::new(RwLock::new(Session::new())),
             crypto: Arc::new(RwLock::new(crypto)),
             stats: ConnectionStats::default(),
-            last_activity: Instant::now(),
+            last_activity_ms: AtomicU64::new(current_time_ms()),
         }
     }
 
     /// Check if connection is stale
+    ///
+    /// Uses atomic load for lock-free staleness check.
     pub fn is_stale(&self, idle_timeout: Duration) -> bool {
-        self.last_activity.elapsed() > idle_timeout
+        let last_ms = self.last_activity_ms.load(Ordering::Relaxed);
+        let now_ms = current_time_ms();
+        let elapsed_ms = now_ms.saturating_sub(last_ms);
+        elapsed_ms > idle_timeout.as_millis() as u64
     }
 
     /// Update last activity timestamp
-    pub fn touch(&mut self) {
-        self.last_activity = Instant::now();
+    ///
+    /// Lock-free update using atomic store - safe to call from routing table lookup.
+    pub fn touch(&self) {
+        self.last_activity_ms
+            .store(current_time_ms(), Ordering::Relaxed);
+    }
+
+    /// Get milliseconds since last activity
+    pub fn idle_duration_ms(&self) -> u64 {
+        let last_ms = self.last_activity_ms.load(Ordering::Relaxed);
+        current_time_ms().saturating_sub(last_ms)
     }
 
     /// Get session state
@@ -433,37 +457,44 @@ mod tests {
         let connection_id = ConnectionId::from_bytes([3u8; 8]);
         let crypto = SessionCrypto::new([4u8; 32], [5u8; 32], &[6u8; 32]);
 
-        let mut conn = PeerConnection::new(session_id, peer_id, peer_addr, connection_id, crypto);
+        let conn = PeerConnection::new(session_id, peer_id, peer_addr, connection_id, crypto);
 
-        // Set last activity to 5 minutes ago using checked_sub to avoid Windows overflow
-        // If subtraction would overflow, use a minimal past instant
-        conn.last_activity = Instant::now()
-            .checked_sub(Duration::from_secs(300))
-            .unwrap_or_else(|| {
-                // Fallback: use a very small duration that definitely won't overflow
-                Instant::now()
-                    .checked_sub(Duration::from_millis(1))
-                    .unwrap_or_else(Instant::now)
-            });
+        // Set last activity to 5 minutes ago using atomic store
+        let now_ms = current_time_ms();
+        let five_minutes_ago = now_ms.saturating_sub(300_000); // 5 minutes in ms
+        conn.last_activity_ms
+            .store(five_minutes_ago, Ordering::Relaxed);
 
-        // For robust testing on all platforms, we need to ensure our test logic
-        // accounts for the fallback scenario
-        let actual_elapsed = conn.last_activity.elapsed();
+        // Verify idle duration is approximately 5 minutes (allow 10 second tolerance)
+        let idle_ms = conn.idle_duration_ms();
+        assert!(
+            idle_ms >= 295_000,
+            "Should be idle for ~5 minutes, got {} ms",
+            idle_ms
+        );
 
-        // Test with a 3-minute timeout
+        // Test with a 3-minute timeout - connection should be stale
         let short_timeout = Duration::from_secs(180);
-        if actual_elapsed >= short_timeout {
-            assert!(
-                conn.is_stale(short_timeout),
-                "Connection should be stale with 3min timeout"
-            );
-        }
+        assert!(
+            conn.is_stale(short_timeout),
+            "Connection should be stale with 3min timeout (idle {} ms)",
+            idle_ms
+        );
 
         // Test with a 6-minute timeout - connection should not be stale
         let long_timeout = Duration::from_secs(360);
         assert!(
             !conn.is_stale(long_timeout),
             "Connection should not be stale with 6min timeout"
+        );
+
+        // Test touch() updates last activity
+        conn.touch();
+        let new_idle = conn.idle_duration_ms();
+        assert!(
+            new_idle < 1000,
+            "After touch(), idle time should be < 1 second, got {} ms",
+            new_idle
         );
     }
 

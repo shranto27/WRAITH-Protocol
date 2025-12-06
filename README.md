@@ -9,14 +9,14 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Current Status
 
-**Version:** 0.9.0 Beta (Ready for 1.0.0) | **Phase 10 Sessions 2-8 COMPLETE**
+**Version:** 1.0.0 Production Release | **Phase 10 Sessions 2-8 COMPLETE**
 
 WRAITH Protocol has completed full production implementation with comprehensive documentation, security validation, and advanced features. The protocol is enterprise-ready with DoS protection, health monitoring, circuit breakers, resume robustness, multi-peer optimization, complete user guides, and security audit.
 
@@ -848,4 +848,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v0.9.0 Beta (Ready for 1.0.0) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,120 (1,096 passing + 24 ignored) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets | **Protocol:** Phase 10 Sessions 2-8 COMPLETE - Production Ready (1,017/947 SP, 107%)
+**Status:** v1.0.0 Production Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,120 (1,096 passing + 24 ignored) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets | **Protocol:** Phase 10 Sessions 2-8 COMPLETE - Production Ready (1,017/947 SP, 107%)

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WRAITH (Wire-speed Resilient Authenticated Invisible Transfer Handler) is a decentralized secure file transfer protocol. This repository contains the Rust implementation along with design specifications.
 
-**Current Status:** Version 0.9.0 Beta - Phase 10 Sessions 2-8 Complete (Node API orchestration layer, discovery integration, NAT traversal, crypto integration, file transfer integration, obfuscation integration, comprehensive integration testing, performance validation, production hardening features, user/developer documentation, security audit, reference client design)
+**Current Status:** Version 1.0.0 Production Release - Phase 10 Sessions 2-8 Complete (Node API orchestration layer, discovery integration, NAT traversal, crypto integration, file transfer integration, obfuscation integration, comprehensive integration testing, performance validation, production hardening features, user/developer documentation, security audit, reference client design)
 
 **Current Metrics:**
 - **Tests:** 1,107 tests total (1,069 passing, 38 ignored) - 100% pass rate on active tests

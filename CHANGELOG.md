@@ -5,7 +5,13 @@ All notable changes to WRAITH Protocol will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] - 2025-12-05 - Phase 10 COMPLETE (Ready for 1.0.0)
+## [1.0.0] - 2025-12-06 - Production Release
+
+**WRAITH Protocol v1.0.0 - Production Release**
+
+This is the first production release of WRAITH Protocol, a decentralized secure file transfer protocol designed for privacy-preserving, high-performance data transfer with deep packet inspection (DPI) evasion capabilities.
+
+### Phase 10 COMPLETE - Enterprise Ready
 
 **Phase 10: Full Production Implementation (130 Story Points)**
 

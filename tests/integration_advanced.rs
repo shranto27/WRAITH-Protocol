@@ -205,12 +205,12 @@ async fn test_multi_peer_fastest_first() {
     // We need to assign chunks to each peer and then record their performance
 
     // Round 1: Assign chunks 0-1 to peers (will go round-robin: slow, fast)
-    let peer_for_chunk_0 = coordinator.assign_chunk(0).await.unwrap();
+    let _peer_for_chunk_0 = coordinator.assign_chunk(0).await.unwrap();
     coordinator
         .record_success(0, 256 * 1024, Duration::from_secs(1)) // ~256 KB/s
         .await;
 
-    let peer_for_chunk_1 = coordinator.assign_chunk(1).await.unwrap();
+    let _peer_for_chunk_1 = coordinator.assign_chunk(1).await.unwrap();
     coordinator
         .record_success(1, 100 * 1024 * 1024, Duration::from_secs(1)) // ~100 MB/s
         .await;

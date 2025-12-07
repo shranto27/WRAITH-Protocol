@@ -400,7 +400,7 @@ impl TransferManager {
 
     /// Find transfer by stream ID
     ///
-    /// Stream ID is derived from transfer ID: (transfer_id[0] << 8) | transfer_id[1]
+    /// Stream ID is derived from transfer ID: `(transfer_id[0] << 8) | transfer_id[1]`
     pub fn find_transfer_by_stream_id(&self, stream_id: u16) -> Option<Arc<FileTransferContext>> {
         for entry in self.transfers.iter() {
             let tid = entry.key();

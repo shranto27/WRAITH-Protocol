@@ -711,8 +711,6 @@ mod dht_properties {
 // ============================================================================
 
 mod rate_limit_properties {
-    use super::*;
-    use std::time::Duration;
     use wraith_core::node::{RateLimitConfig, RateLimiter};
 
     // Note: RateLimiter methods are async, which doesn't work well with proptest

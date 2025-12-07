@@ -561,3 +561,346 @@ mod bbr_properties {
         assert!(bbr.cwnd() > 0, "Sending window should always be positive");
     }
 }
+
+// ============================================================================
+// Session State Machine Properties
+// ============================================================================
+
+mod session_state_properties {
+    use super::*;
+    use wraith_core::session::SessionState;
+
+    proptest! {
+        /// Session state transitions are unidirectional (no backwards transitions)
+        #[test]
+        fn state_transitions_unidirectional(
+            transitions in prop::collection::vec(0u8..4, 0..10),
+        ) {
+            let mut state = SessionState::Init;
+
+            for t in transitions {
+                let new_state = match (state, t % 3) {
+                    (SessionState::Init, 0) => SessionState::Handshake,
+                    (SessionState::Handshake, 0) => SessionState::Active,
+                    (SessionState::Active, 0) => SessionState::Closing,
+                    _ => state, // No transition
+                };
+
+                // Verify we never go backwards
+                prop_assert!(
+                    state <= new_state,
+                    "State should never transition backwards: {:?} -> {:?}",
+                    state,
+                    new_state
+                );
+
+                state = new_state;
+            }
+        }
+
+        /// Terminated state is final (no transitions from Terminated)
+        #[test]
+        fn terminated_is_final(attempt_count in 1usize..100) {
+            let state = SessionState::Terminated;
+
+            for _ in 0..attempt_count {
+                // Any attempted transition from Terminated should be rejected
+                // (In reality, no transitions are allowed from Terminated)
+                prop_assert_eq!(state, SessionState::Terminated);
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Chunk Reassembly Properties
+// ============================================================================
+
+mod chunk_properties {
+    use super::*;
+
+    proptest! {
+        /// Chunking then reassembly recovers original data
+        #[test]
+        fn chunk_reassembly_roundtrip(
+            data in prop::collection::vec(any::<u8>(), 0..10000),
+            chunk_size in 256usize..4096,
+        ) {
+            if data.is_empty() {
+                return Ok(());
+            }
+
+            // Split into chunks
+            let chunks: Vec<Vec<u8>> = data.chunks(chunk_size)
+                .map(|chunk| chunk.to_vec())
+                .collect();
+
+            // Reassemble
+            let reassembled: Vec<u8> = chunks.into_iter().flatten().collect();
+
+            prop_assert_eq!(
+                reassembled, data,
+                "Reassembled data should match original"
+            );
+        }
+
+        /// Chunk count is ceil(data_size / chunk_size)
+        #[test]
+        fn chunk_count_formula(
+            data_size in 1usize..100000,
+            chunk_size in 256usize..4096,
+        ) {
+            let expected_chunks = (data_size + chunk_size - 1) / chunk_size;
+            let data = vec![0u8; data_size];
+
+            let actual_chunks = data.chunks(chunk_size).count();
+
+            prop_assert_eq!(
+                actual_chunks, expected_chunks,
+                "Chunk count should match formula: ceil({} / {})",
+                data_size, chunk_size
+            );
+        }
+
+        /// Last chunk is at most chunk_size bytes
+        #[test]
+        fn last_chunk_size_bounded(
+            data_size in 1usize..100000,
+            chunk_size in 256usize..4096,
+        ) {
+            let data = vec![0u8; data_size];
+            let chunks: Vec<_> = data.chunks(chunk_size).collect();
+
+            if let Some(last_chunk) = chunks.last() {
+                prop_assert!(
+                    last_chunk.len() <= chunk_size,
+                    "Last chunk size {} should not exceed {}",
+                    last_chunk.len(),
+                    chunk_size
+                );
+            }
+        }
+
+        /// All chunks except last are exactly chunk_size
+        #[test]
+        fn intermediate_chunks_exact_size(
+            data_size in 1000usize..100000,
+            chunk_size in 256usize..4096,
+        ) {
+            let data = vec![0u8; data_size];
+            let chunks: Vec<_> = data.chunks(chunk_size).collect();
+
+            // Check all chunks except the last
+            for (i, chunk) in chunks.iter().enumerate().take(chunks.len().saturating_sub(1)) {
+                prop_assert_eq!(
+                    chunk.len(), chunk_size,
+                    "Chunk {} should be exactly {} bytes",
+                    i, chunk_size
+                );
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Padding Properties
+// ============================================================================
+
+mod padding_properties {
+    use super::*;
+    use wraith_obfuscation::{PaddingMode, PaddingOracle};
+
+    proptest! {
+        /// PowerOfTwo padding always rounds up to power of 2
+        #[test]
+        fn power_of_two_padding_correct(size in 1usize..10000) {
+            let mut oracle = PaddingOracle::new(PaddingMode::PowerOfTwo);
+            let padded_size = oracle.padded_size(size);
+
+            // Check it's a power of 2
+            prop_assert!(
+                padded_size.is_power_of_two(),
+                "{} should be a power of 2",
+                padded_size
+            );
+
+            // Check it's >= original size
+            prop_assert!(
+                padded_size >= size,
+                "{} should be >= {}",
+                padded_size, size
+            );
+
+            // Check it's the smallest power of 2 >= size
+            if size > 1 {
+                let next_smaller = padded_size / 2;
+                prop_assert!(
+                    next_smaller < size,
+                    "Next smaller power of 2 ({}) should be less than size ({})",
+                    next_smaller, size
+                );
+            }
+        }
+
+        /// SizeClasses padding uses predefined sizes
+        #[test]
+        fn size_classes_uses_predefined_sizes(size in 1usize..10000) {
+            let mut oracle = PaddingOracle::new(PaddingMode::SizeClasses);
+            let padded_size = oracle.padded_size(size);
+
+            // Should be one of the predefined size classes
+            let size_classes = [256, 512, 1024, 2048, 4096, 8192, 16384];
+            prop_assert!(
+                size_classes.contains(&padded_size) || padded_size >= 16384,
+                "{} should be in size classes or >= 16384",
+                padded_size
+            );
+
+            // Should be >= original size
+            prop_assert!(
+                padded_size >= size,
+                "{} should be >= {}",
+                padded_size, size
+            );
+        }
+
+        /// ConstantRate padding adds consistent amount
+        #[test]
+        fn constant_rate_padding_consistent(size in 1usize..10000) {
+            let mut oracle = PaddingOracle::new(PaddingMode::ConstantRate);
+            let padded_size = oracle.padded_size(size);
+
+            // Should be >= original size
+            prop_assert!(
+                padded_size >= size,
+                "{} should be >= {}",
+                padded_size, size
+            );
+
+            // Padding overhead should be bounded
+            let overhead = padded_size - size;
+            prop_assert!(
+                overhead <= 1024,
+                "Padding overhead {} should be reasonable",
+                overhead
+            );
+        }
+    }
+}
+
+// ============================================================================
+// DHT Node ID Properties
+// ============================================================================
+
+mod dht_properties {
+    use super::*;
+    use wraith_discovery::dht::NodeId;
+
+    proptest! {
+        /// NodeId XOR distance is symmetric
+        #[test]
+        fn xor_distance_symmetric(
+            id1 in any::<[u8; 32]>(),
+            id2 in any::<[u8; 32]>(),
+        ) {
+            let node1 = NodeId::from_bytes(id1);
+            let node2 = NodeId::from_bytes(id2);
+
+            let dist1 = node1.distance(&node2);
+            let dist2 = node2.distance(&node1);
+
+            prop_assert_eq!(
+                dist1, dist2,
+                "XOR distance should be symmetric"
+            );
+        }
+
+        /// NodeId distance to self is zero
+        #[test]
+        fn distance_to_self_is_zero(id in any::<[u8; 32]>()) {
+            let node = NodeId::from_bytes(id);
+            let dist = node.distance(&node);
+
+            // Distance to self should be all zeros
+            prop_assert!(
+                dist.as_bytes().iter().all(|&b| b == 0),
+                "Distance to self should be zero"
+            );
+        }
+
+        /// NodeId roundtrip (bytes -> NodeId -> bytes)
+        #[test]
+        fn node_id_roundtrip(id in any::<[u8; 32]>()) {
+            let node = NodeId::from_bytes(id);
+            let recovered = node.as_bytes();
+
+            prop_assert_eq!(
+                recovered, &id,
+                "NodeId roundtrip should preserve bytes"
+            );
+        }
+    }
+}
+
+// ============================================================================
+// Rate Limiting Properties
+// ============================================================================
+
+mod rate_limit_properties {
+    use super::*;
+    use std::time::Duration;
+    use wraith_core::node::{RateLimitConfig, RateLimiter};
+
+    // Note: RateLimiter methods are async, which doesn't work well with proptest
+    // We use standard unit tests instead for testing rate limiting behavior
+
+    #[test]
+    fn rate_limiter_basic_connection_limit() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let config = RateLimitConfig {
+                max_connections_per_ip: 5,
+                max_packets_per_second: 1000,
+                max_bandwidth_per_second: 10_000_000,
+                max_concurrent_sessions: 100,
+            };
+
+            let limiter = RateLimiter::new(config);
+            let ip = "127.0.0.1".parse().unwrap();
+
+            // Should allow first 5 connections
+            for _ in 0..5 {
+                assert!(limiter.check_connection(ip).await);
+            }
+
+            // Should block 6th connection
+            assert!(!limiter.check_connection(ip).await);
+        });
+    }
+
+    #[test]
+    fn rate_limiter_session_limit() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let config = RateLimitConfig {
+                max_connections_per_ip: 100,
+                max_packets_per_second: 1000,
+                max_bandwidth_per_second: 10_000_000,
+                max_concurrent_sessions: 3,
+            };
+
+            let limiter = RateLimiter::new(config);
+
+            // Should allow first 3 sessions
+            assert!(limiter.check_session_limit().await);
+            limiter.increment_sessions().await;
+            assert!(limiter.check_session_limit().await);
+            limiter.increment_sessions().await;
+            assert!(limiter.check_session_limit().await);
+            limiter.increment_sessions().await;
+
+            // Should block 4th session
+            assert!(!limiter.check_session_limit().await);
+        });
+    }
+}

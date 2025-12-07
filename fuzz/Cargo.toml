@@ -17,6 +17,9 @@ wraith-crypto = { path = "../crates/wraith-crypto" }
 wraith-discovery = { path = "../crates/wraith-discovery" }
 wraith-obfuscation = { path = "../crates/wraith-obfuscation" }
 wraith-files = { path = "../crates/wraith-files" }
+clap = { workspace = true }
+toml = "0.8"
+hex = "0.4"
 
 [[bin]]
 name = "fuzz_frame_parser"
@@ -49,6 +52,27 @@ bench = false
 [[bin]]
 name = "fuzz_tree_hash"
 path = "fuzz_targets/tree_hash.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_cli_args"
+path = "fuzz_targets/cli_args.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_config_parse"
+path = "fuzz_targets/config_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_peer_id"
+path = "fuzz_targets/peer_id.rs"
 test = false
 doc = false
 bench = false

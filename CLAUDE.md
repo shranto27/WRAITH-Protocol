@@ -6,14 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WRAITH (Wire-speed Resilient Authenticated Invisible Transfer Handler) is a decentralized secure file transfer protocol. This repository contains the Rust implementation along with design specifications.
 
-**Current Status:** Version 1.1.1 - Maintenance Release (Repository Organization & Phase 12 Planning)
+**Current Status:** Version 1.2.0 - Production Release (Phase 12 Complete: Technical Excellence & Production Hardening)
 
 **Current Metrics:**
-- **Tests:** 1,177 tests total (1,157 passing, 20 ignored) - 100% pass rate on active tests
-- **Code Volume:** ~36,949 lines of Rust code (~29,049 LOC + ~7,900 comments) across 7 active crates
-- **Documentation:** 60+ files, 45,000+ lines including tutorial, integration guide, troubleshooting, security audit, protocol comparison, reference client design, architecture docs, API reference, performance report
-- **Security:** Zero vulnerabilities, EXCELLENT security posture ([v1.1.0 audit](docs/security/SECURITY_AUDIT_v1.1.0.md))
-- **Performance:** File chunking 14.85 GiB/s, tree hashing 4.71 GiB/s, chunk verification 4.78 GiB/s (Session 4 benchmarks)
+- **Tests:** 1,178 tests total (1,157 passing, 21 ignored) - 100% pass rate on active tests
+- **Code Volume:** ~43,919 lines of Rust code (~27,103 LOC + comments/blanks) across 7 active crates
+- **Documentation:** 60+ files, 45,000+ lines including tutorial, integration guide, troubleshooting, security audit, protocol comparison, reference client design, architecture docs, API reference, performance report, release notes
+- **Security:** Zero vulnerabilities, EXCELLENT security posture ([v1.1.0 audit](docs/security/SECURITY_AUDIT_v1.1.0.md), 286 dependencies scanned)
+- **Performance:** File chunking 14.85 GiB/s, tree hashing 4.71 GiB/s, chunk verification 4.78 GiB/s, file reassembly 5.42 GiB/s (Phase 10/12 benchmarks)
 
 ## Build & Development Commands
 

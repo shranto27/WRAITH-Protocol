@@ -84,12 +84,7 @@ impl TransferProgress {
     }
 
     /// Update progress with current transfer state
-    pub fn update(
-        &mut self,
-        bytes_sent: u64,
-        chunks_sent: usize,
-        speed_bytes_per_sec: f64,
-    ) {
+    pub fn update(&mut self, bytes_sent: u64, chunks_sent: usize, speed_bytes_per_sec: f64) {
         self.bytes_sent = bytes_sent;
         self.chunks_sent = chunks_sent;
         self.speed_bytes_per_sec = speed_bytes_per_sec;

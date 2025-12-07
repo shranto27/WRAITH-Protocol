@@ -231,7 +231,9 @@ impl SecurityMonitor {
         }
 
         // Update per-IP event counts
-        let ip_entry = ip_events.entry(event.source_ip).or_insert_with(HashMap::new);
+        let ip_entry = ip_events
+            .entry(event.source_ip)
+            .or_insert_with(HashMap::new);
         *ip_entry.entry(event.event_type.clone()).or_insert(0) += 1;
 
         // Log event if enabled
@@ -239,34 +241,74 @@ impl SecurityMonitor {
             let message = event.message.as_deref().unwrap_or("");
             match event.event_type {
                 SecurityEventType::HandshakeFailed => {
-                    tracing::warn!("Security: Handshake failed from {}: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: Handshake failed from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::RateLimitExceeded => {
-                    tracing::warn!("Security: Rate limit exceeded from {}: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: Rate limit exceeded from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::IpTempBanned => {
-                    tracing::warn!("Security: IP {} temporarily banned: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: IP {} temporarily banned: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::IpPermBanned => {
-                    tracing::error!("Security: IP {} permanently banned: {}", event.source_ip, message);
+                    tracing::error!(
+                        "Security: IP {} permanently banned: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::InvalidPacket => {
-                    tracing::debug!("Security: Invalid packet from {}: {}", event.source_ip, message);
+                    tracing::debug!(
+                        "Security: Invalid packet from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::ReplayDetected => {
-                    tracing::warn!("Security: Replay attack from {}: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: Replay attack from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::ConnectionLimitExceeded => {
-                    tracing::warn!("Security: Connection limit exceeded from {}: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: Connection limit exceeded from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::BandwidthLimitExceeded => {
-                    tracing::warn!("Security: Bandwidth limit exceeded from {}: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: Bandwidth limit exceeded from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::NonceOverflow => {
-                    tracing::warn!("Security: Nonce overflow from {}: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: Nonce overflow from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
                 SecurityEventType::SuspiciousPattern => {
-                    tracing::warn!("Security: Suspicious pattern from {}: {}", event.source_ip, message);
+                    tracing::warn!(
+                        "Security: Suspicious pattern from {}: {}",
+                        event.source_ip,
+                        message
+                    );
                 }
             }
         }
@@ -356,7 +398,12 @@ impl SecurityMonitor {
 
         if let Some(events) = ip_events.get(&ip) {
             // Pattern 1: High rate of handshake failures (> 5 in history)
-            if events.get(&SecurityEventType::HandshakeFailed).copied().unwrap_or(0) > 5 {
+            if events
+                .get(&SecurityEventType::HandshakeFailed)
+                .copied()
+                .unwrap_or(0)
+                > 5
+            {
                 return true;
             }
 
@@ -367,7 +414,12 @@ impl SecurityMonitor {
             }
 
             // Pattern 3: Repeated rate limit violations
-            if events.get(&SecurityEventType::RateLimitExceeded).copied().unwrap_or(0) > 10 {
+            if events
+                .get(&SecurityEventType::RateLimitExceeded)
+                .copied()
+                .unwrap_or(0)
+                > 10
+            {
                 return true;
             }
         }

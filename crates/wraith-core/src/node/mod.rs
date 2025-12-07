@@ -93,7 +93,9 @@ pub use error::{NodeError, Result};
 pub use file_transfer::{FileMetadata, FileTransferContext};
 pub use health::{HealthAction, HealthConfig, HealthMonitor};
 pub use identity::{Identity, TransferId};
-pub use ip_reputation::{IpReputationConfig, IpReputationMetrics, IpReputationSystem, ReputationStatus};
+pub use ip_reputation::{
+    IpReputationConfig, IpReputationMetrics, IpReputationSystem, ReputationStatus,
+};
 pub use multi_peer::{ChunkAssignmentStrategy, MultiPeerCoordinator, PeerPerformance};
 pub use nat::{CandidateType, IceCandidate};
 pub use node::Node;
@@ -106,7 +108,10 @@ pub use progress::{TransferProgress, TransferStatus};
 pub use rate_limiter::{RateLimitConfig, RateLimitMetrics, RateLimiter};
 pub use resume::{ResumeManager, ResumeState};
 pub use routing::{RoutingStats, RoutingTable, extract_connection_id};
-pub use security_monitor::{SecurityEvent, SecurityEventCallback, SecurityEventType, SecurityMetrics, SecurityMonitor, SecurityMonitorConfig};
+pub use security_monitor::{
+    SecurityEvent, SecurityEventCallback, SecurityEventType, SecurityMetrics, SecurityMonitor,
+    SecurityMonitorConfig,
+};
 pub use session::PeerConnection;
 pub use session_manager::SessionManager;
 pub use transfer_manager::TransferManager;

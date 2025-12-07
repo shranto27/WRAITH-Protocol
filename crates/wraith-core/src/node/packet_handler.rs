@@ -157,7 +157,11 @@ impl Node {
         // Apply backoff delay if IP is in backoff status
         let backoff_delay = self.inner.ip_reputation.get_backoff_delay(source_ip).await;
         if !backoff_delay.is_zero() {
-            tracing::debug!("Applying backoff delay {} ms for IP {}", backoff_delay.as_millis(), source_ip);
+            tracing::debug!(
+                "Applying backoff delay {} ms for IP {}",
+                backoff_delay.as_millis(),
+                source_ip
+            );
             tokio::time::sleep(backoff_delay).await;
         }
 

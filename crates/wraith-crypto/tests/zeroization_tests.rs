@@ -25,10 +25,7 @@ where
     test_fn(ptr);
 
     // Buffer should be zeroed after test function returns
-    assert!(
-        is_zeroed(&buffer),
-        "Stack memory was not properly zeroized"
-    );
+    assert!(is_zeroed(&buffer), "Stack memory was not properly zeroized");
 }
 
 #[test]
@@ -96,11 +93,8 @@ fn test_double_ratchet_zeroization() {
     let shared_secret = [11u8; 32];
     let remote_public = PrivateKey::generate(&mut rand::thread_rng()).public_key();
 
-    let mut ratchet = DoubleRatchet::new_initiator(
-        &mut rand::thread_rng(),
-        &shared_secret,
-        remote_public,
-    );
+    let mut ratchet =
+        DoubleRatchet::new_initiator(&mut rand::thread_rng(), &shared_secret, remote_public);
 
     // Perform some ratchet steps
     let plaintext = b"test message";
@@ -188,11 +182,8 @@ fn test_double_ratchet_skipped_message_keys() {
     let shared_secret = [0xBBu8; 32];
     let remote_public = PrivateKey::generate(&mut rand::thread_rng()).public_key();
 
-    let mut ratchet = DoubleRatchet::new_initiator(
-        &mut rand::thread_rng(),
-        &shared_secret,
-        remote_public,
-    );
+    let mut ratchet =
+        DoubleRatchet::new_initiator(&mut rand::thread_rng(), &shared_secret, remote_public);
 
     // Generate some keys
     let plaintext = b"test";
@@ -218,7 +209,9 @@ fn test_no_key_leakage_in_encrypt_decrypt() {
     let plaintext = b"secret message";
     let aad = b"";
 
-    let ciphertext = send_session.encrypt(plaintext, aad).expect("encryption failed");
+    let ciphertext = send_session
+        .encrypt(plaintext, aad)
+        .expect("encryption failed");
     let _decrypted = recv_session
         .decrypt(&ciphertext, aad)
         .expect("decryption failed");

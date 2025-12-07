@@ -320,8 +320,15 @@ impl Node {
                 Ok(vec![peer_connection.addr])
             }
             Err(e) => {
-                tracing::warn!("DHT lookup failed for peer {}: {}", hex::encode(&peer_id[..8]), e);
-                Err(NodeError::Discovery(format!("Peer discovery failed: {}", e)))
+                tracing::warn!(
+                    "DHT lookup failed for peer {}: {}",
+                    hex::encode(&peer_id[..8]),
+                    e
+                );
+                Err(NodeError::Discovery(format!(
+                    "Peer discovery failed: {}",
+                    e
+                )))
             }
         }
     }
@@ -411,7 +418,11 @@ impl Node {
                 let dht_peer = wraith_discovery::dht::DhtPeer::new(node_id, peer_addr);
                 let routing_table = dht_write.routing_table_mut();
                 if let Err(e) = routing_table.insert(dht_peer) {
-                    tracing::debug!("Failed to announce peer {} to DHT: {}", hex::encode(&peer_id[..8]), e);
+                    tracing::debug!(
+                        "Failed to announce peer {} to DHT: {}",
+                        hex::encode(&peer_id[..8]),
+                        e
+                    );
                 } else {
                     tracing::debug!("Announced peer {} to DHT", hex::encode(&peer_id[..8]));
                 }
@@ -585,8 +596,8 @@ impl Node {
         let chunk_size = self.inner.config.transfer.chunk_size;
 
         // Compute tree hash
-        let tree_hash =
-            wraith_files::tree_hash::compute_tree_hash(file_path, chunk_size).map_err(NodeError::Io)?;
+        let tree_hash = wraith_files::tree_hash::compute_tree_hash(file_path, chunk_size)
+            .map_err(NodeError::Io)?;
 
         // Create send transfer session
         let mut transfer_session = crate::transfer::TransferSession::new_send(
@@ -670,7 +681,11 @@ impl Node {
         let total_chunks = chunker.num_chunks();
         let stream_id = ((transfer_id[0] as u16) << 8) | (transfer_id[1] as u16);
 
-        tracing::debug!("Uploading {} chunks across {} peers", total_chunks, sessions.len());
+        tracing::debug!(
+            "Uploading {} chunks across {} peers",
+            total_chunks,
+            sessions.len()
+        );
 
         // Assign and upload chunks
         for chunk_index in 0..total_chunks {
@@ -704,7 +719,12 @@ impl Node {
 
                 let start = Instant::now();
                 if let Err(e) = self.send_encrypted_frame(&session, &chunk_frame).await {
-                    tracing::warn!("Failed to send chunk {} to peer {:?}: {}", chunk_index, peer_id, e);
+                    tracing::warn!(
+                        "Failed to send chunk {} to peer {:?}: {}",
+                        chunk_index,
+                        peer_id,
+                        e
+                    );
                     coordinator.reassign_chunk(chunk_index as usize).await;
                     continue;
                 }
@@ -764,11 +784,8 @@ impl Node {
         let chunks_total = session.total_chunks as usize;
         let speed = session.speed().unwrap_or(0.0);
 
-        let mut progress = crate::node::progress::TransferProgress::new(
-            *transfer_id,
-            bytes_total,
-            chunks_total,
-        );
+        let mut progress =
+            crate::node::progress::TransferProgress::new(*transfer_id, bytes_total, chunks_total);
 
         progress.update(bytes_sent, chunks_sent, speed);
 

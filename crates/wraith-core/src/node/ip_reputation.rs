@@ -74,7 +74,7 @@ pub enum ReputationStatus {
     /// Temporarily banned
     TempBanned {
         /// Ban expiry time
-        until: Instant
+        until: Instant,
     },
     /// Permanently banned
     PermBanned,
@@ -303,7 +303,9 @@ impl IpReputationSystem {
         match reputation.status {
             ReputationStatus::Backoff => {
                 // Progressive backoff: base_delay * 2^(failures - backoff_threshold)
-                let excess_failures = reputation.failures.saturating_sub(self.config.backoff_threshold);
+                let excess_failures = reputation
+                    .failures
+                    .saturating_sub(self.config.backoff_threshold);
                 let multiplier = 2u32.saturating_pow(excess_failures.min(10)); // Cap at 2^10 = 1024x
                 let delay = self.config.backoff_base_delay * multiplier;
                 delay.min(self.config.max_backoff_delay)
@@ -341,7 +343,10 @@ impl IpReputationSystem {
                 ReputationStatus::TempBanned { until } if now >= *until && rep.failures == 0 => {
                     false
                 }
-                ReputationStatus::Good if rep.failures == 0 && now.duration_since(rep.last_failure) > Duration::from_secs(3600) => {
+                ReputationStatus::Good
+                    if rep.failures == 0
+                        && now.duration_since(rep.last_failure) > Duration::from_secs(3600) =>
+                {
                     false
                 }
                 _ => true,
@@ -435,7 +440,10 @@ mod tests {
         // Check again - should have decayed
         assert!(system.check_allowed(ip).await);
         let status = system.get_status(ip).await;
-        assert!(matches!(status, ReputationStatus::Good | ReputationStatus::Warning));
+        assert!(matches!(
+            status,
+            ReputationStatus::Good | ReputationStatus::Warning
+        ));
     }
 
     #[tokio::test]

@@ -21,6 +21,13 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 WRAITH Protocol has completed Phase 12: Technical Excellence & Production Hardening, delivering 126 story points across 6 focused sprints. The protocol is enterprise-ready with modular architecture, lock-free buffer pools, comprehensive testing infrastructure, enhanced security hardening, and complete Node API integration.
 
+**Project Metrics (2025-12-07):**
+- **Code Volume:** ~37,948 lines of Rust code (~28,342 LOC + ~2,559 comments + ~7,047 blanks) across 104 Rust source files
+- **Test Coverage:** 1,289 total tests (1,270 passing, 19 ignored) - 100% pass rate on active tests
+- **Documentation:** 94 markdown files, ~50,391 lines of comprehensive documentation
+- **Dependencies:** 287 audited packages (zero vulnerabilities via cargo-audit)
+- **Security:** Grade A+ (95/100), 12% technical debt ratio, 5 active fuzz targets, zero warnings
+
 **Phase 12: Technical Excellence & Production Hardening (126 SP) - COMPLETE (2025-12-07):**
 
 **Sprint 12.1: Node.rs Modularization (28 SP) - COMPLETE:**
@@ -61,31 +68,31 @@ WRAITH Protocol has completed Phase 12: Technical Excellence & Production Harden
 **Code Quality Metrics:**
 - **Quality Grade:** A+ (95/100)
 - **Technical Debt Ratio:** 12% (healthy range)
-- **Test Coverage:** 1,178 tests total (1,157 passing, 21 ignored) - 100% pass rate on active tests
+- **Test Coverage:** 1,289 total tests (1,270 passing, 19 ignored) - 100% pass rate on active tests
   - 357 wraith-core (frame parsing, sessions, streams, BBR, migration, Node API, rate limiting, health, circuit breakers, resume, multi-peer)
   - 152 wraith-crypto (Ed25519, X25519, Elligator2, AEAD, Noise, Ratchet, encryption at rest)
   - 38 wraith-files (chunking, reassembly, tree hashing, O(m) algorithms)
   - 167 wraith-obfuscation (padding, timing, TLS/WebSocket/DoH mimicry)
   - 231 wraith-discovery (DHT, STUN, ICE, relay)
   - 96 wraith-transport (AF_XDP, io_uring, UDP, worker pools)
-  - 158 integration tests (end-to-end, Node API integration, NAT traversal, multi-peer, error recovery)
-- **Security Vulnerabilities:** Zero (286 dependencies scanned with cargo audit, CodeQL verified, [v1.1.0 audit](docs/security/SECURITY_AUDIT_v1.1.0.md))
+  - 248 integration tests (end-to-end, Node API integration, NAT traversal, multi-peer, error recovery, doc tests)
+- **Security Vulnerabilities:** Zero (287 dependencies scanned with cargo-audit, CodeQL verified, [v1.1.0 audit](docs/security/SECURITY_AUDIT_v1.1.0.md))
 - **Clippy Warnings:** Zero (strict `-D warnings` enforcement)
 - **Compiler Warnings:** Zero
-- **Code Volume:** ~43,919 lines total (~27,103 LOC + comments/blanks) across 7 active crates
+- **Code Volume:** ~37,948 lines total (~28,342 LOC + ~2,559 comments + ~7,047 blanks) across 104 Rust source files in 7 active crates
 - **Fuzzing:** 5 libFuzzer targets continuously testing parser robustness
   - frame_parser: SIMD/scalar frame parsing with arbitrary bytes
   - dht_message: Kademlia message handling (FIND_NODE, FIND_VALUE, STORE)
   - padding: All padding modes with round-trip validation
   - crypto: AEAD encrypt/decrypt and key derivation
   - tree_hash: Merkle tree construction with incremental hashing
-- **Property Tests:** State machine invariants validating correctness
+- **Property Tests:** 15 QuickCheck-style property tests validating state machine invariants
 - **Unsafe Code:** 50 blocks with 100% SAFETY documentation (zero unsafe in crypto paths)
-- **Documentation:** 60+ files, 45,000+ lines, complete API coverage, deployment guides, 2,670+ lines of XDP documentation
+- **Documentation:** 94 markdown files, ~50,391 lines, complete API coverage, deployment guides, XDP documentation
 
 **Implementation Status:**
-- **Core workspace:** 9 crates (8 active + 1 XDP), ~43,919 lines total (~27,103 LOC + comments/blanks)
-- **Test coverage:** 1,178 total tests (1,157 passing, 21 ignored) with 100% pass rate on active tests
+- **Core workspace:** 9 crates (8 active + 1 XDP), ~37,948 lines total (~28,342 LOC + ~2,559 comments + ~7,047 blanks)
+- **Test coverage:** 1,289 total tests (1,270 passing, 19 ignored) with 100% pass rate on active tests
   - **wraith-core** (357 tests): **Node API orchestration layer**, Frame parsing with SIMD acceleration (172M frames/sec), session state machine with 7 states, stream multiplexing with prioritization, BBR congestion control with pacing, path MTU discovery with caching, connection migration with PATH_CHALLENGE/RESPONSE, transfer session management, rate limiting (token bucket), health monitoring (3 states), circuit breakers, resume robustness, multi-peer optimization (4 strategies)
   - **wraith-crypto** (152 tests): Ed25519 signatures with batch verification, X25519 key exchange with Elligator2 encoding, XChaCha20-Poly1305 AEAD with key commitment (3.2 GB/s), BLAKE3 hashing with SIMD (8.5 GB/s), Noise_XX handshake with mutual authentication, Double Ratchet with DH and symmetric ratcheting, replay protection with 64-bit sliding window, private key encryption at rest (Argon2id + XChaCha20-Poly1305)
   - **wraith-files** (38 tests): io_uring async file I/O with registered buffers and zero-copy, file chunking with seek support (14.85 GiB/s), file reassembly with O(m) missing chunks algorithm (5.42 GiB/s), BLAKE3 tree hashing with Merkle verification (4.71 GiB/s), incremental tree hasher for streaming, chunk verification (4.78 GiB/s)
@@ -854,4 +861,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v1.2.0 Production Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,178 (1,157 passing + 21 ignored) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets, zero warnings | **Protocol:** Phase 12 COMPLETE - Technical Excellence & Production Hardening (126 SP delivered) | **Next:** Phase 13 - Advanced Optimizations (Planned Q1-Q2 2026)
+**Status:** v1.2.1 Patch Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,289 (1,270 passing + 19 ignored) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets, zero warnings | **Protocol:** Phase 12 COMPLETE - Technical Excellence & Production Hardening (126 SP delivered) | **Next:** Phase 13 - Advanced Optimizations (Planned Q1-Q2 2026)

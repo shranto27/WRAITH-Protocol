@@ -47,6 +47,21 @@ use wraith_obfuscation::{DohTunnel, TlsRecordWrapper, WebSocketFrameWrapper};
 use wraith_transport::transport::Transport;
 use wraith_transport::udp_async::AsyncUdpTransport;
 
+/// Migration state for tracking PATH_CHALLENGE/RESPONSE
+#[allow(dead_code)]
+pub(crate) struct MigrationState {
+    /// Peer being migrated
+    pub peer_id: PeerId,
+    /// New address to migrate to
+    pub new_addr: SocketAddr,
+    /// Challenge data (8 bytes)
+    pub challenge: [u8; 8],
+    /// Channel to signal migration completion
+    pub sender: oneshot::Sender<Result<Duration>>,
+    /// Time when migration was initiated
+    pub initiated_at: Instant,
+}
+
 /// Node inner state
 pub(crate) struct NodeInner {
     /// Node identity
@@ -61,6 +76,10 @@ pub(crate) struct NodeInner {
     pub(crate) transfers: Arc<DashMap<TransferId, Arc<FileTransferContext>>>,
     /// Pending handshakes (peer_addr -> channel)
     pub(crate) pending_handshakes: Arc<DashMap<SocketAddr, oneshot::Sender<HandshakePacket>>>,
+    /// Pending pings (peer_id, sequence -> response channel)
+    pub(crate) pending_pings: Arc<DashMap<(PeerId, u32), oneshot::Sender<Instant>>>,
+    /// Pending migrations (path_id -> migration state)
+    pub(crate) pending_migrations: Arc<DashMap<u64, MigrationState>>,
     /// Node running state
     pub(crate) running: Arc<AtomicBool>,
     /// Transport layer
@@ -81,6 +100,9 @@ pub(crate) struct NodeInner {
     pub(crate) doh_tunnel: Arc<DohTunnel>,
     /// Obfuscation statistics (padding bytes, timing delays, wrapped packets)
     pub(crate) obfuscation_stats: Arc<Mutex<ObfuscationStats>>,
+    /// Available files for seeding (root_hash -> (metadata, file_path))
+    pub(crate) available_files:
+        Arc<DashMap<[u8; 32], (crate::node::transfer::FileMetadata, PathBuf)>>,
 }
 
 /// WRAITH Protocol Node
@@ -146,6 +168,8 @@ impl Node {
             routing: Arc::new(RoutingTable::new()),
             transfers: Arc::new(DashMap::new()),
             pending_handshakes: Arc::new(DashMap::new()),
+            pending_pings: Arc::new(DashMap::new()),
+            pending_migrations: Arc::new(DashMap::new()),
             running: Arc::new(AtomicBool::new(false)),
             transport: Arc::new(Mutex::new(None)),
             discovery: Arc::new(Mutex::new(None)),
@@ -156,6 +180,7 @@ impl Node {
             websocket_wrapper: Arc::new(websocket_wrapper),
             doh_tunnel: Arc::new(doh_tunnel),
             obfuscation_stats: Arc::new(Mutex::new(obfuscation_stats)),
+            available_files: Arc::new(DashMap::new()),
         };
         Ok(Self {
             inner: Arc::new(inner),
@@ -189,7 +214,7 @@ impl Node {
         match transport.as_ref() {
             Some(t) => {
                 let mut addr = t.local_addr().map_err(|e| {
-                    NodeError::Transport(format!("Failed to get local address: {}", e))
+                    NodeError::Transport(format!("Failed to get local address: {}", e).into())
                 })?;
                 if addr.ip().is_unspecified() {
                     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -202,9 +227,7 @@ impl Node {
                 }
                 Ok(addr)
             }
-            None => Err(NodeError::InvalidState(
-                "Transport not initialized".to_string(),
-            )),
+            None => Err(NodeError::InvalidState("Transport not initialized".into())),
         }
     }
 }
@@ -222,7 +245,9 @@ impl Node {
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err(NodeError::InvalidState("Node already running".to_string()));
+            return Err(NodeError::InvalidState(std::borrow::Cow::Borrowed(
+                "Node already running",
+            )));
         }
 
         tracing::info!(
@@ -234,7 +259,7 @@ impl Node {
         // Initialize transport
         let transport = AsyncUdpTransport::bind(self.inner.config.listen_addr)
             .await
-            .map_err(|e| NodeError::Transport(format!("Failed to bind transport: {}", e)))?;
+            .map_err(|e| NodeError::Transport(format!("Failed to bind transport: {}", e).into()))?;
         let transport = Arc::new(transport);
         *self.inner.transport.lock().await = Some(Arc::clone(&transport));
 
@@ -246,14 +271,13 @@ impl Node {
         discovery_config.relay_enabled = self.inner.config.discovery.enable_relay;
 
         let discovery = DiscoveryManager::new(discovery_config).await.map_err(|e| {
-            NodeError::Discovery(format!("Failed to create discovery manager: {}", e))
+            NodeError::Discovery(format!("Failed to create discovery manager: {}", e).into())
         })?;
         let discovery = Arc::new(discovery);
         *self.inner.discovery.lock().await = Some(Arc::clone(&discovery));
-        discovery
-            .start()
-            .await
-            .map_err(|e| NodeError::Discovery(format!("Failed to start discovery: {}", e)))?;
+        discovery.start().await.map_err(|e| {
+            NodeError::Discovery(format!("Failed to start discovery: {}", e).into())
+        })?;
 
         // Start packet receive loop (defined in packet_handler.rs)
         let node = self.clone();
@@ -281,7 +305,9 @@ impl Node {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err(NodeError::InvalidState("Node not running".to_string()));
+            return Err(NodeError::InvalidState(std::borrow::Cow::Borrowed(
+                "Node not running",
+            )));
         }
 
         // Close all sessions
@@ -321,9 +347,12 @@ impl Node {
     /// Discover peer addresses via DHT/STUN/relay
     pub async fn discover_peer(&self, peer_id: &PeerId) -> Result<Vec<SocketAddr>> {
         let discovery = self.inner.discovery.lock().await;
-        let discovery = discovery
-            .as_ref()
-            .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?;
+        let discovery =
+            discovery
+                .as_ref()
+                .ok_or(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                    "Discovery not initialized",
+                )))?;
 
         // Convert PeerId (Ed25519 public key) to DHT NodeId
         let dht_node_id = wraith_discovery::dht::NodeId::from_bytes(*peer_id);
@@ -345,10 +374,9 @@ impl Node {
                     hex::encode(&peer_id[..8]),
                     e
                 );
-                Err(NodeError::Discovery(format!(
-                    "Peer discovery failed: {}",
-                    e
-                )))
+                Err(NodeError::Discovery(
+                    format!("Peer discovery failed: {}", e).into(),
+                ))
             }
         }
     }
@@ -512,15 +540,16 @@ impl Node {
         peer_id: &PeerId,
     ) -> Result<TransferId> {
         let file_path = file_path.as_ref();
-        let file_size = std::fs::metadata(file_path).map_err(NodeError::Io)?.len();
+        let file_size = std::fs::metadata(file_path)
+            .map_err(|e| NodeError::Io(e.to_string()))?
+            .len();
         if file_size == 0 {
-            return Err(NodeError::InvalidState(
-                "Cannot send empty file".to_string(),
-            ));
+            return Err(NodeError::InvalidState("Cannot send empty file".into()));
         }
 
         let chunk_size = self.inner.config.transfer.chunk_size;
-        let tree_hash = compute_tree_hash(file_path, chunk_size).map_err(NodeError::Io)?;
+        let tree_hash =
+            compute_tree_hash(file_path, chunk_size).map_err(|e| NodeError::Io(e.to_string()))?;
         let transfer_id = Self::generate_transfer_id();
 
         let mut transfer =
@@ -593,16 +622,16 @@ impl Node {
     ) -> Result<TransferId> {
         if peer_ids.is_empty() {
             return Err(NodeError::InvalidState(
-                "No peers provided for multi-peer transfer".to_string(),
+                "No peers provided for multi-peer transfer".into(),
             ));
         }
 
         let file_path = file_path.as_ref();
-        let file_size = std::fs::metadata(file_path).map_err(NodeError::Io)?.len();
+        let file_size = std::fs::metadata(file_path)
+            .map_err(|e| NodeError::Io(e.to_string()))?
+            .len();
         if file_size == 0 {
-            return Err(NodeError::InvalidState(
-                "Cannot send empty file".to_string(),
-            ));
+            return Err(NodeError::InvalidState("Cannot send empty file".into()));
         }
 
         tracing::info!(
@@ -617,7 +646,7 @@ impl Node {
 
         // Compute tree hash
         let tree_hash = wraith_files::tree_hash::compute_tree_hash(file_path, chunk_size)
-            .map_err(NodeError::Io)?;
+            .map_err(|e| NodeError::Io(e.to_string()))?;
 
         // Create send transfer session
         let mut transfer_session = crate::transfer::TransferSession::new_send(
@@ -650,7 +679,7 @@ impl Node {
         for peer_id in peer_ids {
             match self.get_or_establish_session(peer_id).await {
                 Ok(session) => {
-                    coordinator.add_peer(*peer_id, session.peer_addr).await;
+                    coordinator.add_peer(*peer_id, session.peer_addr()).await;
                     sessions.push((*peer_id, session));
                 }
                 Err(e) => {
@@ -661,7 +690,7 @@ impl Node {
 
         if sessions.is_empty() {
             return Err(NodeError::Transfer(
-                "Failed to establish session with any peer".to_string(),
+                "Failed to establish session with any peer".into(),
             ));
         }
 
@@ -696,7 +725,7 @@ impl Node {
     ) -> Result<()> {
         let chunk_size = self.inner.config.transfer.chunk_size;
         let mut chunker = wraith_files::chunker::FileChunker::new(&file_path, chunk_size)
-            .map_err(NodeError::Io)?;
+            .map_err(|e| NodeError::Io(e.to_string()))?;
 
         let total_chunks = chunker.num_chunks();
         let stream_id = ((transfer_id[0] as u16) << 8) | (transfer_id[1] as u16);
@@ -727,7 +756,9 @@ impl Node {
 
             if let Some(session) = session {
                 // Read chunk data
-                let chunk_data = chunker.read_chunk_at(chunk_index).map_err(NodeError::Io)?;
+                let chunk_data = chunker
+                    .read_chunk_at(chunk_index)
+                    .map_err(|e| NodeError::Io(e.to_string()))?;
                 let chunk_len = chunk_data.len();
 
                 // Build and send chunk frame
@@ -846,7 +877,9 @@ impl Node {
         let guard = self.inner.transport.lock().await;
         guard
             .as_ref()
-            .ok_or_else(|| NodeError::InvalidState("Transport not initialized".to_string()))
+            .ok_or(NodeError::InvalidState(std::borrow::Cow::Borrowed(
+                "Transport not initialized",
+            )))
             .cloned()
     }
 }

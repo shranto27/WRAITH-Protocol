@@ -4,6 +4,7 @@
 // verifying that cryptographic operations work correctly with frame
 // encoding/decoding and session management.
 
+use hex;
 use rand_core::{OsRng, RngCore};
 use wraith_core::{
     ConnectionId, FRAME_HEADER_SIZE, Frame, FrameBuilder, FrameFlags, FrameType, HandshakePhase,
@@ -2187,7 +2188,7 @@ async fn test_discovery_node_integration() {
 /// 4. Wait for transfer completion
 /// 5. Verify file integrity
 #[tokio::test]
-#[ignore = "Requires DATA frame handling in packet processing path (Sprint 11.4)"]
+#[ignore = "TODO(Sprint 14.3): Requires two-node infrastructure with real peer connections"]
 async fn test_end_to_end_file_transfer() {
     use std::fs;
     use tempfile::TempDir;
@@ -2209,6 +2210,18 @@ async fn test_end_to_end_file_transfer() {
     let send_path = temp_dir.path().join("test_file.bin");
     fs::write(&send_path, &test_data).unwrap();
 
+    // Get receiver's listening address
+    let receiver_addr = receiver.listen_addr().await.unwrap();
+
+    // Establish session first (so receiver knows about sender)
+    let _session = sender
+        .establish_session_with_addr(receiver.node_id(), receiver_addr)
+        .await
+        .unwrap();
+
+    // Give time for session establishment
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
     // Send file
     let transfer_id = sender
         .send_file(&send_path, receiver.node_id())
@@ -2218,24 +2231,30 @@ async fn test_end_to_end_file_transfer() {
     // Verify transfer was created
     assert_eq!(transfer_id.len(), 32);
 
-    // Wait for transfer to complete (with timeout)
-    let timeout = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        sender.wait_for_transfer(transfer_id),
-    );
+    // Verify transfer is tracked on sender
+    let active_transfers = sender.active_transfers().await;
+    assert!(active_transfers.contains(&transfer_id));
 
-    match timeout.await {
+    // Wait for transfer to complete (with generous timeout for file I/O)
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        sender.wait_for_transfer(transfer_id),
+    )
+    .await;
+
+    // Verify transfer completed successfully
+    match result {
         Ok(Ok(())) => {
             // Transfer completed successfully
-            // Note: Full implementation will verify received file
+            tracing::info!("File transfer completed successfully");
         }
         Ok(Err(e)) => {
             panic!("Transfer failed: {}", e);
         }
         Err(_) => {
-            // Timeout - acceptable for current implementation
-            // since actual transfer isn't implemented yet
-            // Note: Full implementation will complete the transfer
+            // Timeout - check progress for debugging
+            let progress = sender.get_transfer_progress(&transfer_id).await;
+            panic!("Transfer timed out. Progress: {:?}", progress);
         }
     }
 
@@ -2366,14 +2385,14 @@ async fn test_discovery_and_peer_finding() {
     node2.stop().await.unwrap();
 }
 
-/// Test multi-path transfer with multiple peers
+/// Test multi-peer file transfer
 ///
-/// Tests downloading from multiple peers simultaneously:
+/// Tests sending a file to multiple peers simultaneously:
 /// 1. Create sender and multiple receiver nodes
-/// 2. Initiate multi-peer download
-/// 3. Verify speedup from parallel downloads
+/// 2. Initiate multi-peer send
+/// 3. Verify all transfers complete
 #[tokio::test]
-#[ignore = "Requires PATH_CHALLENGE/RESPONSE frame handling (Sprint 11.5)"]
+#[ignore = "TODO(Sprint 14.3): Requires two-node infrastructure with real peer connections"]
 async fn test_multi_path_transfer_node_api() {
     use std::fs;
     use tempfile::TempDir;
@@ -2394,19 +2413,54 @@ async fn test_multi_path_transfer_node_api() {
     let send_path = temp_dir.path().join("multi_test.bin");
     fs::write(&send_path, &test_data).unwrap();
 
+    // Get receiver addresses
+    let receiver1_addr = receiver1.listen_addr().await.unwrap();
+    let receiver2_addr = receiver2.listen_addr().await.unwrap();
+
     // Establish sessions with multiple peers
-    let _session1 = sender.establish_session(receiver1.node_id()).await.unwrap();
-    let _session2 = sender.establish_session(receiver2.node_id()).await.unwrap();
+    let _session1 = sender
+        .establish_session_with_addr(receiver1.node_id(), receiver1_addr)
+        .await
+        .unwrap();
+    let _session2 = sender
+        .establish_session_with_addr(receiver2.node_id(), receiver2_addr)
+        .await
+        .unwrap();
+
+    // Give time for session establishment
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Verify both sessions exist
     let sessions = sender.active_sessions().await;
     assert_eq!(sessions.len(), 2);
 
-    // Note: Full implementation will test:
-    // - let tree_hash = wraith_files::compute_tree_hash(&send_path, 256 * 1024).unwrap();
-    // - let peers = vec![*receiver1.node_id(), *receiver2.node_id()];
-    // - let transfer_id = sender.download_from_peers(&tree_hash.root, peers, &recv_path).await.unwrap();
-    // - sender.wait_for_transfer(transfer_id).await.unwrap();
+    // Send file to multiple peers using multi-peer transfer
+    let peers = vec![*receiver1.node_id(), *receiver2.node_id()];
+    let transfer_id = sender.send_file_to_peers(&send_path, &peers).await.unwrap();
+
+    // Verify transfer was created
+    assert_eq!(transfer_id.len(), 32);
+
+    // Wait for transfer to complete
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        sender.wait_for_transfer(transfer_id),
+    )
+    .await;
+
+    // Verify transfer completed successfully
+    match result {
+        Ok(Ok(())) => {
+            tracing::info!("Multi-peer file transfer completed successfully");
+        }
+        Ok(Err(e)) => {
+            panic!("Multi-peer transfer failed: {}", e);
+        }
+        Err(_) => {
+            let progress = sender.get_transfer_progress(&transfer_id).await;
+            panic!("Multi-peer transfer timed out. Progress: {:?}", progress);
+        }
+    }
 
     sender.stop().await.unwrap();
     receiver1.stop().await.unwrap();
@@ -2480,9 +2534,9 @@ async fn test_error_recovery_node_api() {
 /// Tests managing multiple simultaneous file transfers:
 /// 1. Create multiple transfer sessions
 /// 2. Verify isolation between transfers
-/// 3. Test resource sharing
+/// 3. Test concurrent execution and completion
 #[tokio::test]
-#[ignore = "Requires concurrent transfer coordination (Sprint 11.4)"]
+#[ignore = "TODO(Sprint 14.3): Requires two-node infrastructure with real peer connections"]
 async fn test_concurrent_transfers_node_api() {
     use std::fs;
     use tempfile::TempDir;
@@ -2499,6 +2553,27 @@ async fn test_concurrent_transfers_node_api() {
     receiver1.start().await.unwrap();
     receiver2.start().await.unwrap();
     receiver3.start().await.unwrap();
+
+    // Get receiver addresses and establish sessions
+    let receiver1_addr = receiver1.listen_addr().await.unwrap();
+    let receiver2_addr = receiver2.listen_addr().await.unwrap();
+    let receiver3_addr = receiver3.listen_addr().await.unwrap();
+
+    sender
+        .establish_session_with_addr(receiver1.node_id(), receiver1_addr)
+        .await
+        .unwrap();
+    sender
+        .establish_session_with_addr(receiver2.node_id(), receiver2_addr)
+        .await
+        .unwrap();
+    sender
+        .establish_session_with_addr(receiver3.node_id(), receiver3_addr)
+        .await
+        .unwrap();
+
+    // Give time for session establishment
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Create multiple test files
     let mut transfer_ids = Vec::new();
@@ -2525,21 +2600,51 @@ async fn test_concurrent_transfers_node_api() {
     assert_ne!(transfer_ids[1], transfer_ids[2]);
     assert_ne!(transfer_ids[0], transfer_ids[2]);
 
-    // Check transfer progress (all should be 0.0 since not actually transferring)
+    // Check that all transfers are tracked
     for id in &transfer_ids {
         let progress = sender.get_transfer_progress(id).await;
-        assert!(progress.is_some());
+        assert!(
+            progress.is_some(),
+            "Transfer {:?} should be tracked",
+            hex::encode(&id[..8])
+        );
     }
 
     // List active transfers
     let active = sender.active_transfers().await;
-    assert_eq!(active.len(), 3);
+    assert_eq!(active.len(), 3, "Should have 3 active transfers");
 
-    // Note: Full implementation will test:
-    // - Concurrent transfer execution
-    // - Progress tracking for each transfer
-    // - Completion verification
-    // - Bandwidth sharing
+    // Wait for all transfers to complete concurrently
+    let mut wait_handles = Vec::new();
+    for id in &transfer_ids {
+        let sender_clone = sender.clone();
+        let id_copy = *id;
+        let handle = tokio::spawn(async move {
+            tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                sender_clone.wait_for_transfer(id_copy),
+            )
+            .await
+        });
+        wait_handles.push(handle);
+    }
+
+    // Verify all transfers complete successfully
+    for (i, handle) in wait_handles.into_iter().enumerate() {
+        let result = handle.await.unwrap();
+        match result {
+            Ok(Ok(())) => {
+                tracing::info!("Transfer {} completed successfully", i);
+            }
+            Ok(Err(e)) => {
+                panic!("Transfer {} failed: {}", i, e);
+            }
+            Err(_) => {
+                let progress = sender.get_transfer_progress(&transfer_ids[i]).await;
+                panic!("Transfer {} timed out. Progress: {:?}", i, progress);
+            }
+        }
+    }
 
     sender.stop().await.unwrap();
     receiver1.stop().await.unwrap();

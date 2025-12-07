@@ -92,12 +92,12 @@ impl TransferManager {
         let file_path = file_path.as_ref();
 
         // Get file metadata
-        let file_size = std::fs::metadata(file_path).map_err(NodeError::Io)?.len();
+        let file_size = std::fs::metadata(file_path)
+            .map_err(|e| NodeError::Io(e.to_string()))?
+            .len();
 
         if file_size == 0 {
-            return Err(NodeError::InvalidState(
-                "Cannot send empty file".to_string(),
-            ));
+            return Err(NodeError::InvalidState("Cannot send empty file".into()));
         }
 
         // Compute tree hash for integrity verification
@@ -108,7 +108,8 @@ impl TransferManager {
             self.chunk_size
         );
 
-        let tree_hash = compute_tree_hash(file_path, self.chunk_size).map_err(NodeError::Io)?;
+        let tree_hash = compute_tree_hash(file_path, self.chunk_size)
+            .map_err(|e| NodeError::Io(e.to_string()))?;
 
         // Generate transfer ID
         let transfer_id = Self::generate_transfer_id();
@@ -174,8 +175,8 @@ impl TransferManager {
         transfer.start();
 
         // Create file reassembler
-        let reassembler =
-            FileReassembler::new(file_name, file_size, chunk_size).map_err(NodeError::Io)?;
+        let reassembler = FileReassembler::new(file_name, file_size, chunk_size)
+            .map_err(|e| NodeError::Io(e.to_string()))?;
 
         // Create tree hash (just root for now - we'll build full tree from chunks)
         let tree_hash = FileTreeHash {
@@ -233,7 +234,8 @@ impl TransferManager {
             .clone();
 
         // Create chunker
-        let mut chunker = FileChunker::new(&file_path, self.chunk_size).map_err(NodeError::Io)?;
+        let mut chunker = FileChunker::new(&file_path, self.chunk_size)
+            .map_err(|e| NodeError::Io(e.to_string()))?;
 
         let total_chunks = chunker.num_chunks();
 
@@ -246,7 +248,9 @@ impl TransferManager {
         // Send each chunk
         for chunk_index in 0..total_chunks {
             // Read chunk
-            let chunk_data = chunker.read_chunk_at(chunk_index).map_err(NodeError::Io)?;
+            let chunk_data = chunker
+                .read_chunk_at(chunk_index)
+                .map_err(|e| NodeError::Io(e.to_string()))?;
             let chunk_len = chunk_data.len();
 
             // Verify chunk hash against tree hash
@@ -255,7 +259,7 @@ impl TransferManager {
                 if computed_hash.as_bytes() != &context.tree_hash.chunks[chunk_index as usize] {
                     tracing::error!("Chunk {} hash mismatch during send", chunk_index);
                     return Err(NodeError::InvalidState(
-                        "Chunk hash verification failed".to_string(),
+                        "Chunk hash verification failed".into(),
                     ));
                 }
             }
@@ -317,7 +321,7 @@ impl TransferManager {
             let mut reassembler = reassembler_arc.lock().await;
             reassembler
                 .write_chunk(chunk_index, chunk_data)
-                .map_err(NodeError::Io)?;
+                .map_err(|e| NodeError::Io(e.to_string()))?;
 
             tracing::trace!(
                 "Wrote chunk {} to reassembler for transfer {:?}",
@@ -325,10 +329,13 @@ impl TransferManager {
                 hex::encode(&transfer_id[..8])
             );
         } else {
-            return Err(NodeError::InvalidState(format!(
-                "No reassembler found for transfer {:?}",
-                hex::encode(&transfer_id[..8])
-            )));
+            return Err(NodeError::InvalidState(
+                format!(
+                    "No reassembler found for transfer {:?}",
+                    hex::encode(&transfer_id[..8])
+                )
+                .into(),
+            ));
         }
 
         // Verify chunk hash
@@ -342,7 +349,7 @@ impl TransferManager {
                     hex::encode(&transfer_id[..8])
                 );
                 return Err(NodeError::InvalidState(
-                    "Chunk hash verification failed".to_string(),
+                    "Chunk hash verification failed".into(),
                 ));
             }
         }

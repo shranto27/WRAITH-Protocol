@@ -99,12 +99,12 @@ impl FileMetadata {
         let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
-            .ok_or_else(|| NodeError::InvalidState("Invalid file name".to_string()))?
+            .ok_or_else(|| NodeError::invalid_state("Invalid file name"))?
             .to_string();
 
         if file_name.len() > 255 {
-            return Err(NodeError::InvalidState(
-                "File name too long (max 255 bytes)".to_string(),
+            return Err(NodeError::invalid_state(
+                "File name too long (max 255 bytes)",
             ));
         }
 
@@ -163,8 +163,8 @@ impl FileMetadata {
     /// Deserialize metadata from bytes
     pub fn deserialize(data: &[u8]) -> Result<Self> {
         if data.len() < 85 {
-            return Err(NodeError::InvalidState(
-                "Metadata too short (min 85 bytes)".to_string(),
+            return Err(NodeError::invalid_state(
+                "Metadata too short (min 85 bytes)",
             ));
         }
 
@@ -180,20 +180,20 @@ impl FileMetadata {
         offset += 1;
 
         if data.len() < 85 + file_name_len {
-            return Err(NodeError::InvalidState(
-                "Metadata truncated (file name)".to_string(),
-            ));
+            return Err(NodeError::invalid_state("Metadata truncated (file name)"));
         }
 
-        let file_name = String::from_utf8(data[offset..offset + file_name_len].to_vec())
-            .map_err(|e| NodeError::InvalidState(format!("Invalid file name UTF-8: {}", e)))?;
+        let file_name =
+            String::from_utf8(data[offset..offset + file_name_len].to_vec()).map_err(|e| {
+                NodeError::InvalidState(format!("Invalid file name UTF-8: {}", e).into())
+            })?;
         offset += file_name_len;
 
         // File size (8 bytes)
         let file_size = u64::from_be_bytes(
             data[offset..offset + 8]
                 .try_into()
-                .map_err(|_| NodeError::InvalidState("Invalid file_size".to_string()))?,
+                .map_err(|_| NodeError::invalid_state("Invalid file_size"))?,
         );
         offset += 8;
 
@@ -201,7 +201,7 @@ impl FileMetadata {
         let chunk_size = u32::from_be_bytes(
             data[offset..offset + 4]
                 .try_into()
-                .map_err(|_| NodeError::InvalidState("Invalid chunk_size".to_string()))?,
+                .map_err(|_| NodeError::invalid_state("Invalid chunk_size"))?,
         );
         offset += 4;
 
@@ -209,7 +209,7 @@ impl FileMetadata {
         let total_chunks = u64::from_be_bytes(
             data[offset..offset + 8]
                 .try_into()
-                .map_err(|_| NodeError::InvalidState("Invalid total_chunks".to_string()))?,
+                .map_err(|_| NodeError::invalid_state("Invalid total_chunks"))?,
         );
         offset += 8;
 
@@ -239,7 +239,9 @@ pub fn build_metadata_frame(stream_id: u16, metadata: &FileMetadata) -> Result<V
         .sequence(0)
         .payload(&metadata_bytes)
         .build(frame_size)
-        .map_err(|e| NodeError::InvalidState(format!("Failed to build metadata frame: {}", e)))
+        .map_err(|e| {
+            NodeError::InvalidState(format!("Failed to build metadata frame: {}", e).into())
+        })
 }
 
 /// Build a data frame for file chunk
@@ -256,7 +258,7 @@ pub fn build_chunk_frame(stream_id: u16, chunk_index: u64, chunk_data: &[u8]) ->
         .offset(chunk_index * chunk_data.len() as u64) // File offset
         .payload(chunk_data)
         .build(frame_size)
-        .map_err(|e| NodeError::InvalidState(format!("Failed to build chunk frame: {}", e)))
+        .map_err(|e| NodeError::InvalidState(format!("Failed to build chunk frame: {}", e).into()))
 }
 
 #[cfg(test)]

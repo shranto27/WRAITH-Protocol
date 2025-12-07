@@ -75,8 +75,13 @@ impl IoUringEngine {
             .build()
             .user_data(user_data);
 
-        // SAFETY: Pushing operation to io_uring submission queue. The buffer pointer (buf)
-        // must remain valid until the completion event, which is enforced by caller's contract.
+        // SAFETY: Pushing read operation to io_uring submission queue is safe under these conditions:
+        // - fd is a valid open file descriptor (caller's responsibility)
+        // - buf is a valid mutable pointer with at least len bytes available (caller's responsibility)
+        // - buf remains valid and unmodified until completion event (caller's responsibility)
+        // - offset + len does not exceed file size (kernel validates, returns error if invalid)
+        // - user_data is an arbitrary identifier (no constraints)
+        // - Queue has space (checked by returning QueueFull error)
         unsafe {
             self.ring
                 .submission()
@@ -111,8 +116,13 @@ impl IoUringEngine {
             .build()
             .user_data(user_data);
 
-        // SAFETY: Pushing operation to io_uring submission queue. The buffer pointer (buf)
-        // must remain valid until the completion event, which is enforced by caller's contract.
+        // SAFETY: Pushing write operation to io_uring submission queue is safe under these conditions:
+        // - fd is a valid open file descriptor with write permissions (caller's responsibility)
+        // - buf is a valid const pointer with at least len bytes of readable data (caller's responsibility)
+        // - buf remains valid and unmodified until completion event (caller's responsibility)
+        // - offset + len does not exceed file system limits (kernel handles, may extend file)
+        // - user_data is an arbitrary identifier (no constraints)
+        // - Queue has space (checked by returning QueueFull error)
         unsafe {
             self.ring
                 .submission()
@@ -247,8 +257,12 @@ mod tests {
         let fd = file.as_raw_fd();
 
         let mut buf = vec![0u8; 1024];
-        // SAFETY: buf is valid for the duration of the async operation. The engine stores
-        // the request ID and waits for completion before accessing the buffer.
+        // SAFETY: Test code read operation is safe under these conditions:
+        // - buf is a valid Vec<u8> with 1024 bytes allocated
+        // - buf.as_mut_ptr() returns a valid mutable pointer to the buffer
+        // - buf remains in scope and unmodified until wait(1) completes
+        // - fd is valid (just opened file)
+        // - Buffer is not reallocated or dropped until after completion
         unsafe {
             engine.read(fd, 0, buf.as_mut_ptr(), buf.len(), 1).unwrap();
         }
@@ -274,8 +288,12 @@ mod tests {
         let fd = file.as_raw_fd();
 
         let data = b"Write test data";
-        // SAFETY: data slice is valid for the duration of the async operation. The engine
-        // waits for completion before the data goes out of scope.
+        // SAFETY: Test code write operation is safe under these conditions:
+        // - data is a valid byte slice literal with 15 bytes
+        // - data.as_ptr() returns a valid const pointer to the buffer
+        // - data remains in scope and unmodified until wait(1) completes
+        // - fd is valid (just opened file with write permissions)
+        // - Slice cannot be modified or dropped until after completion
         unsafe {
             engine.write(fd, 0, data.as_ptr(), data.len(), 1).unwrap();
         }
@@ -303,8 +321,13 @@ mod tests {
         // Submit multiple reads
         let mut buffers = vec![vec![0u8; 64]; 4];
         for (i, buf) in buffers.iter_mut().enumerate() {
-            // SAFETY: Each buffer remains valid until completion. Buffers are stored in a Vec
-            // that outlives the async operations, and we wait for all completions before returning.
+            // SAFETY: Test code batch read operations are safe under these conditions:
+            // - Each buffer is a valid Vec<u8> with 64 bytes allocated
+            // - buffers Vec owns all 4 sub-buffers (not moved or dropped)
+            // - buffers remains in scope until wait(4) completes all operations
+            // - buf.as_mut_ptr() returns valid mutable pointers for each buffer
+            // - Buffers are independent (no overlapping memory regions)
+            // - fd is valid for multiple reads
             unsafe {
                 engine
                     .read(fd, 0, buf.as_mut_ptr(), buf.len(), i as u64)

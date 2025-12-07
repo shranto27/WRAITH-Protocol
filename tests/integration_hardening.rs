@@ -28,14 +28,14 @@ async fn test_rate_limiter_protects_against_dos() {
 
     // First 5 connections should be allowed
     for _ in 0..5 {
-        assert!(limiter.check_connection(ip).await);
+        assert!(limiter.check_connection(ip));
     }
 
     // 6th connection should be blocked
-    assert!(!limiter.check_connection(ip).await);
+    assert!(!limiter.check_connection(ip));
 
     // Metrics should reflect this
-    let metrics = limiter.metrics().await;
+    let metrics = limiter.metrics();
     assert_eq!(metrics.connections_allowed, 5);
     assert_eq!(metrics.connections_blocked, 1);
 }
@@ -51,18 +51,18 @@ async fn test_rate_limiter_session_limit() {
 
     // Add 3 sessions
     for _ in 0..3 {
-        assert!(limiter.check_session_limit().await);
-        limiter.increment_sessions().await;
+        assert!(limiter.check_session_limit());
+        limiter.increment_sessions();
     }
 
     // 4th session should be blocked
-    assert!(!limiter.check_session_limit().await);
+    assert!(!limiter.check_session_limit());
 
     // Remove a session
-    limiter.decrement_sessions().await;
+    limiter.decrement_sessions();
 
     // Now should be able to add another
-    assert!(limiter.check_session_limit().await);
+    assert!(limiter.check_session_limit());
 }
 
 #[tokio::test]
@@ -192,8 +192,8 @@ async fn test_combined_protection_mechanisms() {
 
     // Add sessions up to limit
     for i in 0..4 {
-        assert!(limiter.check_session_limit().await);
-        limiter.increment_sessions().await;
+        assert!(limiter.check_session_limit());
+        limiter.increment_sessions();
 
         // Update health monitor
         health.update(i + 1, 0).await;
@@ -226,13 +226,13 @@ async fn test_rate_limiter_bandwidth_control() {
     let session_id = [4u8; 32];
 
     // Transfer 8KB - should succeed
-    assert!(limiter.check_bandwidth(&session_id, 8_000).await);
+    assert!(limiter.check_bandwidth(&session_id, 8_000));
 
     // Transfer another 2KB - should succeed (total 10KB)
-    assert!(limiter.check_bandwidth(&session_id, 2_000).await);
+    assert!(limiter.check_bandwidth(&session_id, 2_000));
 
     // Transfer 1 more byte - should fail
-    assert!(!limiter.check_bandwidth(&session_id, 1).await);
+    assert!(!limiter.check_bandwidth(&session_id, 1));
 }
 
 #[tokio::test]

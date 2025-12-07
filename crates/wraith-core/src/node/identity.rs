@@ -91,8 +91,7 @@ impl Identity {
         // Note: We don't store the signing key, only use the public key as node ID
 
         // Generate X25519 keypair for Noise handshakes
-        let x25519 = NoiseKeypair::generate()
-            .map_err(|e| NodeError::Crypto(wraith_crypto::CryptoError::Handshake(e.to_string())))?;
+        let x25519 = NoiseKeypair::generate().map_err(|e| NodeError::Crypto(e.to_string()))?;
 
         Ok(Self { node_id, x25519 })
     }

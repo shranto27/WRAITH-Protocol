@@ -106,11 +106,16 @@ impl TransportFactoryConfig {
     }
 }
 
+/// Default bind address for transports (0.0.0.0:0 = any interface, OS-assigned port)
+const DEFAULT_BIND_ADDR: std::net::SocketAddr = std::net::SocketAddr::V4(
+    std::net::SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0),
+);
+
 impl Default for TransportFactoryConfig {
     fn default() -> Self {
         Self {
             transport_type: TransportType::Udp,
-            bind_addr: "0.0.0.0:0".parse().unwrap(),
+            bind_addr: DEFAULT_BIND_ADDR,
             recv_buffer_size: None,
             send_buffer_size: None,
         }

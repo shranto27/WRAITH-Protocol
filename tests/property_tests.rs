@@ -733,11 +733,11 @@ mod rate_limit_properties {
 
             // Should allow first 5 connections
             for _ in 0..5 {
-                assert!(limiter.check_connection(ip).await);
+                assert!(limiter.check_connection(ip));
             }
 
             // Should block 6th connection
-            assert!(!limiter.check_connection(ip).await);
+            assert!(!limiter.check_connection(ip));
         });
     }
 
@@ -756,15 +756,15 @@ mod rate_limit_properties {
             let limiter = RateLimiter::new(config);
 
             // Should allow first 3 sessions
-            assert!(limiter.check_session_limit().await);
-            limiter.increment_sessions().await;
-            assert!(limiter.check_session_limit().await);
-            limiter.increment_sessions().await;
-            assert!(limiter.check_session_limit().await);
-            limiter.increment_sessions().await;
+            assert!(limiter.check_session_limit());
+            limiter.increment_sessions();
+            assert!(limiter.check_session_limit());
+            limiter.increment_sessions();
+            assert!(limiter.check_session_limit());
+            limiter.increment_sessions();
 
             // Should block 4th session
-            assert!(!limiter.check_session_limit().await);
+            assert!(!limiter.check_session_limit());
         });
     }
 }

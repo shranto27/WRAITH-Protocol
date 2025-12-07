@@ -11,6 +11,9 @@ use wraith_crypto::aead::SessionCrypto;
 use wraith_crypto::noise::{NoiseHandshake, NoiseKeypair};
 use wraith_transport::transport::Transport;
 
+/// Type alias for peer address with interior mutability for connection migration
+type PeerAddr = std::sync::RwLock<SocketAddr>;
+
 /// Handshake packet with sender address (for channel-based handshake)
 ///
 /// # Handshake Packet Channeling
@@ -55,8 +58,8 @@ pub struct PeerConnection {
     /// Peer ID (public key)
     pub peer_id: PeerId,
 
-    /// Peer address
-    pub peer_addr: SocketAddr,
+    /// Peer address (wrapped for interior mutability during connection migration)
+    peer_addr: PeerAddr,
 
     /// Connection ID for this session
     pub connection_id: ConnectionId,
@@ -91,7 +94,8 @@ impl Clone for PeerConnection {
         Self {
             session_id: self.session_id,
             peer_id: self.peer_id,
-            peer_addr: self.peer_addr,
+            // Clone peer_addr by reading current value and creating new RwLock
+            peer_addr: std::sync::RwLock::new(self.peer_addr()),
             connection_id: self.connection_id,
             // Clone Arc references (cheap - just incrementing refcount)
             session: Arc::clone(&self.session),
@@ -118,7 +122,7 @@ impl PeerConnection {
         Self {
             session_id,
             peer_id,
-            peer_addr,
+            peer_addr: std::sync::RwLock::new(peer_addr),
             connection_id,
             session: Arc::new(RwLock::new(Session::new())),
             crypto: Arc::new(RwLock::new(crypto)),
@@ -126,6 +130,14 @@ impl PeerConnection {
             last_activity_ms: AtomicU64::new(current_time_ms()),
             failed_pings: std::sync::atomic::AtomicU32::new(0),
         }
+    }
+
+    /// Get the current peer address
+    ///
+    /// Thread-safe read access to the peer address.
+    #[inline]
+    pub fn peer_addr(&self) -> SocketAddr {
+        *self.peer_addr.read().expect("peer_addr lock poisoned")
     }
 
     /// Increment failed ping counter
@@ -178,7 +190,7 @@ impl PeerConnection {
             .write()
             .await
             .transition_to(new_state)
-            .map_err(|e| NodeError::InvalidState(e.to_string()))
+            .map_err(|e| NodeError::InvalidState(e.to_string().into()))
     }
 
     /// Encrypt frame data for transmission
@@ -202,11 +214,15 @@ impl PeerConnection {
 
         // Check if rekey is needed
         if crypto.needs_rekey() {
-            return Err(NodeError::Crypto(wraith_crypto::CryptoError::NonceOverflow));
+            return Err(NodeError::Crypto(
+                wraith_crypto::CryptoError::NonceOverflow.to_string(),
+            ));
         }
 
         // Encrypt with empty AAD (frame already contains all necessary data)
-        crypto.encrypt(frame_bytes, &[]).map_err(NodeError::Crypto)
+        crypto
+            .encrypt(frame_bytes, &[])
+            .map_err(|e| NodeError::Crypto(e.to_string()))
     }
 
     /// Decrypt received frame data
@@ -231,7 +247,7 @@ impl PeerConnection {
         // Decrypt with empty AAD
         crypto
             .decrypt(encrypted_bytes, &[])
-            .map_err(NodeError::Crypto)
+            .map_err(|e| NodeError::Crypto(e.to_string()))
     }
 
     /// Check if session needs rekeying
@@ -247,6 +263,35 @@ impl PeerConnection {
     /// Get current receive counter (for debugging/monitoring)
     pub async fn recv_counter(&self) -> u64 {
         self.crypto.read().await.recv_counter()
+    }
+
+    /// Update peer address after successful migration
+    ///
+    /// This method is called after PATH_CHALLENGE/RESPONSE validation
+    /// to update the session's peer address to the new validated address.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_addr` - The new validated peer address
+    ///
+    /// # Thread Safety
+    ///
+    /// This method uses RwLock for safe interior mutability.
+    pub fn update_peer_addr(&self, new_addr: SocketAddr) {
+        let old_addr = self.peer_addr();
+
+        // Update address using RwLock write lock
+        {
+            let mut addr = self.peer_addr.write().expect("peer_addr lock poisoned");
+            *addr = new_addr;
+        }
+
+        tracing::info!(
+            "Updated peer address from {} to {} for session {:?}",
+            old_addr,
+            new_addr,
+            hex::encode(&self.session_id[..8])
+        );
     }
 }
 
@@ -309,7 +354,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
 
     // Create Noise handshake state
     let mut noise = NoiseHandshake::new_initiator(local_keypair)
-        .map_err(|e| NodeError::Handshake(e.to_string()))?;
+        .map_err(|e| NodeError::Handshake(e.to_string().into()))?;
 
     // Noise_XX handshake pattern:
     // -> e (initiator sends ephemeral key)
@@ -319,7 +364,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     // 1. Send message 1 (-> e)
     let msg1 = noise
         .write_message(&[])
-        .map_err(|e| NodeError::Handshake(format!("Failed to create msg1: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg1: {}", e).into()))?;
 
     tracing::trace!(
         "Sending handshake msg1 ({} bytes) to {}",
@@ -330,7 +375,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     transport
         .send_to(&msg1, peer_addr)
         .await
-        .map_err(|e| NodeError::Transport(format!("Failed to send msg1: {}", e)))?;
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg1: {}", e).into()))?;
 
     // 2. Receive message 2 (<- e, ee, s, es)
     // Use channel if provided (prevents racing with packet_receive_loop)
@@ -339,8 +384,8 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
         // Receive via channel (registered in pending_handshakes)
         let packet = tokio::time::timeout(Duration::from_secs(5), rx)
             .await
-            .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg2".to_string()))?
-            .map_err(|_| NodeError::Handshake("Handshake channel closed".to_string()))?;
+            .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg2".into()))?
+            .map_err(|_| NodeError::Handshake("Handshake channel closed".into()))?;
         (packet.data, packet.from)
     } else {
         // Direct recv_from (fallback for tests)
@@ -348,10 +393,10 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
         let (size, from) =
             tokio::time::timeout(Duration::from_secs(5), transport.recv_from(&mut buf))
                 .await
-                .map_err(|_| {
-                    NodeError::Handshake("Handshake timeout waiting for msg2".to_string())
-                })?
-                .map_err(|e| NodeError::Transport(format!("Failed to receive msg2: {}", e)))?;
+                .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg2".into()))?
+                .map_err(|e| {
+                    NodeError::Transport(format!("Failed to receive msg2: {}", e).into())
+                })?;
         (buf[..size].to_vec(), from)
     };
 
@@ -365,10 +410,13 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     };
 
     if !addr_matches {
-        return Err(NodeError::Handshake(format!(
-            "Received msg2 from unexpected address: {} (expected {})",
-            from, peer_addr
-        )));
+        return Err(NodeError::Handshake(
+            format!(
+                "Received msg2 from unexpected address: {} (expected {})",
+                from, peer_addr
+            )
+            .into(),
+        ));
     }
 
     tracing::trace!(
@@ -379,12 +427,12 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
 
     let _payload2 = noise
         .read_message(&msg2_data)
-        .map_err(|e| NodeError::Handshake(format!("Failed to process msg2: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg2: {}", e).into()))?;
 
     // 3. Send message 3 (-> s, se)
     let msg3 = noise
         .write_message(&[])
-        .map_err(|e| NodeError::Handshake(format!("Failed to create msg3: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg3: {}", e).into()))?;
 
     tracing::trace!(
         "Sending handshake msg3 ({} bytes) to {}",
@@ -395,23 +443,23 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     transport
         .send_to(&msg3, peer_addr)
         .await
-        .map_err(|e| NodeError::Transport(format!("Failed to send msg3: {}", e)))?;
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg3: {}", e).into()))?;
 
     // Extract session keys after handshake completes
     if !noise.is_complete() {
         return Err(NodeError::Handshake(
-            "Handshake not complete after msg3".to_string(),
+            "Handshake not complete after msg3".into(),
         ));
     }
 
     // Get peer's public key BEFORE consuming noise with into_session_keys()
     let peer_id = noise.get_remote_static().ok_or_else(|| {
-        NodeError::Handshake("Failed to get remote static key after handshake".to_string())
+        NodeError::Handshake("Failed to get remote static key after handshake".into())
     })?;
 
     let keys = noise
         .into_session_keys()
-        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e).into()))?;
 
     // Create session crypto (initiator: send=send_key, recv=recv_key)
     let crypto = SessionCrypto::new(keys.send_key, keys.recv_key, &keys.chain_key);
@@ -461,7 +509,7 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
 
     // Create Noise handshake state
     let mut noise = NoiseHandshake::new_responder(local_keypair)
-        .map_err(|e| NodeError::Handshake(e.to_string()))?;
+        .map_err(|e| NodeError::Handshake(e.to_string().into()))?;
 
     // Noise_XX handshake pattern (from responder perspective):
     // <- e (receive initiator's ephemeral key)
@@ -477,12 +525,12 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
 
     let _payload1 = noise
         .read_message(msg1)
-        .map_err(|e| NodeError::Handshake(format!("Failed to process msg1: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg1: {}", e).into()))?;
 
     // 2. Send message 2 (-> e, ee, s, es)
     let msg2 = noise
         .write_message(&[])
-        .map_err(|e| NodeError::Handshake(format!("Failed to create msg2: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg2: {}", e).into()))?;
 
     tracing::trace!(
         "Sending handshake msg2 ({} bytes) to {}",
@@ -493,7 +541,7 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
     transport
         .send_to(&msg2, peer_addr)
         .await
-        .map_err(|e| NodeError::Transport(format!("Failed to send msg2: {}", e)))?;
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg2: {}", e).into()))?;
 
     // 3. Receive message 3 (<- s, se)
     // Use channel if provided (prevents racing with packet_receive_loop)
@@ -502,8 +550,8 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
         // Receive via channel (registered in pending_handshakes)
         let packet = tokio::time::timeout(Duration::from_secs(5), rx)
             .await
-            .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg3".to_string()))?
-            .map_err(|_| NodeError::Handshake("Handshake channel closed".to_string()))?;
+            .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg3".into()))?
+            .map_err(|_| NodeError::Handshake("Handshake channel closed".into()))?;
         (packet.data, packet.from)
     } else {
         // Direct recv_from (fallback for tests)
@@ -511,10 +559,10 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
         let (size, from) =
             tokio::time::timeout(Duration::from_secs(5), transport.recv_from(&mut buf))
                 .await
-                .map_err(|_| {
-                    NodeError::Handshake("Handshake timeout waiting for msg3".to_string())
-                })?
-                .map_err(|e| NodeError::Transport(format!("Failed to receive msg3: {}", e)))?;
+                .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg3".into()))?
+                .map_err(|e| {
+                    NodeError::Transport(format!("Failed to receive msg3: {}", e).into())
+                })?;
         (buf[..size].to_vec(), from)
     };
 
@@ -528,10 +576,13 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
     };
 
     if !addr_matches {
-        return Err(NodeError::Handshake(format!(
-            "Received msg3 from unexpected address: {} (expected {})",
-            from, peer_addr
-        )));
+        return Err(NodeError::Handshake(
+            format!(
+                "Received msg3 from unexpected address: {} (expected {})",
+                from, peer_addr
+            )
+            .into(),
+        ));
     }
 
     tracing::trace!(
@@ -542,23 +593,23 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
 
     let _payload3 = noise
         .read_message(&msg3_data)
-        .map_err(|e| NodeError::Handshake(format!("Failed to process msg3: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg3: {}", e).into()))?;
 
     // Extract session keys after handshake completes
     if !noise.is_complete() {
         return Err(NodeError::Handshake(
-            "Handshake not complete after msg3".to_string(),
+            "Handshake not complete after msg3".into(),
         ));
     }
 
     // Get peer's public key BEFORE consuming noise with into_session_keys()
     let peer_id = noise.get_remote_static().ok_or_else(|| {
-        NodeError::Handshake("Failed to get remote static key after handshake".to_string())
+        NodeError::Handshake("Failed to get remote static key after handshake".into())
     })?;
 
     let keys = noise
         .into_session_keys()
-        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e)))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e).into()))?;
 
     // Create session crypto (responder: recv=send_key, send=recv_key - reversed from initiator)
     let crypto = SessionCrypto::new(keys.recv_key, keys.send_key, &keys.chain_key);
@@ -596,7 +647,7 @@ mod tests {
 
         assert_eq!(conn.session_id, session_id);
         assert_eq!(conn.peer_id, peer_id);
-        assert_eq!(conn.peer_addr, peer_addr);
+        assert_eq!(conn.peer_addr(), peer_addr);
         assert!(!conn.is_stale(Duration::from_secs(60)));
     }
 

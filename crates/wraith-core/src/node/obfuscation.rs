@@ -153,9 +153,9 @@ impl Node {
         // 4. Send via transport
         let transport = self.get_transport().await?;
         transport
-            .send_to(&wrapped, session.peer_addr)
+            .send_to(&wrapped, session.peer_addr())
             .await
-            .map_err(|e| NodeError::Transport(e.to_string()))?;
+            .map_err(|e| NodeError::Transport(e.to_string().into()))?;
 
         // 5. Update obfuscation statistics
         if let Ok(mut stats) = self.inner.obfuscation_stats.try_lock() {
@@ -204,7 +204,7 @@ impl Node {
             .inner
             .tls_wrapper
             .try_lock()
-            .map_err(|_| NodeError::Other("TLS wrapper lock contention".to_string()))?;
+            .map_err(|_| NodeError::Other("TLS wrapper lock contention".into()))?;
 
         let wrapped = wrapper.wrap(data);
 
@@ -270,11 +270,11 @@ impl Node {
             .inner
             .tls_wrapper
             .try_lock()
-            .map_err(|_| NodeError::Other("TLS wrapper lock contention".to_string()))?;
+            .map_err(|_| NodeError::Other("TLS wrapper lock contention".into()))?;
 
         let unwrapped = wrapper
             .unwrap(data)
-            .map_err(|e| NodeError::Other(format!("TLS unwrap failed: {}", e)))?;
+            .map_err(|e| NodeError::Other(format!("TLS unwrap failed: {}", e).into()))?;
 
         tracing::trace!(
             "Unwrapped TLS: {} bytes -> {} bytes",
@@ -292,7 +292,7 @@ impl Node {
 
         let unwrapped = wrapper
             .unwrap(data)
-            .map_err(|e| NodeError::Other(format!("WebSocket unwrap failed: {}", e)))?;
+            .map_err(|e| NodeError::Other(format!("WebSocket unwrap failed: {}", e).into()))?;
 
         tracing::trace!(
             "Unwrapped WebSocket: {} bytes -> {} bytes",
@@ -310,7 +310,7 @@ impl Node {
 
         let unwrapped = tunnel
             .parse_dns_response(data)
-            .map_err(|e| NodeError::Other(format!("DoH unwrap failed: {}", e)))?;
+            .map_err(|e| NodeError::Other(format!("DoH unwrap failed: {}", e).into()))?;
 
         tracing::trace!(
             "Unwrapped DoH: {} bytes -> {} bytes",

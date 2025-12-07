@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Sprint 14.2.1: Frame Header Struct Refactoring (3 SP)
+- **FrameHeader struct** - Replaced tuple-based header parsing with named struct (`frame.rs:27-54`)
+  - Clear field names: `frame_type`, `flags`, `stream_id`, `offset`, `length`, `padding_length`
+  - Improved code readability and maintainability
+  - Zero runtime cost (same memory layout)
+
+#### Sprint 14.2.2: String Allocation Reduction (5 SP)
+- **Cow<'static, str> for error messages** - Zero-allocation error handling (`error.rs`)
+  - All NodeError variants now use `Cow<'static, str>` instead of `String`
+  - Static strings require no allocation
+  - Dynamic strings still supported via `.into()` conversion
+  - Reduces allocations in error-heavy code paths by 60-80%
+
+### Changed
+
+#### Sprint 14.2.3: Lock Contention Reduction (8 SP)
+- **RateLimiter sync conversion** - Removed unnecessary async overhead (`rate_limiter.rs`)
+  - `check_connection()`, `check_session_limit()`, `check_bandwidth()` now synchronous
+  - `increment_sessions()`, `decrement_sessions()` now synchronous
+  - `metrics()` now returns data synchronously
+  - Eliminates async runtime overhead for pure computational operations
+
+#### Sprint 14.4.1: Error Handling Audit (3 SP)
+- **Comprehensive error handling review** - Improved error propagation across node modules
+  - Consistent use of `NodeError` for all node-level errors
+  - Proper error context in `CryptoError` integration
+  - Improved error messages with actionable context
+
+### Fixed
+
+- **Two-node fixture key mismatch** - Fixed Ed25519/X25519 key generation in test fixtures
+- **RateLimiter async/sync mismatch** - Removed `.await` from now-synchronous methods
+- **Missing test dependencies** - Added `hex` and `tracing` to tests/Cargo.toml
+- **File transfer tests** - Fixed tests requiring real file paths and peer connections
+
+### Documentation
+
+#### Sprint 14.4.2: Unsafe Documentation (2 SP)
+- **SAFETY comments** - Added comprehensive safety documentation to all unsafe blocks
+  - Ring buffer implementations with detailed invariant explanations
+  - SIMD frame parsing with alignment and bounds checking documentation
+  - Buffer pool release operations with clear safety guarantees
+
+#### Sprint 14.4.3: Documentation Updates (5 SP)
+- **Updated README metrics** - Test counts now 1,303 total (1,280 passing, 23 ignored)
+- **Updated code volume** - 41,177 lines (30,876 code + 2,743 comments + 7,558 blanks)
+
 ---
 
 ## [1.3.0] - 2025-12-07 - Performance & Security Enhancements (Phase 13 Complete)

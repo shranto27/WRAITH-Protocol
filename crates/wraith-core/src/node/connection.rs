@@ -4,6 +4,7 @@
 
 use crate::node::session::PeerId;
 use crate::node::{Node, NodeError};
+use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::time::interval;
@@ -139,7 +140,7 @@ impl Node {
             .stream_id(0) // Connection-level (stream 0)
             .sequence(sequence)
             .build(128) // Minimum size with padding
-            .map_err(|e| NodeError::Other(format!("Failed to build PING frame: {}", e)))?;
+            .map_err(|e| NodeError::Other(format!("Failed to build PING frame: {}", e).into()))?;
 
         // Encrypt frame
         let encrypted = session.encrypt_frame(&frame).await?;
@@ -148,13 +149,11 @@ impl Node {
         let transport_guard = self.inner.transport.lock().await;
         if let Some(transport) = transport_guard.as_ref() {
             transport
-                .send_to(&encrypted, session.peer_addr)
+                .send_to(&encrypted, session.peer_addr())
                 .await
-                .map_err(|e| NodeError::Transport(format!("Failed to send PING: {}", e)))?;
+                .map_err(|e| NodeError::Transport(format!("Failed to send PING: {}", e).into()))?;
         } else {
-            return Err(NodeError::Transport(
-                "Transport not initialized".to_string(),
-            ));
+            return Err(NodeError::Transport("Transport not initialized".into()));
         }
         drop(transport_guard);
 
@@ -203,6 +202,7 @@ impl Node {
     ) -> Result<(), NodeError> {
         use crate::frame::{FrameBuilder, FrameType};
         use crate::migration::PathValidator;
+        use crate::node::node::MigrationState;
 
         tracing::info!(
             "Migrating session for peer {:?} to new address {}",
@@ -233,6 +233,21 @@ impl Node {
         // Initiate PATH_CHALLENGE
         let challenge = path_validator.initiate_challenge(path_id);
 
+        // Create channel for PATH_RESPONSE
+        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+
+        // Register pending migration
+        let migration_state = MigrationState {
+            peer_id: *peer_id,
+            new_addr,
+            challenge,
+            sender: response_tx,
+            initiated_at: std::time::Instant::now(),
+        };
+        self.inner
+            .pending_migrations
+            .insert(path_id, migration_state);
+
         // Build PATH_CHALLENGE frame
         let frame = FrameBuilder::new()
             .frame_type(FrameType::PathChallenge)
@@ -240,7 +255,9 @@ impl Node {
             .sequence(0)
             .payload(&challenge)
             .build(128)
-            .map_err(|e| NodeError::Migration(format!("Failed to build PATH_CHALLENGE: {}", e)))?;
+            .map_err(|e| {
+                NodeError::Migration(format!("Failed to build PATH_CHALLENGE: {}", e).into())
+            })?;
 
         // Encrypt and send to new address
         let encrypted = session.encrypt_frame(&frame).await?;
@@ -248,31 +265,27 @@ impl Node {
         let transport_guard = self.inner.transport.lock().await;
         if let Some(transport) = transport_guard.as_ref() {
             transport.send_to(&encrypted, new_addr).await.map_err(|e| {
-                NodeError::Migration(format!("Failed to send PATH_CHALLENGE: {}", e))
+                self.inner.pending_migrations.remove(&path_id);
+                NodeError::Migration(format!("Failed to send PATH_CHALLENGE: {}", e).into())
             })?;
         } else {
-            return Err(NodeError::Migration(
-                "Transport not initialized".to_string(),
-            ));
+            self.inner.pending_migrations.remove(&path_id);
+            return Err(NodeError::Migration("Transport not initialized".into()));
         }
         drop(transport_guard);
 
-        // TODO: Wait for PATH_RESPONSE from new address
-        // For full implementation, this requires:
-        // 1. A pending_migrations map to track challenge/response state
-        // 2. packet_receive_loop to route PATH_RESPONSE frames
-        // 3. Validation that response comes from the new address
-        // 4. Updating the session's peer_addr after successful validation
-        //
-        // For now, we document the migration attempt and verify with ping
-        tracing::debug!("PATH_CHALLENGE sent to {}, awaiting validation", new_addr);
+        tracing::debug!(
+            "PATH_CHALLENGE sent to {}, awaiting PATH_RESPONSE",
+            new_addr
+        );
 
-        // Simulate validation delay
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Verify new path with ping (this validates transport layer connectivity)
-        match self.ping_session(peer_id, session.clone()).await {
-            Ok(latency) => {
+        // Wait for PATH_RESPONSE with timeout
+        let timeout = Duration::from_secs(5);
+        match tokio::time::timeout(timeout, response_rx).await {
+            Ok(Ok(Ok(latency))) => {
+                // Migration successful
+                // TODO: Update session peer address in sessions map
+                // Note: PeerConnection is immutable (behind Arc), need to update sessions map entry
                 tracing::info!(
                     "Migration to {} verified with {}µs RTT",
                     new_addr,
@@ -280,12 +293,19 @@ impl Node {
                 );
                 Ok(())
             }
-            Err(e) => {
+            Ok(Ok(Err(e))) => {
                 tracing::error!("Migration validation failed: {}", e);
-                Err(NodeError::Migration(format!(
-                    "Path validation failed: {}",
-                    e
+                Err(e)
+            }
+            Ok(Err(_)) => {
+                self.inner.pending_migrations.remove(&path_id);
+                Err(NodeError::Migration(Cow::Borrowed(
+                    "Migration channel closed",
                 )))
+            }
+            Err(_) => {
+                self.inner.pending_migrations.remove(&path_id);
+                Err(NodeError::Timeout(Cow::Borrowed("Migration timed out")))
             }
         }
     }

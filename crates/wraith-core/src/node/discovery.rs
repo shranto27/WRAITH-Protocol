@@ -128,7 +128,9 @@ impl Node {
             let guard = self.inner.discovery.lock().await;
             guard
                 .as_ref()
-                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .ok_or(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                    "Discovery not initialized",
+                )))?
                 .clone()
         };
 
@@ -160,7 +162,9 @@ impl Node {
             let guard = self.inner.discovery.lock().await;
             guard
                 .as_ref()
-                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .ok_or(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                    "Discovery not initialized",
+                )))?
                 .clone()
         };
 
@@ -224,7 +228,9 @@ impl Node {
             let guard = self.inner.discovery.lock().await;
             guard
                 .as_ref()
-                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .ok_or(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                    "Discovery not initialized",
+                )))?
                 .clone()
         };
 
@@ -270,9 +276,9 @@ impl Node {
     /// Returns error if all bootstrap attempts fail.
     pub async fn bootstrap(&self, bootstrap_nodes: &[SocketAddr]) -> Result<(), NodeError> {
         if bootstrap_nodes.is_empty() {
-            return Err(NodeError::Discovery(
-                "No bootstrap nodes provided".to_string(),
-            ));
+            return Err(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                "No bootstrap nodes provided",
+            )));
         }
 
         tracing::info!("Bootstrapping from {} nodes", bootstrap_nodes.len());
@@ -282,7 +288,9 @@ impl Node {
             let guard = self.inner.discovery.lock().await;
             guard
                 .as_ref()
-                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .ok_or(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                    "Discovery not initialized",
+                )))?
                 .clone()
         };
 
@@ -317,9 +325,9 @@ impl Node {
         drop(dht); // Release lock before DHT operations
 
         if success_count == 0 {
-            return Err(NodeError::Discovery(
-                "Failed to bootstrap from any node".to_string(),
-            ));
+            return Err(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                "Failed to bootstrap from any node",
+            )));
         }
 
         // Perform iterative FIND_NODE for our own ID to populate routing table

@@ -151,6 +151,27 @@ impl FrameFlags {
     }
 }
 
+/// Parsed frame header fields
+///
+/// This struct contains all the fields extracted from a frame header,
+/// replacing the previous 6-tuple return type for improved readability
+/// and maintainability.
+#[derive(Debug, Clone, Copy)]
+pub struct FrameHeader {
+    /// Frame type (DATA, ACK, CONTROL, etc.)
+    pub frame_type: FrameType,
+    /// Frame flags bitmap
+    pub flags: FrameFlags,
+    /// Stream identifier
+    pub stream_id: u16,
+    /// Sequence number
+    pub sequence: u32,
+    /// File offset for DATA frames
+    pub offset: u64,
+    /// Payload length in bytes
+    pub payload_len: u16,
+}
+
 /// SIMD-accelerated frame parsing
 #[cfg(feature = "simd")]
 mod simd_parse {
@@ -166,7 +187,7 @@ mod simd_parse {
     ///
     /// Caller must ensure data.len() >= FRAME_HEADER_SIZE (28 bytes).
     #[cfg(target_arch = "x86_64")]
-    pub(super) fn parse_header_simd(data: &[u8]) -> (FrameType, FrameFlags, u16, u32, u64, u16) {
+    pub(super) fn parse_header_simd(data: &[u8]) -> super::FrameHeader {
         #[cfg(target_arch = "x86_64")]
         {
             // SAFETY: Caller ensures data.len() >= FRAME_HEADER_SIZE (28 bytes). x86_64 SSE2
@@ -198,7 +219,14 @@ mod simd_parse {
                     FrameType::try_from(frame_type_byte).unwrap_or(FrameType::Reserved);
                 let flags = FrameFlags(flags_byte);
 
-                (frame_type, flags, stream_id, sequence, offset, payload_len)
+                super::FrameHeader {
+                    frame_type,
+                    flags,
+                    stream_id,
+                    sequence,
+                    offset,
+                    payload_len,
+                }
             }
         }
     }
@@ -211,7 +239,7 @@ mod simd_parse {
     ///
     /// Caller must ensure data.len() >= FRAME_HEADER_SIZE (28 bytes).
     #[cfg(target_arch = "aarch64")]
-    pub(super) fn parse_header_simd(data: &[u8]) -> (FrameType, FrameFlags, u16, u32, u64, u16) {
+    pub(super) fn parse_header_simd(data: &[u8]) -> super::FrameHeader {
         #[cfg(target_arch = "aarch64")]
         {
             // SAFETY: Caller ensures data.len() >= FRAME_HEADER_SIZE (28 bytes). ARM64 NEON
@@ -242,14 +270,21 @@ mod simd_parse {
                     FrameType::try_from(frame_type_byte).unwrap_or(FrameType::Reserved);
                 let flags = FrameFlags(flags_byte);
 
-                (frame_type, flags, stream_id, sequence, offset, payload_len)
+                super::FrameHeader {
+                    frame_type,
+                    flags,
+                    stream_id,
+                    sequence,
+                    offset,
+                    payload_len,
+                }
             }
         }
     }
 
     /// Fallback for unsupported architectures - uses scalar parsing
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    pub(super) fn parse_header_simd(data: &[u8]) -> (FrameType, FrameFlags, u16, u32, u64, u16) {
+    pub(super) fn parse_header_simd(data: &[u8]) -> super::FrameHeader {
         super::parse_header_scalar(data)
     }
 }
@@ -258,7 +293,7 @@ mod simd_parse {
 ///
 /// This is the fallback implementation used when the `simd` feature
 /// is disabled or on platforms without SIMD support.
-fn parse_header_scalar(data: &[u8]) -> (FrameType, FrameFlags, u16, u32, u64, u16) {
+fn parse_header_scalar(data: &[u8]) -> FrameHeader {
     let frame_type_byte = data[8];
     let flags_byte = data[9];
     let stream_id = u16::from_be_bytes([data[10], data[11]]);
@@ -271,7 +306,14 @@ fn parse_header_scalar(data: &[u8]) -> (FrameType, FrameFlags, u16, u32, u64, u1
     let frame_type = FrameType::try_from(frame_type_byte).unwrap_or(FrameType::Reserved);
     let flags = FrameFlags(flags_byte);
 
-    (frame_type, flags, stream_id, sequence, offset, payload_len)
+    FrameHeader {
+        frame_type,
+        flags,
+        stream_id,
+        sequence,
+        offset,
+        payload_len,
+    }
 }
 
 /// Zero-copy frame view into a packet buffer
@@ -311,51 +353,49 @@ impl<'a> Frame<'a> {
 
         // Use SIMD parsing when feature is enabled, otherwise use scalar
         #[cfg(feature = "simd")]
-        let (frame_type, flags, stream_id, sequence, offset, payload_len) =
-            simd_parse::parse_header_simd(data);
+        let header = simd_parse::parse_header_simd(data);
 
         #[cfg(not(feature = "simd"))]
-        let (frame_type, flags, stream_id, sequence, offset, payload_len) =
-            parse_header_scalar(data);
+        let header = parse_header_scalar(data);
 
         // Validate frame type (SIMD path uses unwrap_or(Reserved) to avoid branching)
-        if matches!(frame_type, FrameType::Reserved) {
+        if matches!(header.frame_type, FrameType::Reserved) {
             return Err(FrameType::try_from(data[8]).unwrap_err());
         }
 
-        if FRAME_HEADER_SIZE + payload_len as usize > data.len() {
+        if FRAME_HEADER_SIZE + header.payload_len as usize > data.len() {
             return Err(FrameError::PayloadOverflow);
         }
 
         // Validate stream ID (1-15 are reserved for protocol use)
-        if stream_id > 0 && stream_id < 16 {
-            return Err(FrameError::ReservedStreamId(stream_id as u32));
+        if header.stream_id > 0 && header.stream_id < 16 {
+            return Err(FrameError::ReservedStreamId(header.stream_id as u32));
         }
 
         // Validate offset (sanity check against max file size)
-        if offset > MAX_FILE_OFFSET {
+        if header.offset > MAX_FILE_OFFSET {
             return Err(FrameError::InvalidOffset {
-                offset,
+                offset: header.offset,
                 max: MAX_FILE_OFFSET,
             });
         }
 
         // Validate payload length
-        if payload_len as usize > MAX_PAYLOAD_SIZE {
+        if header.payload_len as usize > MAX_PAYLOAD_SIZE {
             return Err(FrameError::PayloadTooLarge {
-                size: payload_len as usize,
+                size: header.payload_len as usize,
                 max: MAX_PAYLOAD_SIZE,
             });
         }
 
         Ok(Self {
             raw: data,
-            kind: frame_type,
-            flags,
-            stream_id,
-            sequence,
-            offset,
-            payload_len,
+            kind: header.frame_type,
+            flags: header.flags,
+            stream_id: header.stream_id,
+            sequence: header.sequence,
+            offset: header.offset,
+            payload_len: header.payload_len,
         })
     }
 
@@ -376,25 +416,24 @@ impl<'a> Frame<'a> {
             });
         }
 
-        let (frame_type, flags, stream_id, sequence, offset, payload_len) =
-            parse_header_scalar(data);
+        let header = parse_header_scalar(data);
 
-        if matches!(frame_type, FrameType::Reserved) {
+        if matches!(header.frame_type, FrameType::Reserved) {
             return Err(FrameType::try_from(data[8]).unwrap_err());
         }
 
-        if FRAME_HEADER_SIZE + payload_len as usize > data.len() {
+        if FRAME_HEADER_SIZE + header.payload_len as usize > data.len() {
             return Err(FrameError::PayloadOverflow);
         }
 
         Ok(Self {
             raw: data,
-            kind: frame_type,
-            flags,
-            stream_id,
-            sequence,
-            offset,
-            payload_len,
+            kind: header.frame_type,
+            flags: header.flags,
+            stream_id: header.stream_id,
+            sequence: header.sequence,
+            offset: header.offset,
+            payload_len: header.payload_len,
         })
     }
 
@@ -419,25 +458,24 @@ impl<'a> Frame<'a> {
             });
         }
 
-        let (frame_type, flags, stream_id, sequence, offset, payload_len) =
-            simd_parse::parse_header_simd(data);
+        let header = simd_parse::parse_header_simd(data);
 
-        if matches!(frame_type, FrameType::Reserved) {
+        if matches!(header.frame_type, FrameType::Reserved) {
             return Err(FrameType::try_from(data[8]).unwrap_err());
         }
 
-        if FRAME_HEADER_SIZE + payload_len as usize > data.len() {
+        if FRAME_HEADER_SIZE + header.payload_len as usize > data.len() {
             return Err(FrameError::PayloadOverflow);
         }
 
         Ok(Self {
             raw: data,
-            kind: frame_type,
-            flags,
-            stream_id,
-            sequence,
-            offset,
-            payload_len,
+            kind: header.frame_type,
+            flags: header.flags,
+            stream_id: header.stream_id,
+            sequence: header.sequence,
+            offset: header.offset,
+            payload_len: header.payload_len,
         })
     }
 

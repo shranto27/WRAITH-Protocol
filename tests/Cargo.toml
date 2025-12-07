@@ -20,6 +20,8 @@ wraith-discovery = { path = "../crates/wraith-discovery" }
 wraith-files = { path = "../crates/wraith-files" }
 rand_core = { workspace = true }
 rand = "0.8"
+hex = { workspace = true }
+tracing = { workspace = true }
 criterion = { workspace = true }
 proptest = { workspace = true }
 tempfile = "3"

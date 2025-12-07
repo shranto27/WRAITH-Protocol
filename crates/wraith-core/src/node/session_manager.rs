@@ -77,7 +77,7 @@ impl SessionManager {
         let guard = self.transport.lock().await;
         guard
             .as_ref()
-            .ok_or_else(|| NodeError::InvalidState("Transport not initialized".to_string()))
+            .ok_or_else(|| NodeError::invalid_state("Transport not initialized"))
             .cloned()
     }
 

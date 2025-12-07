@@ -54,7 +54,9 @@ impl Node {
             let guard = self.inner.discovery.lock().await;
             guard
                 .as_ref()
-                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .ok_or(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                    "Discovery not initialized",
+                )))?
                 .clone()
         };
 
@@ -178,7 +180,7 @@ impl Node {
         }
 
         Err(last_error.unwrap_or_else(|| {
-            NodeError::NatTraversal("All direct connection attempts failed".to_string())
+            NodeError::NatTraversal("All direct connection attempts failed".into())
         }))
     }
 
@@ -214,9 +216,9 @@ impl Node {
             }
         }
 
-        Err(NodeError::NatTraversal(
-            "All candidate pairs failed".to_string(),
-        ))
+        Err(NodeError::NatTraversal(std::borrow::Cow::Borrowed(
+            "All candidate pairs failed",
+        )))
     }
 
     /// Connect via relay server
@@ -231,7 +233,9 @@ impl Node {
             let guard = self.inner.discovery.lock().await;
             guard
                 .as_ref()
-                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .ok_or(NodeError::Discovery(std::borrow::Cow::Borrowed(
+                    "Discovery not initialized",
+                )))?
                 .clone()
         };
 
@@ -278,19 +282,17 @@ impl Node {
                             peer.peer_id,
                             e
                         );
-                        Err(NodeError::NatTraversal(format!(
-                            "Relay handshake failed: {}",
-                            e
-                        )))
+                        Err(NodeError::NatTraversal(
+                            format!("Relay handshake failed: {}", e).into(),
+                        ))
                     }
                 }
             }
             Err(e) => {
                 tracing::warn!("Relay connection failed: {}", e);
-                Err(NodeError::NatTraversal(format!(
-                    "Relay connection failed: {}",
-                    e
-                )))
+                Err(NodeError::NatTraversal(
+                    format!("Relay connection failed: {}", e).into(),
+                ))
             }
         }
     }
@@ -521,7 +523,7 @@ impl Node {
                     Ok((**conn_arc).clone())
                 } else {
                     Err(NodeError::NatTraversal(
-                        "Session established but connection not found".to_string(),
+                        "Session established but connection not found".into(),
                     ))
                 }
             }
@@ -532,10 +534,9 @@ impl Node {
                     remote.address,
                     e
                 );
-                Err(NodeError::NatTraversal(format!(
-                    "Candidate connection failed: {}",
-                    e
-                )))
+                Err(NodeError::NatTraversal(
+                    format!("Candidate connection failed: {}", e).into(),
+                ))
             }
         }
     }

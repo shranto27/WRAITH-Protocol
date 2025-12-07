@@ -102,8 +102,13 @@ pub fn get_numa_node_count() -> usize {
 pub unsafe fn allocate_on_node(size: usize, node: usize) -> Option<*mut u8> {
     use libc::{MAP_ANONYMOUS, MAP_PRIVATE, PROT_READ, PROT_WRITE, mmap};
 
-    // SAFETY: mmap is a standard POSIX syscall. We request anonymous private mapping with
-    // valid size and protection flags. The returned address is checked for MAP_FAILED.
+    // SAFETY: mmap syscall is safe under these conditions:
+    // - size parameter is valid (non-zero, within system limits)
+    // - Protection flags (PROT_READ | PROT_WRITE) are valid combinations
+    // - Mapping flags (MAP_PRIVATE | MAP_ANONYMOUS) are valid combinations
+    // - File descriptor -1 is correct for anonymous mappings
+    // - Return value is checked for MAP_FAILED before dereferencing
+    // - Caller is responsible for calling munmap with same size
     let addr = unsafe {
         mmap(
             ptr::null_mut(),
@@ -156,8 +161,12 @@ pub unsafe fn allocate_on_node(size: usize, _node: usize) -> Option<*mut u8> {
     use std::alloc::{Layout, alloc};
 
     let layout = Layout::from_size_align(size, std::mem::align_of::<u8>()).ok()?;
-    // SAFETY: Layout is valid (created from `from_size_align` which validated alignment).
-    // Caller is responsible for deallocating with `deallocate_on_node`.
+    // SAFETY: alloc call is safe under these conditions:
+    // - Layout is valid (created via from_size_align which validates alignment and size)
+    // - Alignment is always valid for u8 (alignment of 1)
+    // - Return value is checked for null before use
+    // - Caller must deallocate with same layout via deallocate_on_node
+    // - Memory is not initialized; caller must initialize before use
     let ptr = unsafe { alloc(layout) };
 
     if ptr.is_null() { None } else { Some(ptr) }
@@ -173,8 +182,12 @@ pub unsafe fn allocate_on_node(size: usize, _node: usize) -> Option<*mut u8> {
 #[cfg(target_os = "linux")]
 pub unsafe fn deallocate_on_node(ptr: *mut u8, size: usize) {
     if !ptr.is_null() {
-        // SAFETY: munmap is a standard POSIX syscall. Pointer and size must match the original
-        // mmap allocation, which is enforced by caller's contract.
+        // SAFETY: munmap syscall is safe under these conditions:
+        // - ptr must be a valid pointer returned from mmap (caller's responsibility)
+        // - size must match the original mmap allocation size (caller's responsibility)
+        // - ptr has not been previously deallocated (caller's responsibility)
+        // - Cast to *mut libc::c_void is valid for any pointer type
+        // - munmap failure is acceptable (memory leak is better than use-after-free)
         unsafe {
             libc::munmap(ptr as *mut libc::c_void, size);
         }
@@ -194,11 +207,17 @@ pub unsafe fn deallocate_on_node(ptr: *mut u8, size: usize) {
     use std::alloc::{Layout, dealloc};
 
     if !ptr.is_null() {
-        // SAFETY: Layout matches the allocation from allocate_on_node (non-Linux path).
-        // Pointer and size must be valid from original allocation (enforced by caller).
-        // The alignment is always valid (1 for u8).
+        // SAFETY: from_size_align_unchecked is safe under these conditions:
+        // - size matches the original allocation (caller's responsibility)
+        // - Alignment of 1 (for u8) is always valid and a power of 2
+        // - Original allocation used same alignment via from_size_align
         let layout = unsafe { Layout::from_size_align_unchecked(size, std::mem::align_of::<u8>()) };
-        // SAFETY: ptr was allocated with the same layout via allocate_on_node.
+
+        // SAFETY: dealloc is safe under these conditions:
+        // - ptr was allocated with alloc using the same layout (caller's responsibility)
+        // - Layout matches the allocation (size and alignment both correct)
+        // - ptr has not been previously deallocated (caller's responsibility)
+        // - ptr is non-null (checked above)
         unsafe { dealloc(ptr, layout) };
     }
 }
@@ -225,9 +244,12 @@ impl NumaAllocator {
     /// Get the current CPU's NUMA node
     #[cfg(target_os = "linux")]
     fn current_numa_node() -> Option<usize> {
-        // SAFETY: sched_getcpu is a standard Linux syscall that returns the current CPU ID
-        // or -1 on error. Takes no arguments, has no side effects, and cannot cause memory
-        // unsafety. Return value is checked for validity (>= 0) before use.
+        // SAFETY: sched_getcpu syscall is safe under these conditions:
+        // - Takes no arguments, so no preconditions on parameters
+        // - Has no side effects (read-only query of scheduler state)
+        // - Cannot cause memory unsafety (no pointer dereferencing)
+        // - Returns valid CPU ID (>= 0) or -1 on error
+        // - Return value is checked for validity before use as usize
         let cpu = unsafe { libc::sched_getcpu() };
         if cpu >= 0 {
             get_numa_node_for_cpu(cpu as usize)
@@ -247,11 +269,17 @@ impl NumaAllocator {
     /// The caller must free the memory with `deallocate()`
     pub unsafe fn allocate(&self, size: usize) -> Option<*mut u8> {
         if let Some(node) = self.node {
-            // SAFETY: Delegates to allocate_on_node with valid node ID.
+            // SAFETY: Delegates to allocate_on_node with these guarantees:
+            // - node is a valid NUMA node ID (stored in allocator at creation)
+            // - size parameter is passed through unchanged
+            // - Caller's safety obligations are passed to allocate_on_node
             unsafe { allocate_on_node(size, node) }
         } else {
             // Fallback to regular allocation on node 0
-            // SAFETY: Delegates to allocate_on_node with default node 0.
+            // SAFETY: Delegates to allocate_on_node with these guarantees:
+            // - Node 0 is always valid (system has at least one NUMA node)
+            // - size parameter is passed through unchanged
+            // - Caller's safety obligations are passed to allocate_on_node
             unsafe { allocate_on_node(size, 0) }
         }
     }
@@ -261,7 +289,11 @@ impl NumaAllocator {
     /// # Safety
     /// The caller must ensure the pointer was allocated by this allocator
     pub unsafe fn deallocate(&self, ptr: *mut u8, size: usize) {
-        // SAFETY: Delegates to deallocate_on_node. Caller must ensure ptr/size match allocation.
+        // SAFETY: Delegates to deallocate_on_node with these guarantees:
+        // - ptr must be from allocate_on_node (caller's responsibility)
+        // - size must match original allocation (caller's responsibility)
+        // - ptr has not been previously deallocated (caller's responsibility)
+        // - All safety obligations are passed through to deallocate_on_node
         unsafe {
             deallocate_on_node(ptr, size);
         }
@@ -299,7 +331,12 @@ mod tests {
 
     #[test]
     fn test_allocate_deallocate() {
-        // SAFETY: Test allocates memory, writes test pattern, then deallocates with matching size.
+        // SAFETY: Test code is safe under these conditions:
+        // - Memory is allocated with allocate_on_node
+        // - Allocated pointer is checked for Some before use
+        // - write_bytes writes within allocated size bounds
+        // - Deallocation uses same size as allocation
+        // - Memory is not accessed after deallocation
         unsafe {
             let size = 4096;
             let ptr = allocate_on_node(size, 0);
@@ -331,8 +368,14 @@ mod tests {
     fn test_numa_allocator_allocate_deallocate() {
         let allocator = NumaAllocator::new();
 
-        // SAFETY: Test allocates memory via NUMA allocator, writes/reads test pattern with valid
-        // pointer arithmetic (i < size), then deallocates with matching size.
+        // SAFETY: Test code is safe under these conditions:
+        // - Memory is allocated via NumaAllocator::allocate
+        // - Allocated pointer is checked for Some before use
+        // - ptr.add(i) is valid for all i in 0..size (pointer arithmetic within bounds)
+        // - Writes via *ptr.add(i) are within allocated memory
+        // - Reads via *ptr.add(i) are of previously written values
+        // - Deallocation uses same size as allocation
+        // - Memory is not accessed after deallocation
         unsafe {
             let size = 1024;
             if let Some(ptr) = allocator.allocate(size) {

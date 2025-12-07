@@ -166,7 +166,7 @@ impl Node {
         }
 
         // Check connection rate limit
-        if !self.inner.rate_limiter.check_connection(source_ip).await {
+        if !self.inner.rate_limiter.check_connection(source_ip) {
             tracing::warn!("Rate limit exceeded for IP: {}", source_ip);
             self.inner.ip_reputation.record_failure(source_ip).await;
             let event = SecurityEvent::new(SecurityEventType::RateLimitExceeded, source_ip)
@@ -213,8 +213,9 @@ impl Node {
                     match conn.decrypt_frame(&unwrapped[8..]).await {
                         Ok(frame_bytes) => {
                             let node = self.clone();
+                            let peer_id = conn.peer_id;
                             tokio::spawn(async move {
-                                if let Err(e) = node.dispatch_frame(frame_bytes).await {
+                                if let Err(e) = node.dispatch_frame(frame_bytes, peer_id).await {
                                     tracing::warn!("Error handling frame: {}", e);
                                 }
                             });
@@ -242,13 +243,19 @@ impl Node {
     }
 
     /// Dispatch frame to appropriate handler based on frame type
-    pub(crate) async fn dispatch_frame(&self, frame_bytes: Vec<u8>) -> Result<()> {
+    pub(crate) async fn dispatch_frame(
+        &self,
+        frame_bytes: Vec<u8>,
+        peer_id: crate::node::session::PeerId,
+    ) -> Result<()> {
         let frame = Frame::parse(&frame_bytes)
-            .map_err(|e| NodeError::Other(format!("Failed to parse frame: {}", e)))?;
+            .map_err(|e| NodeError::Other(format!("Failed to parse frame: {}", e).into()))?;
 
         match frame.frame_type() {
             FrameType::StreamOpen => self.handle_stream_open_frame(frame).await,
             FrameType::Data => self.handle_data_frame(frame).await,
+            FrameType::Pong => self.handle_pong_frame(frame, peer_id).await,
+            FrameType::PathResponse => self.handle_path_response_frame(frame, peer_id).await,
             FrameType::StreamClose => {
                 tracing::debug!("Received StreamClose frame");
                 Ok(())
@@ -281,13 +288,13 @@ impl Node {
         );
 
         // Check session limit
-        if !self.inner.rate_limiter.check_session_limit().await {
+        if !self.inner.rate_limiter.check_session_limit() {
             tracing::warn!("Session limit exceeded for connection from {}", peer_addr);
             self.inner.ip_reputation.record_failure(source_ip).await;
             let event = SecurityEvent::new(SecurityEventType::ConnectionLimitExceeded, source_ip)
                 .with_message("Global session limit exceeded");
             self.inner.security_monitor.record_event(event).await;
-            return Err(NodeError::Transport("Session limit exceeded".to_string()));
+            return Err(NodeError::Transport("Session limit exceeded".into()));
         }
 
         // Create channel for receiving msg3
@@ -385,7 +392,7 @@ impl Node {
             metadata.file_size,
             metadata.chunk_size as usize,
         )
-        .map_err(NodeError::Io)?;
+        .map_err(|e| NodeError::Io(e.to_string()))?;
 
         // Create tree hash (root only for now)
         let tree_hash = wraith_files::tree_hash::FileTreeHash {
@@ -401,6 +408,30 @@ impl Node {
             tree_hash,
         ));
         self.inner.transfers.insert(metadata.transfer_id, context);
+
+        Ok(())
+    }
+
+    /// Handle PONG frame (ping response)
+    pub(crate) async fn handle_pong_frame(
+        &self,
+        frame: Frame<'_>,
+        peer_id: crate::node::session::PeerId,
+    ) -> Result<()> {
+        let sequence = frame.sequence();
+
+        // Look up pending ping by (peer_id, sequence)
+        if let Some((_key, tx)) = self.inner.pending_pings.remove(&(peer_id, sequence)) {
+            // Send timestamp back to waiting ping_session
+            let _ = tx.send(std::time::Instant::now());
+            tracing::trace!("PONG received from {:?}, seq {}", peer_id, sequence);
+        } else {
+            tracing::debug!(
+                "Received unexpected PONG from {:?}, seq {}",
+                peer_id,
+                sequence
+            );
+        }
 
         Ok(())
     }
@@ -422,7 +453,9 @@ impl Node {
         }
 
         let context = matched_context.ok_or_else(|| {
-            NodeError::InvalidState(format!("No transfer for stream_id {}", frame.stream_id()))
+            NodeError::InvalidState(
+                format!("No transfer for stream_id {}", frame.stream_id()).into(),
+            )
         })?;
         let transfer_id = context.transfer_id;
 
@@ -432,7 +465,7 @@ impl Node {
                 .lock()
                 .await
                 .write_chunk(chunk_index, chunk_data)
-                .map_err(NodeError::Io)?;
+                .map_err(|e| NodeError::Io(e.to_string()))?;
         }
 
         // Verify chunk hash if available
@@ -440,7 +473,7 @@ impl Node {
             let computed_hash = blake3::hash(chunk_data);
             if computed_hash.as_bytes() != &context.tree_hash.chunks[chunk_index as usize] {
                 return Err(NodeError::InvalidState(
-                    "Chunk hash verification failed".to_string(),
+                    "Chunk hash verification failed".into(),
                 ));
             }
         }
@@ -454,6 +487,64 @@ impl Node {
                 "File transfer {:?} completed ({} bytes)",
                 hex::encode(&transfer_id[..8]),
                 transfer.file_size
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Handle PATH_RESPONSE frame (connection migration)
+    pub(crate) async fn handle_path_response_frame(
+        &self,
+        frame: Frame<'_>,
+        _peer_id: crate::node::session::PeerId,
+    ) -> Result<()> {
+        let response_data = frame.payload();
+        if response_data.len() != 8 {
+            tracing::warn!(
+                "Invalid PATH_RESPONSE payload length: {} (expected 8)",
+                response_data.len()
+            );
+            return Ok(());
+        }
+
+        let mut response_challenge = [0u8; 8];
+        response_challenge.copy_from_slice(response_data);
+
+        tracing::debug!(
+            "Received PATH_RESPONSE with challenge: {:?}",
+            response_challenge
+        );
+
+        // Find matching pending migration by iterating through all pending migrations
+        // and matching the challenge data
+        let mut matched_path_id = None;
+        for entry in self.inner.pending_migrations.iter() {
+            if entry.value().challenge == response_challenge {
+                matched_path_id = Some(*entry.key());
+                break;
+            }
+        }
+
+        if let Some(path_id) = matched_path_id {
+            if let Some((_path_id, migration_state)) =
+                self.inner.pending_migrations.remove(&path_id)
+            {
+                let latency = migration_state.initiated_at.elapsed();
+
+                tracing::info!(
+                    "PATH_RESPONSE validated for migration to {} (latency: {}µs)",
+                    migration_state.new_addr,
+                    latency.as_micros()
+                );
+
+                // Send success to waiting migrate_session
+                let _ = migration_state.sender.send(Ok(latency));
+            }
+        } else {
+            tracing::debug!(
+                "No matching pending migration for PATH_RESPONSE challenge: {:?}",
+                response_challenge
             );
         }
 
@@ -476,12 +567,14 @@ impl Node {
             .clone();
 
         let mut chunker = FileChunker::new(&file_path, self.inner.config.transfer.chunk_size)
-            .map_err(NodeError::Io)?;
+            .map_err(|e| NodeError::Io(e.to_string()))?;
 
         let total_chunks = chunker.num_chunks();
 
         for chunk_index in 0..total_chunks {
-            let chunk_data = chunker.read_chunk_at(chunk_index).map_err(NodeError::Io)?;
+            let chunk_data = chunker
+                .read_chunk_at(chunk_index)
+                .map_err(|e| NodeError::Io(e.to_string()))?;
             let chunk_len = chunk_data.len();
 
             // Verify chunk hash
@@ -489,7 +582,7 @@ impl Node {
                 let computed_hash = blake3::hash(&chunk_data);
                 if computed_hash.as_bytes() != &context.tree_hash.chunks[chunk_index as usize] {
                     return Err(NodeError::InvalidState(
-                        "Chunk hash verification failed".to_string(),
+                        "Chunk hash verification failed".into(),
                     ));
                 }
             }
@@ -544,14 +637,14 @@ impl Node {
         // Send via transport
         let transport = self.get_transport().await?;
         transport
-            .send_to(&wrapped, connection.peer_addr)
+            .send_to(&wrapped, connection.peer_addr())
             .await
-            .map_err(|e| NodeError::Transport(format!("Failed to send packet: {}", e)))?;
+            .map_err(|e| NodeError::Transport(format!("Failed to send packet: {}", e).into()))?;
 
         tracing::trace!(
             "Sent {} obfuscated bytes to {} (original: {} encrypted)",
             wrapped.len(),
-            connection.peer_addr,
+            connection.peer_addr(),
             encrypted_len
         );
 

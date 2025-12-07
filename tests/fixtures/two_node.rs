@@ -117,10 +117,10 @@ impl TwoNodeFixture {
         responder_config.transport.idle_timeout = Duration::from_secs(10);
 
         // Create identities
-        let initiator_identity = Identity::generate()
-            .map_err(|e| NodeError::Crypto(wraith_crypto::CryptoError::Handshake(e.to_string())))?;
-        let responder_identity = Identity::generate()
-            .map_err(|e| NodeError::Crypto(wraith_crypto::CryptoError::Handshake(e.to_string())))?;
+        let initiator_identity =
+            Identity::generate().map_err(|e| NodeError::Crypto(e.to_string()))?;
+        let responder_identity =
+            Identity::generate().map_err(|e| NodeError::Crypto(e.to_string()))?;
 
         // Create nodes
         let initiator =
@@ -144,7 +144,9 @@ impl TwoNodeFixture {
         UdpSocket::bind(addr)
             .await
             .map_err(|e| {
-                NodeError::TransportInit(format!("Port {} already in use: {}", addr.port(), e))
+                NodeError::TransportInit(
+                    format!("Port {} already in use: {}", addr.port(), e).into(),
+                )
             })
             .map(|_| ())
     }
@@ -238,7 +240,7 @@ impl TwoNodeFixture {
     ) -> Result<(), NodeError> {
         tokio::time::timeout(timeout, self.initiator.wait_for_transfer(*transfer_id))
             .await
-            .map_err(|_| NodeError::Timeout("Transfer did not complete in time".to_string()))?
+            .map_err(|_| NodeError::Timeout("Transfer did not complete in time".into()))?
     }
 
     /// Get transfer progress as a percentage (0.0 to 100.0)

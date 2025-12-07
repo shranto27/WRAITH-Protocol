@@ -6,11 +6,19 @@
 use crate::dht::{DhtNode, NodeId};
 use crate::nat::{Candidate, HolePuncher, IceGatherer, NatDetector, NatType};
 use crate::relay::client::{RelayClient, RelayClientState};
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::RwLock;
+
+/// Default STUN server 1 (Cloudflare DNS - placeholder for STUN)
+const DEFAULT_STUN_SERVER_1: SocketAddr =
+    SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(1, 1, 1, 1), 3478));
+
+/// Default STUN server 2 (Google DNS - placeholder for STUN)
+const DEFAULT_STUN_SERVER_2: SocketAddr =
+    SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(8, 8, 8, 8), 3478));
 
 /// Discovery manager errors
 #[derive(Debug, Error)]
@@ -84,11 +92,7 @@ impl DiscoveryConfig {
             node_id,
             listen_addr,
             bootstrap_nodes: Vec::new(),
-            stun_servers: vec![
-                // Default STUN servers (placeholders)
-                "1.1.1.1:3478".parse().expect("valid address"),
-                "8.8.8.8:3478".parse().expect("valid address"),
-            ],
+            stun_servers: vec![DEFAULT_STUN_SERVER_1, DEFAULT_STUN_SERVER_2],
             relay_servers: Vec::new(),
             nat_detection_enabled: true,
             relay_enabled: true,

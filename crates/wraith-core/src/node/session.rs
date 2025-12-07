@@ -73,6 +73,9 @@ pub struct PeerConnection {
     /// Last activity timestamp (milliseconds since UNIX epoch)
     /// Uses AtomicU64 for lock-free updates from routing table lookups
     last_activity_ms: AtomicU64,
+
+    /// Failed consecutive ping counter (lock-free using atomic)
+    failed_pings: std::sync::atomic::AtomicU32,
 }
 
 /// Get current time as milliseconds since UNIX epoch
@@ -81,6 +84,26 @@ fn current_time_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+impl Clone for PeerConnection {
+    fn clone(&self) -> Self {
+        Self {
+            session_id: self.session_id,
+            peer_id: self.peer_id,
+            peer_addr: self.peer_addr,
+            connection_id: self.connection_id,
+            // Clone Arc references (cheap - just incrementing refcount)
+            session: Arc::clone(&self.session),
+            crypto: Arc::clone(&self.crypto),
+            stats: self.stats.clone(),
+            // Clone AtomicU64 by loading its current value
+            last_activity_ms: AtomicU64::new(self.last_activity_ms.load(Ordering::Relaxed)),
+            failed_pings: std::sync::atomic::AtomicU32::new(
+                self.failed_pings.load(Ordering::Relaxed),
+            ),
+        }
+    }
 }
 
 impl PeerConnection {
@@ -101,7 +124,23 @@ impl PeerConnection {
             crypto: Arc::new(RwLock::new(crypto)),
             stats: ConnectionStats::default(),
             last_activity_ms: AtomicU64::new(current_time_ms()),
+            failed_pings: std::sync::atomic::AtomicU32::new(0),
         }
+    }
+
+    /// Increment failed ping counter
+    pub fn increment_failed_pings(&self) -> u32 {
+        self.failed_pings.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Reset failed ping counter (successful ping)
+    pub fn reset_failed_pings(&self) {
+        self.failed_pings.store(0, Ordering::Relaxed);
+    }
+
+    /// Get current failed ping count
+    pub fn failed_ping_count(&self) -> u32 {
+        self.failed_pings.load(Ordering::Relaxed)
     }
 
     /// Check if connection is stale

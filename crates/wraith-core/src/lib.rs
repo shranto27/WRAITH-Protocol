@@ -81,6 +81,7 @@ pub mod frame;
 pub mod migration;
 pub mod node;
 pub mod path;
+pub mod ring_buffer;
 pub mod session;
 pub mod stream;
 pub mod transfer;
@@ -91,6 +92,7 @@ pub use frame::{Frame, FrameBuilder, FrameFlags, FrameType};
 pub use migration::{PathState, PathValidator, ValidatedPath};
 pub use node::{Node, NodeConfig, NodeError};
 pub use path::{DEFAULT_MTU, MAX_MTU, MIN_MTU, PathMtuDiscovery};
+pub use ring_buffer::{MpscRingBuffer, SpscRingBuffer};
 pub use session::{
     ConnectionId, HandshakePhase, Session, SessionConfig, SessionState, SessionStats,
 };

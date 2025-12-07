@@ -7,6 +7,7 @@ use crate::node::session::PeerConnection;
 use crate::node::{Node, NodeError};
 use std::net::SocketAddr;
 use std::time::Duration;
+use wraith_transport::transport::Transport;
 
 /// ICE candidate for NAT traversal
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,32 +134,52 @@ impl Node {
     }
 
     /// Attempt direct connection to peer
+    ///
+    /// Tries each advertised peer address in sequence until one succeeds.
+    /// Returns the established session ID and peer connection on success.
     async fn direct_connect(&self, peer: &PeerInfo) -> Result<PeerConnection, NodeError> {
         tracing::debug!("Direct connecting to peer {:?}", peer.peer_id);
 
         // Try each advertised address
+        let mut last_error = None;
         for addr in &peer.addresses {
-            tracing::trace!("Trying address: {}", addr);
+            tracing::trace!("Trying direct connection to address: {}", addr);
 
-            // TODO: Integrate with wraith-transport
-            // For now, create a mock connection:
-            //
-            // match self.transport.connect(*addr).await {
-            //     Ok(conn) => {
-            //         // Perform handshake
-            //         let session = self.establish_session_with_transport(peer, conn).await?;
-            //         return Ok(session);
-            //     }
-            //     Err(e) => {
-            //         tracing::trace!("Failed to connect to {}: {}", addr, e);
-            //         continue;
-            //     }
-            // }
+            // Attempt to establish session with this address
+            match self.establish_session_with_addr(&peer.peer_id, *addr).await {
+                Ok(session_id) => {
+                    // Session established successfully, retrieve the connection from sessions map
+                    // The connection is stored as Arc<PeerConnection> in the DashMap
+                    if let Some(conn_arc) = self.inner.sessions.get(&peer.peer_id) {
+                        tracing::info!(
+                            "Direct connection established to peer {:?} at {} (session: {})",
+                            peer.peer_id,
+                            addr,
+                            hex::encode(&session_id[..8])
+                        );
+
+                        // Clone the PeerConnection (shares Arc references)
+                        return Ok((**conn_arc).clone());
+                    } else {
+                        last_error = Some(NodeError::SessionNotFound(peer.peer_id));
+                        tracing::warn!(
+                            "Session established but not found in sessions map for peer {:?}",
+                            peer.peer_id
+                        );
+                        continue;
+                    }
+                }
+                Err(e) => {
+                    tracing::trace!("Failed to connect to {}: {}", addr, e);
+                    last_error = Some(e);
+                    continue;
+                }
+            }
         }
 
-        Err(NodeError::NatTraversal(
-            "All direct connection attempts failed".to_string(),
-        ))
+        Err(last_error.unwrap_or_else(|| {
+            NodeError::NatTraversal("All direct connection attempts failed".to_string())
+        }))
     }
 
     /// Perform ICE-lite hole punching
@@ -199,27 +220,79 @@ impl Node {
     }
 
     /// Connect via relay server
+    ///
+    /// Uses the discovery manager to establish a relay path, then performs
+    /// a Noise_XX handshake over the relay connection to establish a secure session.
     async fn connect_via_relay(&self, peer: &PeerInfo) -> Result<PeerConnection, NodeError> {
         tracing::debug!("Connecting via relay to peer {:?}", peer.peer_id);
 
-        // TODO: Integrate with wraith-discovery::RelayManager
-        // For now, return error:
-        //
-        // let relay = self.discovery_manager
-        //     .find_relay()
-        //     .await
-        //     .map_err(|e| NodeError::Discovery(e.to_string()))?;
-        //
-        // let conn = self.transport
-        //     .connect_via_relay(&relay, peer)
-        //     .await
-        //     .map_err(|e| NodeError::Transport(e.to_string()))?;
-        //
-        // Ok(PeerConnection::new_relayed(conn, peer.peer_id))
+        // Get discovery manager
+        let discovery = {
+            let guard = self.inner.discovery.lock().await;
+            guard
+                .as_ref()
+                .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?
+                .clone()
+        };
 
-        Err(NodeError::NatTraversal(
-            "Relay not yet implemented".to_string(),
-        ))
+        // Convert peer_id to NodeId for relay connection
+        let peer_node_id = wraith_discovery::dht::NodeId::from_bytes(peer.peer_id);
+
+        // Use discovery manager to establish relay path
+        // The discovery manager handles the relay connection establishment
+        match discovery.connect_to_peer(peer_node_id).await {
+            Ok(conn_info) => {
+                tracing::info!(
+                    "Discovery manager established {} connection to peer {:?} via relay {}",
+                    conn_info.connection_type,
+                    peer.peer_id,
+                    conn_info.addr
+                );
+
+                // Now establish a protocol-level session over the relay connection
+                // The relay address is used as the peer address for the handshake
+                // The actual peer_id is already known from the PeerInfo
+                match self
+                    .establish_session_with_addr(&peer.peer_id, conn_info.addr)
+                    .await
+                {
+                    Ok(session_id) => {
+                        // Session established successfully over relay
+                        if let Some(conn_arc) = self.inner.sessions.get(&peer.peer_id) {
+                            tracing::info!(
+                                "Relay session established to peer {:?} via {} (session: {})",
+                                peer.peer_id,
+                                conn_info.addr,
+                                hex::encode(&session_id[..8])
+                            );
+
+                            // Clone the PeerConnection (shares Arc references)
+                            Ok((**conn_arc).clone())
+                        } else {
+                            Err(NodeError::SessionNotFound(peer.peer_id))
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to establish session over relay to peer {:?}: {}",
+                            peer.peer_id,
+                            e
+                        );
+                        Err(NodeError::NatTraversal(format!(
+                            "Relay handshake failed: {}",
+                            e
+                        )))
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Relay connection failed: {}", e);
+                Err(NodeError::NatTraversal(format!(
+                    "Relay connection failed: {}",
+                    e
+                )))
+            }
+        }
     }
 
     /// Gather ICE candidates from local interfaces
@@ -236,53 +309,109 @@ impl Node {
             });
         }
 
-        // 2. Server reflexive candidates (STUN)
-        // TODO: Integrate with STUN client
-        // if let Ok(reflexive_addr) = self.get_reflexive_address().await {
-        //     candidates.push(IceCandidate {
-        //         address: reflexive_addr,
-        //         candidate_type: CandidateType::ServerReflexive,
-        //         priority: 100,
-        //         foundation: format!("srflx-{}", reflexive_addr),
-        //     });
-        // }
+        // 2. Server reflexive candidates (STUN) - Integrate with discovery manager
+        let discovery = {
+            let guard = self.inner.discovery.lock().await;
+            guard.as_ref().cloned()
+        };
 
-        // 3. Relayed candidates (TURN)
-        // TODO: Integrate with relay manager
-        // if self.inner.config.discovery.enable_relay {
-        //     if let Ok(relayed_addr) = self.get_relayed_address().await {
-        //         candidates.push(IceCandidate {
-        //             address: relayed_addr,
-        //             candidate_type: CandidateType::Relayed,
-        //             priority: 0,
-        //             foundation: format!("relay-{}", relayed_addr),
-        //         });
-        //     }
-        // }
+        if let Some(ref disc) = discovery {
+            // Get NAT type which triggers STUN detection
+            if let Some(nat_type) = disc.nat_type().await {
+                tracing::debug!("Detected NAT type: {:?}", nat_type);
+                // NAT type detected means STUN was successful
+                // In a real implementation, we would get the actual reflexive address
+                // from the STUN response. For now, this confirms STUN is working.
+            }
+        }
+
+        // 3. Relayed candidates (TURN) - Integrate with relay manager
+        if discovery.is_some() && self.inner.config.discovery.enable_relay {
+            // The discovery manager handles relay connections
+            // Relayed addresses are established when connect_via_relay() is called
+            // For candidate gathering, we just note that relay is available
+            tracing::debug!("Relay is enabled and available for fallback");
+        }
+
+        tracing::debug!("Gathered {} ICE candidates", candidates.len());
 
         Ok(candidates)
     }
 
     /// Exchange ICE candidates with peer
     ///
-    /// In a real implementation, this would use a signaling channel or relay.
+    /// In a full implementation, this would use a signaling channel (e.g., via relay server
+    /// or out-of-band mechanism) to exchange ICE candidates with the peer. The signaling
+    /// protocol would:
+    ///
+    /// 1. Send local candidates to peer via signaling channel
+    /// 2. Receive remote candidates from peer via signaling channel
+    /// 3. Wait for candidate exchange to complete with timeout
+    ///
+    /// For now, this implementation uses the peer's known addresses from discovery
+    /// and converts them to ICE candidates. A full signaling implementation would
+    /// be added in a future sprint.
+    ///
+    /// # Arguments
+    ///
+    /// * `peer` - Peer information including known addresses
+    /// * `local_candidates` - Local ICE candidates to send to peer (currently unused)
+    ///
+    /// # Future Implementation
+    ///
+    /// A complete implementation would:
+    /// - Use DHT STORE/GET for public signaling (with encryption)
+    /// - Use relay server for private signaling
+    /// - Support SDP-like candidate description format
+    /// - Handle candidate gathering and exchange in parallel
+    /// - Implement candidate filtering and priority calculation
     async fn exchange_candidates(
         &self,
         peer: &PeerInfo,
-        _local_candidates: &[IceCandidate],
+        local_candidates: &[IceCandidate],
     ) -> Result<Vec<IceCandidate>, NodeError> {
-        // TODO: Implement candidate exchange via signaling
-        // For now, convert peer addresses to candidates
+        tracing::debug!(
+            "Exchanging ICE candidates with peer {:?} ({} local candidates)",
+            peer.peer_id,
+            local_candidates.len()
+        );
+
+        // In a future implementation, this would:
+        // 1. Serialize local_candidates to a wire format
+        // 2. Send them to the peer via signaling (DHT STORE or relay message)
+        // 3. Wait for peer's candidates via signaling (DHT GET or relay response)
+        // 4. Deserialize and return peer's candidates
+        //
+        // For now, use the peer's known addresses from discovery as candidates
         let remote_candidates: Vec<IceCandidate> = peer
             .addresses
             .iter()
-            .map(|addr| IceCandidate {
-                address: *addr,
-                candidate_type: CandidateType::Host,
-                priority: 126,
-                foundation: format!("host-{}", addr),
+            .enumerate()
+            .map(|(idx, addr)| {
+                // Assign priority based on address type
+                let priority = if addr.is_ipv4() { 126 } else { 100 };
+
+                IceCandidate {
+                    address: *addr,
+                    candidate_type: CandidateType::Host,
+                    priority,
+                    foundation: format!("host-{}-{}", idx, addr),
+                }
             })
             .collect();
+
+        tracing::debug!(
+            "Received {} remote candidates from peer {:?} (from discovery)",
+            remote_candidates.len(),
+            peer.peer_id
+        );
+
+        // TODO(Sprint 13.3): Implement actual signaling-based candidate exchange
+        // - Add signaling message types (CANDIDATE_OFFER, CANDIDATE_ANSWER)
+        // - Use DHT STORE/GET or relay messaging for signaling
+        // - Add encryption for signaling messages
+        // - Handle concurrent candidate gathering and exchange
+        // - Implement ICE candidate filtering and validation
 
         Ok(remote_candidates)
     }
@@ -311,41 +440,165 @@ impl Node {
     }
 
     /// Try to connect using a specific candidate pair
+    ///
+    /// Attempts to establish a connection using the specified local and remote ICE candidates.
+    /// This includes sending hole-punch packets and attempting the Noise handshake.
     async fn try_connect_candidate(
         &self,
-        _local: &IceCandidate,
-        _remote: &IceCandidate,
+        local: &IceCandidate,
+        remote: &IceCandidate,
     ) -> Result<PeerConnection, NodeError> {
-        // TODO: Implement actual connection attempt
-        // For now, return error
-        Err(NodeError::NatTraversal(
-            "Candidate connection not implemented".to_string(),
-        ))
+        tracing::trace!(
+            "Attempting connection with candidate pair: {:?} ({:?}) -> {:?} ({:?})",
+            local.address,
+            local.candidate_type,
+            remote.address,
+            remote.candidate_type
+        );
+
+        // For hole punching scenarios (restricted NAT), send simultaneous packets
+        // to create NAT bindings on both sides
+        if matches!(
+            (local.candidate_type, remote.candidate_type),
+            (CandidateType::Host, CandidateType::Host)
+                | (
+                    CandidateType::ServerReflexive,
+                    CandidateType::ServerReflexive
+                )
+                | (CandidateType::ServerReflexive, CandidateType::Host)
+                | (CandidateType::Host, CandidateType::ServerReflexive)
+        ) {
+            // Send hole punch packets to create NAT bindings
+            if let Err(e) = self
+                .send_hole_punch_packets(local.address, remote.address)
+                .await
+            {
+                tracing::debug!(
+                    "Hole punch packets failed for {:?} -> {:?}: {}",
+                    local.address,
+                    remote.address,
+                    e
+                );
+                // Don't fail immediately - handshake might still succeed
+            }
+
+            // Brief delay to allow NAT bindings to stabilize
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // Attempt to establish session using the remote candidate's address
+        // We derive a temporary peer ID from the remote address for the connection attempt
+        // The real peer ID will be discovered during the Noise handshake
+        let temp_peer_id = {
+            let addr_bytes = remote.address.to_string();
+            let hash = blake3::hash(addr_bytes.as_bytes());
+            *hash.as_bytes()
+        };
+
+        match self
+            .establish_session_with_addr(&temp_peer_id, remote.address)
+            .await
+        {
+            Ok(session_id) => {
+                // Session established successfully
+                // Retrieve the actual peer ID that was discovered during handshake
+                // Find the connection by session_id in the sessions map
+                if let Some(entry) = self
+                    .inner
+                    .sessions
+                    .iter()
+                    .find(|e| e.value().session_id == session_id)
+                {
+                    let conn_arc = entry.value();
+                    tracing::info!(
+                        "Candidate connection successful: {:?} -> {:?} (session: {})",
+                        local.address,
+                        remote.address,
+                        hex::encode(&session_id[..8])
+                    );
+
+                    // Clone the PeerConnection (shares Arc references)
+                    Ok((**conn_arc).clone())
+                } else {
+                    Err(NodeError::NatTraversal(
+                        "Session established but connection not found".to_string(),
+                    ))
+                }
+            }
+            Err(e) => {
+                tracing::trace!(
+                    "Candidate connection failed {:?} -> {:?}: {}",
+                    local.address,
+                    remote.address,
+                    e
+                );
+                Err(NodeError::NatTraversal(format!(
+                    "Candidate connection failed: {}",
+                    e
+                )))
+            }
+        }
     }
 
     /// Send simultaneous packets to punch hole
     ///
     /// Both peers send packets to each other's reflexive addresses
-    /// to create temporary NAT bindings.
-    #[allow(dead_code)]
+    /// to create temporary NAT bindings. Sends multiple packets with
+    /// small delays to increase the likelihood of successful traversal.
+    ///
+    /// # Arguments
+    ///
+    /// * `_local_addr` - Local address to send from (currently unused - transport binds to configured address)
+    /// * `remote_addr` - Remote address to send to
     async fn send_hole_punch_packets(
         &self,
-        local_addr: SocketAddr,
+        _local_addr: SocketAddr,
         remote_addr: SocketAddr,
     ) -> Result<(), NodeError> {
         tracing::trace!(
-            "Sending hole punch packets {} -> {}",
-            local_addr,
+            "Sending hole punch packets to {} (creating NAT binding)",
             remote_addr
         );
 
-        // TODO: Integrate with transport layer
-        // Send multiple packets to increase chance of success
-        for _i in 0..3 {
-            // self.transport.send_raw(local_addr, remote_addr, &[_i as u8; 8]).await?;
-            tokio::time::sleep(Duration::from_millis(10)).await;
+        // Get transport layer
+        let transport = self.get_transport().await?;
+
+        // Send multiple small packets to increase chance of creating NAT binding
+        // The packet content is minimal - just a marker to identify hole punch packets
+        // Real handshake will follow if the binding is successful
+        for i in 0..5 {
+            // Send a small identification packet
+            // Format: [0xFF, 0xFE, sequence_number, padding...]
+            let packet = vec![0xFFu8, 0xFEu8, i, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+            match transport.send_to(&packet, remote_addr).await {
+                Ok(sent) => {
+                    tracing::trace!(
+                        "Sent hole punch packet #{} ({} bytes) to {}",
+                        i,
+                        sent,
+                        remote_addr
+                    );
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to send hole punch packet #{} to {}: {}",
+                        i,
+                        remote_addr,
+                        e
+                    );
+                    // Continue anyway - some packets may get through
+                }
+            }
+
+            // Small delay between packets to space them out
+            // This helps with different NAT timeout characteristics
+            if i < 4 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
         }
 
+        tracing::debug!("Completed sending 5 hole punch packets to {}", remote_addr);
         Ok(())
     }
 }

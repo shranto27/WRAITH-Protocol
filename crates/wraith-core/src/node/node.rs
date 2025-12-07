@@ -26,6 +26,7 @@ use crate::node::error::{NodeError, Result};
 use crate::node::file_transfer::FileTransferContext;
 use crate::node::identity::{Identity, TransferId};
 use crate::node::ip_reputation::IpReputationSystem;
+use crate::node::obfuscation::ObfuscationStats;
 use crate::node::rate_limiter::RateLimiter;
 use crate::node::routing::RoutingTable;
 use crate::node::security_monitor::SecurityMonitor;
@@ -42,6 +43,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, oneshot};
 use wraith_discovery::{DiscoveryConfig as DiscoveryConfigInternal, DiscoveryManager};
 use wraith_files::tree_hash::compute_tree_hash;
+use wraith_obfuscation::{DohTunnel, TlsRecordWrapper, WebSocketFrameWrapper};
 use wraith_transport::transport::Transport;
 use wraith_transport::udp_async::AsyncUdpTransport;
 
@@ -71,6 +73,14 @@ pub(crate) struct NodeInner {
     pub(crate) ip_reputation: Arc<IpReputationSystem>,
     /// Security event monitor
     pub(crate) security_monitor: Arc<SecurityMonitor>,
+    /// TLS record wrapper for protocol mimicry
+    pub(crate) tls_wrapper: Arc<Mutex<TlsRecordWrapper>>,
+    /// WebSocket frame wrapper for protocol mimicry
+    pub(crate) websocket_wrapper: Arc<WebSocketFrameWrapper>,
+    /// DNS-over-HTTPS tunnel for protocol mimicry
+    pub(crate) doh_tunnel: Arc<DohTunnel>,
+    /// Obfuscation statistics (padding bytes, timing delays, wrapped packets)
+    pub(crate) obfuscation_stats: Arc<Mutex<ObfuscationStats>>,
 }
 
 /// WRAITH Protocol Node
@@ -123,6 +133,12 @@ impl Node {
         let ip_reputation = IpReputationSystem::new(IpReputationConfig::default());
         let security_monitor = SecurityMonitor::new(SecurityMonitorConfig::default());
 
+        // Initialize obfuscation wrappers
+        let tls_wrapper = TlsRecordWrapper::new();
+        let websocket_wrapper = WebSocketFrameWrapper::new(false); // Server mode (no masking)
+        let doh_tunnel = DohTunnel::new("https://1.1.1.1/dns-query".to_string());
+        let obfuscation_stats = ObfuscationStats::default();
+
         let inner = NodeInner {
             identity: Arc::new(identity),
             config,
@@ -136,6 +152,10 @@ impl Node {
             rate_limiter: Arc::new(rate_limiter),
             ip_reputation: Arc::new(ip_reputation),
             security_monitor: Arc::new(security_monitor),
+            tls_wrapper: Arc::new(Mutex::new(tls_wrapper)),
+            websocket_wrapper: Arc::new(websocket_wrapper),
+            doh_tunnel: Arc::new(doh_tunnel),
+            obfuscation_stats: Arc::new(Mutex::new(obfuscation_stats)),
         };
         Ok(Self {
             inner: Arc::new(inner),

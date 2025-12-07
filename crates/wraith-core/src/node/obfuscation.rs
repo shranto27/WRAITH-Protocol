@@ -7,6 +7,7 @@ use crate::node::config::{MimicryMode, TimingMode};
 use crate::node::session::PeerConnection;
 use crate::node::{Node, NodeError};
 use std::time::Duration;
+use wraith_transport::transport::Transport;
 
 /// Protocol types for mimicry
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,16 +127,21 @@ impl Node {
     /// Returns error if send fails.
     pub async fn send_obfuscated(
         &self,
-        _session: &PeerConnection,
+        session: &PeerConnection,
         data: &[u8],
     ) -> Result<(), NodeError> {
+        let original_size = data.len();
         let mut packet = data.to_vec();
 
         // 1. Apply padding
         self.apply_obfuscation(&mut packet)?;
+        let padded_size = packet.len();
+        let padding_added = (padded_size - original_size) as u64;
 
         // 2. Apply timing delay
         let delay = self.get_timing_delay();
+        let delay_us = delay.as_micros() as u64;
+
         if !delay.is_zero() {
             tracing::trace!("Applying timing delay: {:?}", delay);
             tokio::time::sleep(delay).await;
@@ -145,14 +151,32 @@ impl Node {
         let wrapped = self.wrap_protocol(&packet)?;
 
         // 4. Send via transport
-        // TODO: Integrate with actual transport
-        // session.send(&wrapped).await
-        //     .map_err(|e| NodeError::Transport(e.to_string()))?;
+        let transport = self.get_transport().await?;
+        transport
+            .send_to(&wrapped, session.peer_addr)
+            .await
+            .map_err(|e| NodeError::Transport(e.to_string()))?;
+
+        // 5. Update obfuscation statistics
+        if let Ok(mut stats) = self.inner.obfuscation_stats.try_lock() {
+            stats.padding_bytes += padding_added;
+            stats.total_delay_us += delay_us;
+            stats.wrapped_packets += 1;
+
+            // Update rolling average packet size
+            let total_packets = stats.wrapped_packets;
+            stats.avg_padded_size = ((stats.avg_padded_size as u64 * (total_packets - 1)
+                + padded_size as u64)
+                / total_packets) as usize;
+        }
 
         tracing::trace!(
-            "Sent obfuscated packet: {} bytes (original: {} bytes)",
+            "Sent obfuscated packet: {} bytes (original: {}, padded: {}, padding: {} bytes, delay: {} us)",
             wrapped.len(),
-            data.len()
+            original_size,
+            padded_size,
+            padding_added,
+            delay_us
         );
 
         Ok(())
@@ -175,97 +199,51 @@ impl Node {
 
     /// Wrap as TLS 1.3 application data
     fn wrap_as_tls(&self, data: &[u8]) -> Result<Vec<u8>, NodeError> {
-        // TODO: Integrate with wraith-obfuscation::tls::TlsWrapper
-        // For now, create a simple wrapper:
-        //
-        // TLS Record format:
-        // - Content Type (1 byte): 0x17 (Application Data)
-        // - Version (2 bytes): 0x03 0x03 (TLS 1.2 for compatibility)
-        // - Length (2 bytes): payload length
-        // - Payload: data
+        // Use wraith-obfuscation TlsRecordWrapper for protocol mimicry
+        let mut wrapper = self
+            .inner
+            .tls_wrapper
+            .try_lock()
+            .map_err(|_| NodeError::Other("TLS wrapper lock contention".to_string()))?;
 
-        let mut wrapped = Vec::with_capacity(5 + data.len());
+        let wrapped = wrapper.wrap(data);
 
-        // Content Type: Application Data
-        wrapped.push(0x17);
-
-        // TLS Version: 1.2 (for compatibility)
-        wrapped.extend_from_slice(&[0x03, 0x03]);
-
-        // Length (big-endian)
-        let len = data.len() as u16;
-        wrapped.extend_from_slice(&len.to_be_bytes());
-
-        // Payload
-        wrapped.extend_from_slice(data);
-
-        tracing::trace!("Wrapped {} bytes as TLS", data.len());
+        tracing::trace!(
+            "Wrapped {} bytes as TLS (total: {} bytes)",
+            data.len(),
+            wrapped.len()
+        );
 
         Ok(wrapped)
     }
 
     /// Wrap as WebSocket frame
     fn wrap_as_websocket(&self, data: &[u8]) -> Result<Vec<u8>, NodeError> {
-        // TODO: Integrate with wraith-obfuscation::websocket::WebSocketWrapper
-        // For now, create a simple wrapper:
-        //
-        // WebSocket frame format:
-        // - FIN + RSV + Opcode (1 byte): 0x82 (FIN=1, Binary frame)
-        // - Mask + Length (1+ bytes)
-        // - Masking key (4 bytes, if masked)
-        // - Payload
+        // Use wraith-obfuscation WebSocketFrameWrapper for protocol mimicry
+        let wrapper = &self.inner.websocket_wrapper;
+        let wrapped = wrapper.wrap(data);
 
-        let mut wrapped = Vec::with_capacity(2 + data.len());
-
-        // FIN=1, Opcode=Binary
-        wrapped.push(0x82);
-
-        // Length (unmasked for simplicity)
-        if data.len() <= 125 {
-            wrapped.push(data.len() as u8);
-        } else if data.len() <= 65535 {
-            wrapped.push(126);
-            wrapped.extend_from_slice(&(data.len() as u16).to_be_bytes());
-        } else {
-            wrapped.push(127);
-            wrapped.extend_from_slice(&(data.len() as u64).to_be_bytes());
-        }
-
-        // Payload (unmasked)
-        wrapped.extend_from_slice(data);
-
-        tracing::trace!("Wrapped {} bytes as WebSocket", data.len());
+        tracing::trace!(
+            "Wrapped {} bytes as WebSocket (total: {} bytes)",
+            data.len(),
+            wrapped.len()
+        );
 
         Ok(wrapped)
     }
 
     /// Wrap as DNS-over-HTTPS query/response
     fn wrap_as_doh(&self, data: &[u8]) -> Result<Vec<u8>, NodeError> {
-        // TODO: Integrate with wraith-obfuscation::doh::DohWrapper
-        // For now, create a simple wrapper:
-        //
-        // DNS message format:
-        // - ID (2 bytes)
-        // - Flags (2 bytes)
-        // - Counts (8 bytes: QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT)
-        // - Questions/Answers (variable)
+        // Use wraith-obfuscation DohTunnel for protocol mimicry
+        // Note: DohTunnel creates DNS query packets with EDNS0 OPT records
+        let tunnel = &self.inner.doh_tunnel;
+        let wrapped = tunnel.create_dns_query("wraith.local", data);
 
-        let mut wrapped = Vec::with_capacity(12 + data.len());
-
-        // DNS Header
-        wrapped.extend_from_slice(&[
-            0x00, 0x01, // ID
-            0x01, 0x00, // Flags: Standard query
-            0x00, 0x01, // QDCOUNT: 1 question
-            0x00, 0x00, // ANCOUNT: 0 answers
-            0x00, 0x00, // NSCOUNT: 0 authority
-            0x00, 0x00, // ARCOUNT: 0 additional
-        ]);
-
-        // Embed data in TXT record
-        wrapped.extend_from_slice(data);
-
-        tracing::trace!("Wrapped {} bytes as DoH", data.len());
+        tracing::trace!(
+            "Wrapped {} bytes as DoH (total: {} bytes)",
+            data.len(),
+            wrapped.len()
+        );
 
         Ok(wrapped)
     }
@@ -287,56 +265,70 @@ impl Node {
 
     /// Unwrap TLS application data
     fn unwrap_tls(&self, data: &[u8]) -> Result<Vec<u8>, NodeError> {
-        // TODO: Integrate with wraith-obfuscation::tls::TlsWrapper
-        if data.len() < 5 {
-            return Err(NodeError::Other("Invalid TLS record".to_string()));
-        }
+        // Use wraith-obfuscation TlsRecordWrapper for protocol demimicry
+        let wrapper = self
+            .inner
+            .tls_wrapper
+            .try_lock()
+            .map_err(|_| NodeError::Other("TLS wrapper lock contention".to_string()))?;
 
-        // Skip 5-byte header
-        Ok(data[5..].to_vec())
+        let unwrapped = wrapper
+            .unwrap(data)
+            .map_err(|e| NodeError::Other(format!("TLS unwrap failed: {}", e)))?;
+
+        tracing::trace!(
+            "Unwrapped TLS: {} bytes -> {} bytes",
+            data.len(),
+            unwrapped.len()
+        );
+
+        Ok(unwrapped)
     }
 
     /// Unwrap WebSocket frame
     fn unwrap_websocket(&self, data: &[u8]) -> Result<Vec<u8>, NodeError> {
-        // TODO: Integrate with wraith-obfuscation::websocket::WebSocketWrapper
-        if data.len() < 2 {
-            return Err(NodeError::Other("Invalid WebSocket frame".to_string()));
-        }
+        // Use wraith-obfuscation WebSocketFrameWrapper for protocol demimicry
+        let wrapper = &self.inner.websocket_wrapper;
 
-        let len = data[1] & 0x7F;
+        let unwrapped = wrapper
+            .unwrap(data)
+            .map_err(|e| NodeError::Other(format!("WebSocket unwrap failed: {}", e)))?;
 
-        let payload_offset = if len <= 125 {
-            2
-        } else if len == 126 {
-            4
-        } else {
-            10
-        };
+        tracing::trace!(
+            "Unwrapped WebSocket: {} bytes -> {} bytes",
+            data.len(),
+            unwrapped.len()
+        );
 
-        if data.len() < payload_offset {
-            return Err(NodeError::Other(
-                "Invalid WebSocket frame length".to_string(),
-            ));
-        }
-
-        Ok(data[payload_offset..].to_vec())
+        Ok(unwrapped)
     }
 
     /// Unwrap DNS-over-HTTPS
     fn unwrap_doh(&self, data: &[u8]) -> Result<Vec<u8>, NodeError> {
-        // TODO: Integrate with wraith-obfuscation::doh::DohWrapper
-        if data.len() < 12 {
-            return Err(NodeError::Other("Invalid DNS message".to_string()));
-        }
+        // Use wraith-obfuscation DohTunnel for protocol demimicry
+        let tunnel = &self.inner.doh_tunnel;
 
-        // Skip 12-byte DNS header
-        Ok(data[12..].to_vec())
+        let unwrapped = tunnel
+            .parse_dns_response(data)
+            .map_err(|e| NodeError::Other(format!("DoH unwrap failed: {}", e)))?;
+
+        tracing::trace!(
+            "Unwrapped DoH: {} bytes -> {} bytes",
+            data.len(),
+            unwrapped.len()
+        );
+
+        Ok(unwrapped)
     }
 
     /// Get current obfuscation statistics
     pub fn get_obfuscation_stats(&self) -> ObfuscationStats {
-        // TODO: Track these stats in Node state
-        ObfuscationStats::default()
+        // Return current obfuscation statistics from Node state
+        self.inner
+            .obfuscation_stats
+            .try_lock()
+            .map(|stats| stats.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -408,8 +400,16 @@ mod tests {
 
         let wrapped = node.wrap_as_doh(&data).unwrap();
 
-        // Should have 12-byte DNS header + payload
-        assert_eq!(wrapped.len(), 12 + data.len());
+        // Should have DNS header + question section + EDNS0 OPT + payload
+        // Actual size depends on domain name length and EDNS0 encoding
+        assert!(
+            wrapped.len() > data.len(),
+            "DoH wrapper should add DNS protocol overhead"
+        );
+        assert!(
+            wrapped.len() >= 12,
+            "DoH wrapper should have at least 12-byte DNS header"
+        );
     }
 
     #[tokio::test]

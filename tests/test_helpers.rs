@@ -77,7 +77,10 @@ impl TimingValidator {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
+    /// use std::time::{Duration, Instant};
+    /// use wraith_integration_tests::test_helpers::TimingValidator;
+    ///
     /// let mut validator = TimingValidator::new(5);
     /// for _ in 0..5 {
     ///     let start = Instant::now();

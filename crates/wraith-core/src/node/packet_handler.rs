@@ -470,11 +470,11 @@ impl Node {
         let encrypted = connection.encrypt_frame(frame_bytes).await?;
         let encrypted_len = encrypted.len();
 
-        // Apply obfuscation
+        // Apply padding obfuscation
         let mut obfuscated = encrypted;
         self.apply_obfuscation(&mut obfuscated)?;
 
-        // Wrap in protocol mimicry
+        // Wrap in protocol mimicry (if enabled)
         let wrapped = self.wrap_protocol(&obfuscated)?;
 
         // Apply timing delay

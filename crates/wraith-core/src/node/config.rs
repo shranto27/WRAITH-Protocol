@@ -279,6 +279,9 @@ pub struct TransferConfig {
 
     /// Maximum peers per transfer
     pub max_peers_per_transfer: usize,
+
+    /// Chunk assignment strategy for multi-peer downloads
+    pub chunk_assignment_strategy: crate::node::multi_peer::ChunkAssignmentStrategy,
 }
 
 impl Default for TransferConfig {
@@ -291,6 +294,7 @@ impl Default for TransferConfig {
             enable_resume: true,
             enable_multi_peer: true,
             max_peers_per_transfer: 5,
+            chunk_assignment_strategy: crate::node::multi_peer::ChunkAssignmentStrategy::default(),
         }
     }
 }

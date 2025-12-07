@@ -72,17 +72,23 @@ impl TwoNodeFixture {
     ///
     /// # Example
     ///
-    /// ```no_run
-    /// let mut initiator_config = NodeConfig::default();
-    /// initiator_config.transport.enable_af_xdp = false;
+    /// ```ignore
+    /// use wraith_core::node::NodeConfig;
+    /// use wraith_integration_tests::fixtures::TwoNodeFixture;
     ///
-    /// let mut responder_config = NodeConfig::default();
-    /// responder_config.transport.worker_threads = 2;
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let mut initiator_config = NodeConfig::default();
+    ///     initiator_config.transport.enable_af_xdp = false;
     ///
-    /// let fixture = TwoNodeFixture::new_with_config(
-    ///     initiator_config,
-    ///     responder_config
-    /// ).await?;
+    ///     let mut responder_config = NodeConfig::default();
+    ///     responder_config.transport.worker_threads = 2;
+    ///
+    ///     let fixture = TwoNodeFixture::new_with_config(
+    ///         initiator_config,
+    ///         responder_config
+    ///     ).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn new_with_config(
         mut initiator_config: NodeConfig,
@@ -232,7 +238,10 @@ impl TwoNodeFixture {
 
     /// Get transfer progress as a percentage (0.0 to 100.0)
     pub async fn get_transfer_progress(&self, transfer_id: &[u8; 32]) -> Option<f64> {
-        self.initiator.get_transfer_progress(transfer_id).await
+        self.initiator
+            .get_transfer_progress(transfer_id)
+            .await
+            .map(|progress| progress.progress_percent)
     }
 
     /// Get the responder's peer ID

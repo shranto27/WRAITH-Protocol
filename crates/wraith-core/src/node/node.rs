@@ -32,10 +32,10 @@ use crate::{ConnectionId, HandshakePhase, SessionState};
 use dashmap::DashMap;
 use getrandom::getrandom;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, oneshot};
 use wraith_discovery::{DiscoveryConfig as DiscoveryConfigInternal, DiscoveryManager};
 use wraith_files::tree_hash::compute_tree_hash;
@@ -279,13 +279,48 @@ impl Node {
 // ═══════════════════════════════════════════════════════════════════════════
 
 impl Node {
+    /// Discover peer addresses via DHT/STUN/relay
+    pub async fn discover_peer(&self, peer_id: &PeerId) -> Result<Vec<SocketAddr>> {
+        let discovery = self.inner.discovery.lock().await;
+        let discovery = discovery
+            .as_ref()
+            .ok_or_else(|| NodeError::Discovery("Discovery not initialized".to_string()))?;
+
+        // Convert PeerId (Ed25519 public key) to DHT NodeId
+        let dht_node_id = wraith_discovery::dht::NodeId::from_bytes(*peer_id);
+
+        // Use DiscoveryManager to find peer
+        match discovery.connect_to_peer(dht_node_id).await {
+            Ok(peer_connection) => {
+                tracing::info!(
+                    "Discovered peer {} at {} via {}",
+                    hex::encode(&peer_id[..8]),
+                    peer_connection.addr,
+                    peer_connection.connection_type
+                );
+                Ok(vec![peer_connection.addr])
+            }
+            Err(e) => {
+                tracing::warn!("DHT lookup failed for peer {}: {}", hex::encode(&peer_id[..8]), e);
+                Err(NodeError::Discovery(format!("Peer discovery failed: {}", e)))
+            }
+        }
+    }
+
     /// Establish session with peer (via DHT lookup)
     pub async fn establish_session(&self, peer_id: &PeerId) -> Result<SessionId> {
         if let Some(connection) = self.inner.sessions.get(peer_id) {
             return Ok(connection.session_id);
         }
-        // TODO: Lookup peer address via DHT
-        let peer_addr: SocketAddr = "127.0.0.1:8421".parse().unwrap();
+
+        // Discover peer addresses via DHT/STUN/relay
+        let addrs = self.discover_peer(peer_id).await?;
+        if addrs.is_empty() {
+            return Err(NodeError::PeerNotFound(*peer_id));
+        }
+
+        // Try first address (in future, could try multiple in parallel)
+        let peer_addr = addrs[0];
         self.establish_session_with_addr(peer_id, peer_addr).await
     }
 
@@ -341,7 +376,28 @@ impl Node {
             hex::encode(&session_id[..8]),
             cid_u64
         );
+
+        // Announce peer to DHT (best-effort, don't fail session if announcement fails)
+        self.announce_peer_to_dht(&peer_id, peer_addr).await;
+
         Ok(session_id)
+    }
+
+    /// Announce peer to DHT (best-effort)
+    async fn announce_peer_to_dht(&self, peer_id: &PeerId, peer_addr: SocketAddr) {
+        if let Some(discovery) = self.inner.discovery.lock().await.as_ref() {
+            let dht = discovery.dht();
+            if let Ok(mut dht_write) = dht.try_write() {
+                let node_id = wraith_discovery::dht::NodeId::from_bytes(*peer_id);
+                let dht_peer = wraith_discovery::dht::DhtPeer::new(node_id, peer_addr);
+                let routing_table = dht_write.routing_table_mut();
+                if let Err(e) = routing_table.insert(dht_peer) {
+                    tracing::debug!("Failed to announce peer {} to DHT: {}", hex::encode(&peer_id[..8]), e);
+                } else {
+                    tracing::debug!("Announced peer {} to DHT", hex::encode(&peer_id[..8]));
+                }
+            }
+        }
     }
 
     /// Get or establish session with peer
@@ -460,6 +516,207 @@ impl Node {
         Ok(transfer_id)
     }
 
+    /// Send file to multiple peers using multi-peer coordination
+    ///
+    /// Establishes sessions with all peers and uses the MultiPeerCoordinator
+    /// to intelligently assign chunks for parallel upload.
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - Path to the file to send
+    /// * `peer_ids` - List of peer IDs to send to
+    ///
+    /// # Returns
+    ///
+    /// Transfer ID for tracking progress
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - File doesn't exist or can't be read
+    /// - No peers provided
+    /// - Session establishment fails with all peers
+    pub async fn send_file_to_peers(
+        &self,
+        file_path: impl AsRef<Path>,
+        peer_ids: &[PeerId],
+    ) -> Result<TransferId> {
+        if peer_ids.is_empty() {
+            return Err(NodeError::InvalidState(
+                "No peers provided for multi-peer transfer".to_string(),
+            ));
+        }
+
+        let file_path = file_path.as_ref();
+        let file_size = std::fs::metadata(file_path).map_err(NodeError::Io)?.len();
+        if file_size == 0 {
+            return Err(NodeError::InvalidState(
+                "Cannot send empty file".to_string(),
+            ));
+        }
+
+        tracing::info!(
+            "Starting multi-peer send: {} to {} peers",
+            file_path.display(),
+            peer_ids.len()
+        );
+
+        // Create transfer ID and context
+        let transfer_id = Node::generate_transfer_id();
+        let chunk_size = self.inner.config.transfer.chunk_size;
+
+        // Compute tree hash
+        let tree_hash =
+            wraith_files::tree_hash::compute_tree_hash(file_path, chunk_size).map_err(NodeError::Io)?;
+
+        // Create send transfer session
+        let mut transfer_session = crate::transfer::TransferSession::new_send(
+            transfer_id,
+            file_path.to_path_buf(),
+            file_size,
+            chunk_size,
+        );
+        transfer_session.start();
+
+        // Add all peers to transfer session
+        for peer_id in peer_ids {
+            transfer_session.add_peer(*peer_id);
+        }
+
+        // Store transfer context
+        let context = Arc::new(FileTransferContext::new_send(
+            transfer_id,
+            Arc::new(tokio::sync::RwLock::new(transfer_session)),
+            tree_hash,
+        ));
+        self.inner.transfers.insert(transfer_id, context.clone());
+
+        // Create multi-peer coordinator
+        let strategy = self.inner.config.transfer.chunk_assignment_strategy;
+        let coordinator = crate::node::multi_peer::MultiPeerCoordinator::new(strategy);
+
+        // Establish sessions with all peers and add to coordinator
+        let mut sessions = Vec::new();
+        for peer_id in peer_ids {
+            match self.get_or_establish_session(peer_id).await {
+                Ok(session) => {
+                    coordinator.add_peer(*peer_id, session.peer_addr).await;
+                    sessions.push((*peer_id, session));
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to establish session with peer {:?}: {}", peer_id, e);
+                }
+            }
+        }
+
+        if sessions.is_empty() {
+            return Err(NodeError::Transfer(
+                "Failed to establish session with any peer".to_string(),
+            ));
+        }
+
+        tracing::info!(
+            "Established sessions with {} out of {} peers",
+            sessions.len(),
+            peer_ids.len()
+        );
+
+        // Spawn task to coordinate chunk uploads
+        let node = self.clone();
+        let file_path_buf = file_path.to_path_buf();
+        tokio::spawn(async move {
+            if let Err(e) = node
+                .coordinate_multi_peer_upload(transfer_id, file_path_buf, sessions, coordinator)
+                .await
+            {
+                tracing::error!("Error in multi-peer upload: {}", e);
+            }
+        });
+
+        Ok(transfer_id)
+    }
+
+    /// Coordinate multi-peer upload (internal helper)
+    async fn coordinate_multi_peer_upload(
+        &self,
+        transfer_id: TransferId,
+        file_path: PathBuf,
+        sessions: Vec<(PeerId, Arc<crate::node::session::PeerConnection>)>,
+        coordinator: crate::node::multi_peer::MultiPeerCoordinator,
+    ) -> Result<()> {
+        let chunk_size = self.inner.config.transfer.chunk_size;
+        let mut chunker = wraith_files::chunker::FileChunker::new(&file_path, chunk_size)
+            .map_err(NodeError::Io)?;
+
+        let total_chunks = chunker.num_chunks();
+        let stream_id = ((transfer_id[0] as u16) << 8) | (transfer_id[1] as u16);
+
+        tracing::debug!("Uploading {} chunks across {} peers", total_chunks, sessions.len());
+
+        // Assign and upload chunks
+        for chunk_index in 0..total_chunks {
+            // Assign chunk to a peer
+            let peer_id = match coordinator.assign_chunk(chunk_index as usize).await {
+                Some(id) => id,
+                None => {
+                    tracing::warn!("No available peer for chunk {}", chunk_index);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+            };
+
+            // Find the session for this peer
+            let session = sessions
+                .iter()
+                .find(|(id, _)| *id == peer_id)
+                .map(|(_, session)| session.clone());
+
+            if let Some(session) = session {
+                // Read chunk data
+                let chunk_data = chunker.read_chunk_at(chunk_index).map_err(NodeError::Io)?;
+                let chunk_len = chunk_data.len();
+
+                // Build and send chunk frame
+                let chunk_frame = crate::node::file_transfer::build_chunk_frame(
+                    stream_id,
+                    chunk_index,
+                    &chunk_data,
+                )?;
+
+                let start = Instant::now();
+                if let Err(e) = self.send_encrypted_frame(&session, &chunk_frame).await {
+                    tracing::warn!("Failed to send chunk {} to peer {:?}: {}", chunk_index, peer_id, e);
+                    coordinator.reassign_chunk(chunk_index as usize).await;
+                    continue;
+                }
+
+                // Record success
+                let duration = start.elapsed();
+                coordinator
+                    .record_success(chunk_index as usize, chunk_len as u64, duration)
+                    .await;
+
+                // Update progress
+                if let Some(context) = self.inner.transfers.get(&transfer_id) {
+                    context
+                        .transfer_session
+                        .write()
+                        .await
+                        .mark_chunk_transferred(chunk_index, chunk_len);
+                }
+            }
+        }
+
+        tracing::info!(
+            "Multi-peer upload complete: {:?} ({} chunks to {} peers)",
+            transfer_id,
+            total_chunks,
+            sessions.len()
+        );
+
+        Ok(())
+    }
+
     /// Wait for transfer to complete
     pub async fn wait_for_transfer(&self, transfer_id: TransferId) -> Result<()> {
         loop {
@@ -474,16 +731,36 @@ impl Node {
         }
     }
 
-    /// Get transfer progress
-    pub async fn get_transfer_progress(&self, transfer_id: &TransferId) -> Option<f64> {
-        self.inner
-            .transfers
-            .get(transfer_id)
-            .map(|context| context.transfer_session.clone())
-            .map(|session| async move { session.read().await.progress() })
-            .map(|fut| {
-                tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(fut))
-            })
+    /// Get detailed transfer progress
+    pub async fn get_transfer_progress(
+        &self,
+        transfer_id: &TransferId,
+    ) -> Option<crate::node::progress::TransferProgress> {
+        let context = self.inner.transfers.get(transfer_id)?;
+        let session = context.transfer_session.read().await;
+
+        let bytes_sent = session.bytes_transferred();
+        let bytes_total = session.file_size;
+        let chunks_sent = session.transferred_count() as usize;
+        let chunks_total = session.total_chunks as usize;
+        let speed = session.speed().unwrap_or(0.0);
+
+        let mut progress = crate::node::progress::TransferProgress::new(
+            *transfer_id,
+            bytes_total,
+            chunks_total,
+        );
+
+        progress.update(bytes_sent, chunks_sent, speed);
+
+        // Set status based on session state
+        if session.is_complete() {
+            progress.status = crate::node::progress::TransferStatus::Complete;
+        } else if bytes_sent > 0 {
+            progress.status = crate::node::progress::TransferStatus::Transferring;
+        }
+
+        Some(progress)
     }
 
     /// List active transfers

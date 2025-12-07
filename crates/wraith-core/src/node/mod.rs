@@ -71,6 +71,7 @@ pub mod node;
 pub mod obfuscation;
 pub mod packet_handler;
 pub mod padding_strategy;
+pub mod progress;
 pub mod rate_limiter;
 pub mod resume;
 pub mod routing;
@@ -98,6 +99,7 @@ pub use padding_strategy::{
     ConstantRatePadding, NonePadding, PaddingStrategy, PowerOfTwoPadding, SizeClassesPadding,
     StatisticalPadding, create_padding_strategy,
 };
+pub use progress::{TransferProgress, TransferStatus};
 pub use rate_limiter::{RateLimitConfig, RateLimitMetrics, RateLimiter};
 pub use resume::{ResumeManager, ResumeState};
 pub use routing::{RoutingStats, RoutingTable, extract_connection_id};

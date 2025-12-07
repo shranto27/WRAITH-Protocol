@@ -17,6 +17,7 @@ wraith-crypto = { workspace = true }
 wraith-files = { workspace = true }
 wraith-transport = { workspace = true }
 wraith-discovery = { workspace = true }
+wraith-obfuscation = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 zeroize = { workspace = true }

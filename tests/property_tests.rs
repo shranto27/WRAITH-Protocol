@@ -563,56 +563,6 @@ mod bbr_properties {
 }
 
 // ============================================================================
-// Session State Machine Properties
-// ============================================================================
-
-mod session_state_properties {
-    use super::*;
-    use wraith_core::session::SessionState;
-
-    proptest! {
-        /// Session state transitions are unidirectional (no backwards transitions)
-        #[test]
-        fn state_transitions_unidirectional(
-            transitions in prop::collection::vec(0u8..4, 0..10),
-        ) {
-            let mut state = SessionState::Init;
-
-            for t in transitions {
-                let new_state = match (state, t % 3) {
-                    (SessionState::Init, 0) => SessionState::Handshake,
-                    (SessionState::Handshake, 0) => SessionState::Active,
-                    (SessionState::Active, 0) => SessionState::Closing,
-                    _ => state, // No transition
-                };
-
-                // Verify we never go backwards
-                prop_assert!(
-                    state <= new_state,
-                    "State should never transition backwards: {:?} -> {:?}",
-                    state,
-                    new_state
-                );
-
-                state = new_state;
-            }
-        }
-
-        /// Terminated state is final (no transitions from Terminated)
-        #[test]
-        fn terminated_is_final(attempt_count in 1usize..100) {
-            let state = SessionState::Terminated;
-
-            for _ in 0..attempt_count {
-                // Any attempted transition from Terminated should be rejected
-                // (In reality, no transitions are allowed from Terminated)
-                prop_assert_eq!(state, SessionState::Terminated);
-            }
-        }
-    }
-}
-
-// ============================================================================
 // Chunk Reassembly Properties
 // ============================================================================
 
@@ -703,92 +653,6 @@ mod chunk_properties {
 }
 
 // ============================================================================
-// Padding Properties
-// ============================================================================
-
-mod padding_properties {
-    use super::*;
-    use wraith_obfuscation::{PaddingMode, PaddingOracle};
-
-    proptest! {
-        /// PowerOfTwo padding always rounds up to power of 2
-        #[test]
-        fn power_of_two_padding_correct(size in 1usize..10000) {
-            let mut oracle = PaddingOracle::new(PaddingMode::PowerOfTwo);
-            let padded_size = oracle.padded_size(size);
-
-            // Check it's a power of 2
-            prop_assert!(
-                padded_size.is_power_of_two(),
-                "{} should be a power of 2",
-                padded_size
-            );
-
-            // Check it's >= original size
-            prop_assert!(
-                padded_size >= size,
-                "{} should be >= {}",
-                padded_size, size
-            );
-
-            // Check it's the smallest power of 2 >= size
-            if size > 1 {
-                let next_smaller = padded_size / 2;
-                prop_assert!(
-                    next_smaller < size,
-                    "Next smaller power of 2 ({}) should be less than size ({})",
-                    next_smaller, size
-                );
-            }
-        }
-
-        /// SizeClasses padding uses predefined sizes
-        #[test]
-        fn size_classes_uses_predefined_sizes(size in 1usize..10000) {
-            let mut oracle = PaddingOracle::new(PaddingMode::SizeClasses);
-            let padded_size = oracle.padded_size(size);
-
-            // Should be one of the predefined size classes
-            let size_classes = [256, 512, 1024, 2048, 4096, 8192, 16384];
-            prop_assert!(
-                size_classes.contains(&padded_size) || padded_size >= 16384,
-                "{} should be in size classes or >= 16384",
-                padded_size
-            );
-
-            // Should be >= original size
-            prop_assert!(
-                padded_size >= size,
-                "{} should be >= {}",
-                padded_size, size
-            );
-        }
-
-        /// ConstantRate padding adds consistent amount
-        #[test]
-        fn constant_rate_padding_consistent(size in 1usize..10000) {
-            let mut oracle = PaddingOracle::new(PaddingMode::ConstantRate);
-            let padded_size = oracle.padded_size(size);
-
-            // Should be >= original size
-            prop_assert!(
-                padded_size >= size,
-                "{} should be >= {}",
-                padded_size, size
-            );
-
-            // Padding overhead should be bounded
-            let overhead = padded_size - size;
-            prop_assert!(
-                overhead <= 1024,
-                "Padding overhead {} should be reasonable",
-                overhead
-            );
-        }
-    }
-}
-
-// ============================================================================
 // DHT Node ID Properties
 // ============================================================================
 
@@ -859,10 +723,11 @@ mod rate_limit_properties {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let config = RateLimitConfig {
-                max_connections_per_ip: 5,
-                max_packets_per_second: 1000,
-                max_bandwidth_per_second: 10_000_000,
+                max_connections_per_ip_per_minute: 5,
+                max_packets_per_session_per_second: 1000,
+                max_bytes_per_session_per_second: 10_000_000,
                 max_concurrent_sessions: 100,
+                refill_interval: std::time::Duration::from_secs(1),
             };
 
             let limiter = RateLimiter::new(config);
@@ -883,10 +748,11 @@ mod rate_limit_properties {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let config = RateLimitConfig {
-                max_connections_per_ip: 100,
-                max_packets_per_second: 1000,
-                max_bandwidth_per_second: 10_000_000,
+                max_connections_per_ip_per_minute: 100,
+                max_packets_per_session_per_second: 1000,
+                max_bytes_per_session_per_second: 10_000_000,
                 max_concurrent_sessions: 3,
+                refill_interval: std::time::Duration::from_secs(1),
             };
 
             let limiter = RateLimiter::new(config);

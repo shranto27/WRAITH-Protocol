@@ -201,7 +201,7 @@ impl ResumeManager {
         // Save to disk
         let path = self.state_file_path(&state.transfer_id);
         let json = serde_json::to_string_pretty(state)
-            .map_err(|e| NodeError::Other(format!("Failed to serialize state: {}", e)))?;
+            .map_err(|e| NodeError::Serialization(format!("Failed to serialize state: {}", e)))?;
 
         fs::write(&path, json).await?;
 
@@ -226,7 +226,7 @@ impl ResumeManager {
 
         let json = fs::read_to_string(&path).await?;
         let state: ResumeState = serde_json::from_str(&json)
-            .map_err(|e| NodeError::Other(format!("Failed to deserialize state: {}", e)))?;
+            .map_err(|e| NodeError::Serialization(format!("Failed to deserialize state: {}", e)))?;
 
         // Update cache
         {

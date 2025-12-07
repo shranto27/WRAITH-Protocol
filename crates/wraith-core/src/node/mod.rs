@@ -21,6 +21,16 @@
 //! └─────────────────────────────────────────────────────────┘
 //! ```
 //!
+//! # Module Structure
+//!
+//! - [`node`] - Main Node struct and lifecycle management
+//! - [`identity`] - Identity management (Ed25519 + X25519 keys)
+//! - [`session_manager`] - Session lifecycle management
+//! - [`transfer_manager`] - File transfer coordination
+//! - [`session`] - PeerConnection and handshake functions
+//! - [`config`] - Configuration types
+//! - [`error`] - Error types
+//!
 //! # Example
 //!
 //! ```no_run
@@ -50,17 +60,21 @@ pub mod discovery;
 pub mod error;
 pub mod file_transfer;
 pub mod health;
+pub mod identity;
 pub mod multi_peer;
 pub mod nat;
 #[allow(clippy::module_inception)]
 pub mod node;
 pub mod obfuscation;
+pub mod packet_handler;
 pub mod padding_strategy;
 pub mod rate_limiter;
 pub mod resume;
 pub mod routing;
 pub mod session;
+pub mod session_manager;
 pub mod transfer;
+pub mod transfer_manager;
 
 pub use buffer_pool::BufferPool;
 pub use circuit_breaker::{
@@ -69,9 +83,10 @@ pub use circuit_breaker::{
 pub use config::NodeConfig;
 pub use connection::{HealthMetrics, HealthStatus};
 pub use discovery::{NatType, NodeCapabilities, PeerAnnouncement, PeerInfo};
-pub use error::NodeError;
+pub use error::{NodeError, Result};
 pub use file_transfer::{FileMetadata, FileTransferContext};
 pub use health::{HealthAction, HealthConfig, HealthMonitor};
+pub use identity::{Identity, TransferId};
 pub use multi_peer::{ChunkAssignmentStrategy, MultiPeerCoordinator, PeerPerformance};
 pub use nat::{CandidateType, IceCandidate};
 pub use node::Node;
@@ -84,3 +99,5 @@ pub use rate_limiter::{RateLimitConfig, RateLimitMetrics, RateLimiter};
 pub use resume::{ResumeManager, ResumeState};
 pub use routing::{RoutingStats, RoutingTable, extract_connection_id};
 pub use session::PeerConnection;
+pub use session_manager::SessionManager;
+pub use transfer_manager::TransferManager;

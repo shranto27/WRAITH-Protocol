@@ -1,6 +1,16 @@
 //! Build automation tasks for WRAITH Protocol
 //!
 //! Run with: `cargo xtask <command>`
+//!
+//! ## Available Commands
+//!
+//! - `test` - Run all tests
+//! - `lint` - Run clippy lints
+//! - `fmt` - Check formatting
+//! - `ci` - Run all CI checks
+//! - `coverage` - Generate code coverage report
+//! - `doc` - Generate documentation
+//! - `build-xdp` - Build XDP program (requires root)
 
 use clap::{Parser, Subcommand};
 use std::process::Command;
@@ -32,6 +42,21 @@ enum Commands {
 
     /// Generate documentation
     Doc,
+
+    /// Generate code coverage report (requires cargo-llvm-cov)
+    Coverage {
+        /// Generate HTML report and open in browser
+        #[arg(long)]
+        html: bool,
+
+        /// Generate LCOV report for CI integration
+        #[arg(long)]
+        lcov: bool,
+
+        /// Output directory for reports (default: target/coverage)
+        #[arg(long, default_value = "target/coverage")]
+        output_dir: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -61,6 +86,77 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Doc => {
             run_command("cargo", &["doc", "--workspace", "--no-deps", "--open"])?;
+        }
+        Commands::Coverage { html, lcov, output_dir } => {
+            println!("Generating code coverage report...");
+            println!("Note: Requires cargo-llvm-cov (install with: cargo install cargo-llvm-cov)");
+
+            // Check if cargo-llvm-cov is installed
+            let check = Command::new("cargo")
+                .args(["llvm-cov", "--version"])
+                .output();
+
+            if check.is_err() || !check.unwrap().status.success() {
+                eprintln!("Error: cargo-llvm-cov is not installed.");
+                eprintln!("Install it with: cargo install cargo-llvm-cov");
+                eprintln!("Or with rustup: rustup component add llvm-tools-preview");
+                anyhow::bail!("cargo-llvm-cov not found");
+            }
+
+            // Create output directory
+            std::fs::create_dir_all(&output_dir)?;
+
+            if html {
+                // Generate HTML report
+                let html_dir = format!("{}/html", output_dir);
+                println!("Generating HTML report in {}", html_dir);
+                run_command(
+                    "cargo",
+                    &[
+                        "llvm-cov",
+                        "--workspace",
+                        "--all-features",
+                        "--html",
+                        "--output-dir",
+                        &html_dir,
+                    ],
+                )?;
+                println!("HTML report generated: {}/index.html", html_dir);
+
+                // Try to open in browser
+                #[cfg(target_os = "linux")]
+                let _ = Command::new("xdg-open")
+                    .arg(format!("{}/index.html", html_dir))
+                    .spawn();
+                #[cfg(target_os = "macos")]
+                let _ = Command::new("open")
+                    .arg(format!("{}/index.html", html_dir))
+                    .spawn();
+            } else if lcov {
+                // Generate LCOV report for CI
+                let lcov_path = format!("{}/lcov.info", output_dir);
+                println!("Generating LCOV report: {}", lcov_path);
+                run_command(
+                    "cargo",
+                    &[
+                        "llvm-cov",
+                        "--workspace",
+                        "--all-features",
+                        "--lcov",
+                        "--output-path",
+                        &lcov_path,
+                    ],
+                )?;
+                println!("LCOV report generated: {}", lcov_path);
+            } else {
+                // Default: show summary in terminal
+                run_command(
+                    "cargo",
+                    &["llvm-cov", "--workspace", "--all-features"],
+                )?;
+            }
+
+            println!("Coverage report complete!");
         }
     }
 

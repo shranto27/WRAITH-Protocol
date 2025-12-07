@@ -2,7 +2,7 @@
 //!
 //! Coordinates file downloads from multiple peers in parallel with chunk assignment.
 
-use crate::node::node::TransferId;
+use crate::node::identity::TransferId;
 use crate::node::session::PeerId;
 use crate::node::{Node, NodeError};
 use crate::transfer::TransferSession;

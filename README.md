@@ -9,7 +9,7 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-1.2.5-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Security](https://img.shields.io/badge/security-audited-green.svg)](docs/security/SECURITY_AUDIT_v1.1.0.md)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
@@ -17,9 +17,9 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 ## Current Status
 
-**Version:** 1.2.5 Maintenance Release | **Development Phase:** Phase 12 Complete
+**Version:** 1.3.0 Performance & Security Release | **Development Phase:** Phase 13 Complete
 
-WRAITH Protocol is enterprise-ready with modular architecture, comprehensive security hardening, and complete Node API integration. The protocol has completed Phase 12: Technical Excellence & Production Hardening.
+WRAITH Protocol is enterprise-ready with lock-free ring buffers for high-performance packet processing, comprehensive DPI evasion validation, and enhanced connection health monitoring. The protocol has completed Phase 13: Node API Integration & Performance.
 
 **Project Metrics (2025-12-07):**
 - **Code Volume:** ~37,948 lines of Rust code across 104 source files

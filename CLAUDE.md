@@ -58,17 +58,27 @@ WRAITH-Protocol/
 │   └── wraith-xdp/         # eBPF/XDP programs (Linux-only, excluded from default build)
 ├── xtask/                  # Build automation (cargo xtask <cmd>)
 ├── docs/                   # Documentation
+│   ├── archive/            # Archived/outdated documentation
 │   ├── architecture/       # Architecture documentation
+│   ├── cli/                # CLI documentation and guides
 │   ├── clients/            # Client application specs
-│   ├── engineering/        # Release guides, engineering docs
+│   ├── engineering/        # API reference, coding standards, release notes
 │   ├── integration/        # Integration guides
 │   ├── operations/         # Operations and deployment guides
+│   ├── progress/           # Development progress tracking
 │   ├── runbooks/           # Operational runbooks
-│   ├── security/           # Security documentation
+│   ├── security/           # Security audits and documentation
 │   ├── technical/          # Technical debt analysis, refactoring docs
 │   ├── testing/            # Testing guides and strategies
+│   ├── xdp/                # XDP/eBPF documentation
+│   ├── COMPARISON.md       # Protocol comparison (QUIC, WireGuard, BitTorrent)
 │   ├── CONFIG_REFERENCE.md # Configuration reference
-│   └── USER_GUIDE.md       # User guide
+│   ├── INTEGRATION_GUIDE.md # Developer integration guide
+│   ├── PERFORMANCE_REPORT.md # Performance benchmarks and analysis
+│   ├── SECURITY_AUDIT.md   # Latest security audit report
+│   ├── TROUBLESHOOTING.md  # Troubleshooting guide
+│   ├── TUTORIAL.md         # Getting started tutorial
+│   └── USER_GUIDE.md       # End-user guide
 ├── to-dos/                 # Project planning and task tracking
 │   ├── protocol/           # Phase planning and progress documents
 │   ├── completed/          # Completed phase summaries

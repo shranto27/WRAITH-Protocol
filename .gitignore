@@ -53,3 +53,8 @@ CLAUDE.local.md
 
 # Benchmarks
 criterion/
+
+# Fuzzing artifacts
+fuzz/artifacts/
+fuzz/corpus/
+fuzz/target/

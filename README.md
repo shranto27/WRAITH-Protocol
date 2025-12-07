@@ -9,7 +9,7 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-1.2.5-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Security](https://img.shields.io/badge/security-audited-green.svg)](docs/security/SECURITY_AUDIT_v1.1.0.md)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
@@ -17,7 +17,7 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 ## Current Status
 
-**Version:** 1.2.1 Maintenance Release | **Development Phase:** Phase 12 Complete
+**Version:** 1.2.5 Maintenance Release | **Development Phase:** Phase 12 Complete
 
 WRAITH Protocol is enterprise-ready with modular architecture, comprehensive security hardening, and complete Node API integration. The protocol has completed Phase 12: Technical Excellence & Production Hardening.
 
@@ -135,7 +135,7 @@ cargo test --workspace
 
 ## Quick Start
 
-**Note:** WRAITH Protocol is currently in early development (v1.2.1). The CLI interface is scaffolded but not yet functional. The following commands represent the planned interface:
+**Note:** WRAITH Protocol is currently in early development (v1.2.5). The CLI interface is scaffolded but not yet functional. The following commands represent the planned interface:
 
 ```bash
 # Send a file (coming soon)
@@ -602,4 +602,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v1.2.1 Patch Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,289 (1,270 passing + 19 ignored) | **Quality:** Grade A+ (95/100), 0 vulnerabilities, 5 fuzz targets, zero warnings
+**Status:** v1.2.5 Maintenance Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,289 (1,270 passing + 19 ignored) | **Quality:** Grade A+ (95/100), 0 vulnerabilities, 5 fuzz targets, zero warnings

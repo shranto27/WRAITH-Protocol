@@ -17,292 +17,73 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 ## Current Status
 
-**Version:** 1.2.1 Maintenance Release | **Phase 12 COMPLETE**
+**Version:** 1.2.1 Maintenance Release | **Development Phase:** Phase 12 Complete
 
-WRAITH Protocol has completed Phase 12: Technical Excellence & Production Hardening, delivering 126 story points across 6 focused sprints. The protocol is enterprise-ready with modular architecture, lock-free buffer pools, comprehensive testing infrastructure, enhanced security hardening, and complete Node API integration.
+WRAITH Protocol is enterprise-ready with modular architecture, comprehensive security hardening, and complete Node API integration. The protocol has completed Phase 12: Technical Excellence & Production Hardening.
 
 **Project Metrics (2025-12-07):**
-- **Code Volume:** ~37,948 lines of Rust code (~28,342 LOC + ~2,559 comments + ~7,047 blanks) across 104 Rust source files
+- **Code Volume:** ~37,948 lines of Rust code across 104 source files
 - **Test Coverage:** 1,289 total tests (1,270 passing, 19 ignored) - 100% pass rate on active tests
 - **Documentation:** 94 markdown files, ~50,391 lines of comprehensive documentation
 - **Dependencies:** 287 audited packages (zero vulnerabilities via cargo-audit)
-- **Security:** Grade A+ (95/100), 12% technical debt ratio, 5 active fuzz targets, zero warnings
+- **Security:** Grade A+ (95/100), zero vulnerabilities, 5 active fuzz targets
+- **Quality:** 12% technical debt ratio, zero compiler/clippy warnings
 
-**Phase 12: Technical Excellence & Production Hardening (126 SP) - COMPLETE (2025-12-07):**
-
-**Sprint 12.1: Node.rs Modularization (28 SP) - COMPLETE:**
-- ✅ **Architecture Refactoring:** Split monolithic 2,800-line node.rs into 8 focused modules
-  - Improved compilation times, better organization, enhanced maintainability
-- ✅ **Error Handling:** Consolidated fragmented error types into unified `NodeError` enum
-- ✅ **Code Quality:** Zero clippy/compiler warnings, 95%+ documentation coverage
-
-**Sprint 12.2: Dependency Updates & Supply Chain Security (18 SP) - COMPLETE:**
-- ✅ **Dependency Audit:** All 286 dependencies scanned with cargo-audit (zero vulnerabilities)
-- ✅ **Security Scanning:** Weekly automated scans (Dependabot + cargo-audit + CodeQL)
-- ✅ **Gitleaks Integration:** Secret scanning with automated PR checks
-
-**Sprint 12.3: Testing Infrastructure (22 SP) - COMPLETE:**
-- ✅ **Flaky Test Fixes:** Fixed timing-sensitive tests (connection timeout, DHT, multi-peer)
-- ✅ **Two-Node Fixture:** Reusable infrastructure for integration testing
-- ✅ **Property Testing:** 15 QuickCheck-style property tests validating invariants
-
-**Sprint 12.4: Feature Completion & Node API Integration (24 SP) - COMPLETE:**
-- ✅ **Discovery Integration:** DHT peer lookup, bootstrap nodes, peer discovery caching
-- ✅ **Obfuscation Integration:** Traffic obfuscation pipeline (4 padding + 4 timing + 3 mimicry modes)
-- ✅ **Progress Tracking:** Real-time transfer progress API with bytes/speed/ETA metrics
-- ✅ **Multi-Peer Optimization:** 4 chunk assignment strategies (RoundRobin, FastestFirst, LoadBalanced, Adaptive)
-
-**Sprint 12.5: Security Hardening & Monitoring (20 SP) - COMPLETE:**
-- ✅ **Rate Limiting:** Token bucket algorithm (node/STUN/relay levels, ~1μs overhead)
-- ✅ **IP Reputation:** Per-IP reputation scores with threshold enforcement (0-100 range)
-- ✅ **Zeroization Validation:** All secret key types implement `ZeroizeOnDrop` with automated tests
-- ✅ **Security Monitoring:** Real-time metrics for failed handshakes, rate limits, invalid messages
-
-**Sprint 12.6: Performance Optimization & Documentation (14 SP) - COMPLETE:**
-- ✅ **Performance Documentation:** Updated PERFORMANCE_REPORT.md with Phase 12 enhancements
-- ✅ **Release Documentation:** Comprehensive release notes (docs/engineering/RELEASE_NOTES_v1.2.0.md)
-- ✅ **Version Bump:** All crates bumped from 1.1.1 to 1.2.0
-
-**Progress: 1,143/947 story points delivered (121% - Phases 10-12 significantly exceeded original scope)**
-
-**Code Quality Metrics:**
-- **Quality Grade:** A+ (95/100)
-- **Technical Debt Ratio:** 12% (healthy range)
-- **Test Coverage:** 1,289 total tests (1,270 passing, 19 ignored) - 100% pass rate on active tests
-  - 357 wraith-core (frame parsing, sessions, streams, BBR, migration, Node API, rate limiting, health, circuit breakers, resume, multi-peer)
-  - 152 wraith-crypto (Ed25519, X25519, Elligator2, AEAD, Noise, Ratchet, encryption at rest)
-  - 38 wraith-files (chunking, reassembly, tree hashing, O(m) algorithms)
-  - 167 wraith-obfuscation (padding, timing, TLS/WebSocket/DoH mimicry)
-  - 231 wraith-discovery (DHT, STUN, ICE, relay)
-  - 96 wraith-transport (AF_XDP, io_uring, UDP, worker pools)
-  - 248 integration tests (end-to-end, Node API integration, NAT traversal, multi-peer, error recovery, doc tests)
-- **Security Vulnerabilities:** Zero (287 dependencies scanned with cargo-audit, CodeQL verified, [v1.1.0 audit](docs/security/SECURITY_AUDIT_v1.1.0.md))
-- **Clippy Warnings:** Zero (strict `-D warnings` enforcement)
-- **Compiler Warnings:** Zero
-- **Code Volume:** ~37,948 lines total (~28,342 LOC + ~2,559 comments + ~7,047 blanks) across 104 Rust source files in 7 active crates
-- **Fuzzing:** 5 libFuzzer targets continuously testing parser robustness
-  - frame_parser: SIMD/scalar frame parsing with arbitrary bytes
-  - dht_message: Kademlia message handling (FIND_NODE, FIND_VALUE, STORE)
-  - padding: All padding modes with round-trip validation
-  - crypto: AEAD encrypt/decrypt and key derivation
-  - tree_hash: Merkle tree construction with incremental hashing
-- **Property Tests:** 15 QuickCheck-style property tests validating state machine invariants
-- **Unsafe Code:** 50 blocks with 100% SAFETY documentation (zero unsafe in crypto paths)
-- **Documentation:** 94 markdown files, ~50,391 lines, complete API coverage, deployment guides, XDP documentation
-
-**Implementation Status:**
-- **Core workspace:** 9 crates (8 active + 1 XDP), ~37,948 lines total (~28,342 LOC + ~2,559 comments + ~7,047 blanks)
-- **Test coverage:** 1,289 total tests (1,270 passing, 19 ignored) with 100% pass rate on active tests
-  - **wraith-core** (357 tests): **Node API orchestration layer**, Frame parsing with SIMD acceleration (172M frames/sec), session state machine with 7 states, stream multiplexing with prioritization, BBR congestion control with pacing, path MTU discovery with caching, connection migration with PATH_CHALLENGE/RESPONSE, transfer session management, rate limiting (token bucket), health monitoring (3 states), circuit breakers, resume robustness, multi-peer optimization (4 strategies)
-  - **wraith-crypto** (152 tests): Ed25519 signatures with batch verification, X25519 key exchange with Elligator2 encoding, XChaCha20-Poly1305 AEAD with key commitment (3.2 GB/s), BLAKE3 hashing with SIMD (8.5 GB/s), Noise_XX handshake with mutual authentication, Double Ratchet with DH and symmetric ratcheting, replay protection with 64-bit sliding window, private key encryption at rest (Argon2id + XChaCha20-Poly1305)
-  - **wraith-files** (38 tests): io_uring async file I/O with registered buffers and zero-copy, file chunking with seek support (14.85 GiB/s), file reassembly with O(m) missing chunks algorithm (5.42 GiB/s), BLAKE3 tree hashing with Merkle verification (4.71 GiB/s), incremental tree hasher for streaming, chunk verification (4.78 GiB/s)
-  - **wraith-obfuscation** (167 tests): Padding engine with 5 modes (PowerOfTwo, SizeClasses, ConstantRate, Statistical), timing obfuscation with 5 distributions (Uniform, Normal, Exponential), TLS 1.3 record layer mimicry, WebSocket binary framing (RFC 6455), DNS-over-HTTPS tunneling, adaptive threat-level profiles (Low/Medium/High/Paranoid)
-  - **wraith-discovery** (231 tests): Privacy-enhanced Kademlia DHT with BLAKE3 NodeIds, S/Kademlia Sybil resistance (20-bit difficulty), DHT privacy with keyed info_hash, STUN client (RFC 5389) with MESSAGE-INTEGRITY, ICE candidate gathering with UDP hole punching, DERP-style relay infrastructure (client/server/selector)
-  - **wraith-transport** (96 tests): AF_XDP zero-copy sockets with batch processing (rx_batch/tx_batch), worker thread pools with CPU pinning, UDP transport with SO_REUSEPORT, MTU discovery with binary search, NUMA-aware allocation
-  - **Integration tests** (158 tests): End-to-end file transfer (5MB with resume), multi-peer coordination (3 peers, 20 chunks), NAT traversal components, relay fallback, obfuscation modes integration, Noise_XX + ratcheting workflow, cryptographic test vectors, connection migration, error recovery, concurrent transfers
-- **Benchmarks:** 28 Criterion benchmarks measuring frame parsing/building (~232 GiB/s theoretical), transport throughput/latency, MTU cache performance, worker pool scaling, obfuscation operation overhead, file chunking/reassembly, tree hashing throughput
-- **Performance highlights (Phase 10 Session 4 benchmarks):**
-  - Frame parsing: 172M frames/sec with SIMD acceleration (SSE2/NEON)
-  - AEAD encryption: 3.2 GB/s (XChaCha20-Poly1305)
-  - BLAKE3 hashing: 8.5 GB/s with rayon parallelization and SIMD
-  - **File chunking: 14.85 GiB/s** (measured Session 4, improved from 13.86 GiB/s)
-  - **Tree hashing: 4.71 GiB/s in-memory, 3.78 GiB/s from disk** (measured Session 4)
-  - **Chunk verification: 51.1 µs per 256 KiB chunk (4.78 GiB/s)** (measured Session 4)
-  - **File reassembly: 5.42 GiB/s** (measured Session 4, +6.2% improvement)
-  - Missing chunks query: O(m) where m = missing count (was O(n))
-- **Documentation:** 60+ files, 45,000+ lines including USER_GUIDE.md, CONFIG_REFERENCE.md, complete API documentation, architecture guides, deployment guides, security model, performance architecture
-- **CI/CD:** GitHub Actions workflows for testing (Linux/macOS/Windows), security scanning (Dependabot, CodeQL, cargo-audit), multi-platform releases (6 targets: Linux x86_64/aarch64/musl, macOS Intel/ARM, Windows x86_64-msvc)
-- **Security:** Zero vulnerabilities (cargo audit clean), CodeQL verified, weekly automated scans, RustSec advisory database integration, Gitleaks secret scanning
-- **Code quality:** Zero clippy warnings, zero unsafe code in cryptographic paths, 50 unsafe blocks with 100% SAFETY documentation, constant-time operations for all cryptographic primitives
-
-**Completed Components:**
-- ✅ **Phase 1 (89 SP):** Frame encoding/decoding with SIMD acceleration (172M frames/sec), session state machine with 7 states, stream multiplexing with prioritization, BBR congestion control with bandwidth probing
-- ✅ **Phase 2 (102 SP):** Ed25519 signatures with batch verification, X25519 key exchange with Elligator2 encoding, XChaCha20-Poly1305 AEAD with key commitment (3.2 GB/s), BLAKE3 hashing with SIMD (8.5 GB/s), Noise_XX handshake with mutual authentication, Double Ratchet with DH and symmetric ratcheting, replay protection with 64-bit sliding window
-- ✅ **Phase 3 (156 SP):** AF_XDP zero-copy networking with UMEM, io_uring async I/O with registered buffers, UDP transport with SO_REUSEPORT, worker thread pools with CPU pinning and NUMA awareness, MTU discovery with binary search and caching
-- ✅ **Phase 4 Part I (76 SP):** AF_XDP batch processing (rx_batch/tx_batch), BBR pacing enforcement with timer-based transmission, io_uring registered buffers for zero-copy, frame validation hardening (reserved stream IDs, offset bounds, payload limits)
-- ✅ **Phase 4 Part II (167 SP):** Complete traffic obfuscation layer - PaddingEngine (5 modes: PowerOfTwo, SizeClasses, ConstantRate, Statistical), TimingObfuscator (5 distributions: Fixed, Uniform, Normal, Exponential), TLS 1.3 record layer mimicry, WebSocket binary framing (RFC 6455), DNS-over-HTTPS tunneling, adaptive threat-level profiles (Low/Medium/High/Paranoid)
-- ✅ **Phase 5 (123 SP):** Discovery & NAT Traversal - Transport trait abstraction (AsyncUdpTransport), privacy-enhanced Kademlia DHT with BLAKE3 NodeIds and k-bucket routing (k=20), S/Kademlia Sybil resistance (20-bit difficulty, ~1M hash attempts), DHT privacy with BLAKE3-keyed info_hash, STUN client (RFC 5389) with MESSAGE-INTEGRITY authentication and NAT type detection, ICE candidate gathering with UDP hole punching, DERP-style relay infrastructure (RelayClient, RelayServer, RelaySelector with 4 selection strategies), unified DiscoveryManager orchestrating DHT/NAT/relay with automatic fallback
-- ✅ **Phase 6 (98 SP):** Integration & File Transfer - Enhanced file chunking (FileChunker/FileReassembler with seek support, out-of-order writes, resume tracking with HashSet), BLAKE3 tree hashing with Merkle verification (compute_tree_hash, compute_merkle_root, verify_chunk, >3 GiB/s throughput), incremental tree hasher for streaming (zero-copy chunk boundaries), transfer session state machine (7 states, progress tracking, multi-peer coordination with chunk assignment, speed/ETA calculation), CLI implementation (send/receive/daemon/status/peers/keygen commands, progress display with indicatif, TOML configuration system with 6 sections), integration test framework (19 tests including end-to-end transfer with resume), performance benchmarks (chunking, tree hashing, verification, reassembly)
-- ✅ **Phase 7 (158 SP):** Hardening & Optimization - Security audit with comprehensive review checklist, fuzzing infrastructure (5 libFuzzer targets: frame_parser, dht_message, padding, crypto, tree_hash), property-based testing (29 proptest invariants), O(m) missing chunks algorithm (was O(n), critical for large file resume), allocation-free incremental hashing, profiling infrastructure (CPU/memory/cache profiling with perf/valgrind), comprehensive documentation (USER_GUIDE.md ~800 lines, CONFIG_REFERENCE.md ~650 lines, expanded deployment guide with security hardening), cross-platform CI testing (Linux/macOS/Windows), packaging (deb/rpm/tar.gz with systemd service and security directives)
-- ✅ **v0.8.0 Enhancements (52 SP):** 7 integration tests (end-to-end file transfer with 5MB resume, multi-peer coordination with 3 peers and 20 chunks, NAT traversal, relay fallback, obfuscation integration, Noise_XX + ratcheting), private key encryption at rest (Argon2id key derivation with OWASP-recommended defaults, XChaCha20-Poly1305 AEAD, passphrase rotation, security presets: low/default/high, 705 LOC with 16 tests), AEAD module refactoring (split 1,529 LOC into 4 focused modules: cipher.rs, replay.rs, session.rs for improved maintainability), BLAKE3 SIMD acceleration (rayon + neon features for 2-4x faster parallel hashing, ARM64 optimization), security audit template (comprehensive 10-section review checklist covering crypto/memory/side-channels/network/dependencies, penetration testing scope, fuzzing commands)
-- ✅ **Phase 9 (85 SP):** Node API & Protocol Orchestration - Complete integration layer coordinating all protocol components (~4,000 lines, 9 modules, 57 tests). Sprint 9.1 (34 SP): Node struct with lifecycle, Identity management, session establishment, file transfer coordination, comprehensive configuration system. Sprint 9.2 (21 SP): DHT integration (announce, lookup_peer, find_peers, bootstrap), NAT traversal (STUN detection, ICE-lite hole punching, relay fallback), connection lifecycle (health monitoring, session migration). Sprint 9.3 (13 SP): Traffic obfuscation (4 padding modes, 4 timing distributions, 3 protocol mimicry types). Sprint 9.4 (17 SP): Multi-peer downloads with parallel chunk fetching, 7 integration tests, 4 performance benchmarks
-- ✅ **Phase 10 Sessions 2-3:** Protocol Component Wiring - Complete end-to-end integration (18 files, 3,147 lines, 7 integration tests). Session 2.4: NAT traversal integration (STUN hole punching, relay fallback, unified connection flow). Session 3.1: Crypto integration (frame encryption/decryption via SessionCrypto, key ratcheting on frame sequence). Session 3.2: File transfer integration (FileTransferManager with chunk routing, BLAKE3 tree hashing, progress tracking). Session 3.3: Obfuscation integration (complete pipeline: padding → encryption → mimicry → timing, cover traffic generator). Session 3.4: Integration testing (7 new tests: NAT traversal, crypto + frames, file transfer, obfuscation, multi-peer, discovery, connection migration)
-- ✅ **Advanced Features:** Path MTU Discovery with binary search and caching, Connection Migration with PATH_CHALLENGE/RESPONSE, Cover Traffic Generation with Poisson/uniform distributions, Buffer Pools with pre-allocated UMEM, XDP packet filtering (planned), 15 documented frame types (DATA, ACK, CONTROL, REKEY, PING/PONG, CLOSE, PAD, STREAM_*, PATH_*)
-- ✅ **Comprehensive test suite:** 1,120 tests total (1,096 passing + 24 ignored), 100% pass rate on active tests
-- ✅ **Performance benchmarks:** 28 Criterion benchmarks measuring all critical paths
-- ✅ **Security documentation:** SECURITY.md, comprehensive technical debt analysis
+For detailed development history and phase accomplishments, see [Protocol Development History](docs/archive/README_Protocol-DEV.md).
 
 ## Features
 
-### Phase 10: Fully Integrated Protocol (Sessions 2-3)
+### Core Capabilities
 
-**End-to-End Component Wiring:**
-- **NAT Traversal Integration:** STUN-based hole punching, relay fallback, unified connection flow
-  - Full Cone, Restricted Cone, Port-Restricted Cone, Symmetric NAT detection
-  - ICE-lite UDP hole punching with automatic relay fallback
-  - `establish_connection()`, `attempt_hole_punch()`, `connect_via_relay()` methods
-- **Cryptographic Integration:** Frame encryption/decryption with key ratcheting
-  - `SessionCrypto` integration for all frame types
-  - Automatic key rotation every 2 minutes or 1M packets
-  - Perfect forward secrecy with Double Ratchet
-- **File Transfer Integration:** Chunk routing and progress tracking
-  - `FileTransferManager` with multi-peer coordination
-  - BLAKE3 tree hashing with per-chunk verification (<1μs)
-  - Pause/resume support with missing chunks detection
-- **Obfuscation Pipeline:** Complete traffic analysis resistance
-  - Padding → Encryption → Mimicry → Timing obfuscation flow
-  - Cover traffic generator (Constant, Poisson, Uniform distributions)
-  - Protocol mimicry (TLS 1.3, WebSocket, DoH)
-- **Integration Tests:** 7 new tests covering all major workflows
-  - NAT traversal, crypto + frames, file transfer, obfuscation, multi-peer, discovery, connection migration
+**High-Performance Transport:**
+- Wire-speed transfers (10+ Gbps with AF_XDP kernel bypass)
+- Sub-millisecond latency (<1ms packet processing with io_uring)
+- Zero-copy I/O via AF_XDP UMEM and io_uring registered buffers
+- BBR congestion control with optimal bandwidth utilization
+- Async file I/O with io_uring
 
-### Node API (v0.9.0)
+**Security & Privacy:**
+- End-to-end encryption (XChaCha20-Poly1305 AEAD)
+- Perfect forward secrecy (Double Ratchet with DH and symmetric ratcheting)
+- Mutual authentication (Noise_XX handshake pattern)
+- Ed25519 digital signatures for identity verification
+- BLAKE3 cryptographic hashing
+- Traffic analysis resistance (Elligator2 key encoding)
+- Replay protection (64-bit sliding window)
+- Key commitment for AEAD (prevents multi-key attacks)
 
-**High-Level Protocol Orchestration:**
-- **Node Lifecycle:** `Node::new_random()`, `start()`, `stop()` for node management
-- **Session Management:** Noise_XX handshake with automatic key exchange
-- **File Transfer:** `send_file()`, `receive_file()` with progress monitoring
-- **DHT Integration:** Peer discovery, announcements, and lookup via Kademlia
-- **NAT Traversal:** STUN detection, ICE-lite hole punching, relay fallback
-- **Connection Management:** Health monitoring, session migration, automatic cleanup
-- **Traffic Obfuscation:** Integrated padding, timing, and protocol mimicry
-- **Multi-Peer Downloads:** Parallel chunk fetching with round-robin assignment
-- **Comprehensive Configuration:** 6 subsystems (Transport, Obfuscation, Discovery, Transfer, Logging)
+**Traffic Obfuscation:**
+- Packet padding (5 modes: PowerOfTwo, SizeClasses, ConstantRate, Statistical)
+- Timing obfuscation (5 distributions: Fixed, Uniform, Normal, Exponential)
+- Protocol mimicry (TLS 1.3, WebSocket, DNS-over-HTTPS)
+- Cover traffic generation (Constant, Poisson, Uniform distributions)
+- Adaptive threat-level profiles (Low, Medium, High, Paranoid)
 
-**Architecture:**
-- **9 Modules:** node, config, session, error, discovery, nat, connection, obfuscation, transfer
-- **Thread-Safe:** `Arc<RwLock<>>` shared state, `AtomicBool` lifecycle
-- **~4,000 Lines:** Complete integration layer coordinating all protocol components
-- **57 Tests:** Full coverage of all Node API operations
+**Decentralized Discovery:**
+- Privacy-enhanced Kademlia DHT with BLAKE3 NodeIds
+- S/Kademlia Sybil resistance (crypto puzzle-based NodeId generation)
+- NAT traversal (STUN client, ICE-lite UDP hole punching)
+- DERP-style relay infrastructure with automatic fallback
+- Connection migration with PATH_CHALLENGE/PATH_RESPONSE
 
-### Performance
-- **Wire-Speed Transfers**: 10+ Gbps throughput with AF_XDP kernel bypass
-- **Sub-Millisecond Latency**: <1ms packet processing with io_uring
-- **Zero-Copy I/O**: Direct NIC-to-application data path via AF_XDP UMEM
-- **Batch Processing**: rx_batch/tx_batch APIs for efficient packet handling
-- **BBR Congestion Control**: Optimal bandwidth utilization with timer-based pacing
-- **Async File I/O**: io_uring with registered buffers for zero-copy file operations
+**File Transfer:**
+- Chunked file transfer with BLAKE3 tree hashing
+- Multi-peer downloads with parallel chunk fetching
+- Resume support with missing chunks detection
+- Real-time progress tracking (bytes, speed, ETA)
+- Chunk verification (<1μs per chunk)
 
-### Security
+**Node API:**
+- High-level protocol orchestration layer
+- Lifecycle management (start/stop)
+- Session management (Noise_XX handshake)
+- File transfer coordination
+- DHT integration (peer discovery, announcements)
+- NAT traversal integration
+- Health monitoring and automatic cleanup
+- Comprehensive configuration system (6 subsystems)
 
-**Core Security Features:**
-- **Ed25519 Digital Signatures**: Identity verification and message authentication
-- **Strong Encryption**: XChaCha20-Poly1305 AEAD with key commitment (256-bit security, 192-bit nonce)
-- **Key Exchange**: X25519 with Elligator2 encoding for indistinguishability
-- **Perfect Forward Secrecy**: Double Ratchet with DH and symmetric ratcheting
-- **Mutual Authentication**: Noise_XX handshake pattern (3-message mutual auth)
-- **Hashing**: BLAKE3 with HKDF for key derivation
-
-**Advanced Security:**
-- **Replay Protection**: 64-bit sliding window bitmap prevents duplicate packet acceptance
-- **Key Commitment for AEAD**: BLAKE3-based commitment prevents multi-key attacks
-- **Automatic Rekey**: Configurable thresholds (90% default) for time, packets, and bytes
-- **Constant-Time Operations**: All cryptographic operations timing side-channel resistant
-- **Memory Safety**: Pure Rust implementation with ZeroizeOnDrop on all secret key material
-- **Documented Unsafe Code**: Zero unsafe in crypto paths; performance-critical unsafe fully documented with SAFETY comments
-- **S/Kademlia Sybil Resistance**: Crypto puzzle-based NodeId generation (20-bit difficulty, ~1M hash attempts)
-- **DHT Privacy Enhancement**: BLAKE3-keyed info_hash prevents real content hash exposure
-- **STUN MESSAGE-INTEGRITY**: RFC 5389 HMAC-SHA1 authentication with rate limiting (10 req/s default)
-
-**v0.8.0 Security Enhancements:**
-- **Private Key Encryption at Rest** (SEC-001, 705 LOC, 16 tests):
-  - Argon2id key derivation with OWASP-recommended parameters (m=19456, t=2, p=1)
-  - XChaCha20-Poly1305 AEAD encryption for private keys with 192-bit nonce
-  - `EncryptedPrivateKey` with compact binary serialization (version + salt + nonce + ciphertext + tag)
-  - `DecryptedPrivateKey` wrapper with automatic ZeroizeOnDrop on sensitive data
-  - Passphrase rotation via `change_passphrase()` without key re-generation
-  - Security presets: `low_security()` (m=4096, t=1), `default()` (OWASP), `high_security()` (m=65536, t=4)
-  - Prevents key material exposure in memory dumps and swap files
-- **Modular AEAD Architecture** (REFACTOR-001):
-  - Refactored 1,529 LOC monolithic `aead.rs` into 4 focused modules (1,251 LOC total)
-  - `aead/cipher.rs` (488 LOC): Core AEAD primitives (Nonce, Tag, AeadKey, AeadCipher)
-  - `aead/replay.rs` (264 LOC): Replay protection with 64-bit sliding window
-  - `aead/session.rs` (457 LOC): Session-level crypto with BufferPool
-  - Improved maintainability and testability with zero behavior changes
-- **BLAKE3 SIMD Acceleration** (PERF-001):
-  - Enabled `rayon` feature for parallel tree hashing (2-4x speedup)
-  - Enabled `neon` feature for ARM64 SIMD optimization
-  - Throughput: 8.5 GB/s on x86_64 (AVX2), 6.2 GB/s on ARM64 (NEON)
-- **Comprehensive Security Audit Template** (DOC-004):
-  - 10-section review checklist: crypto/memory/side-channels/network/auth/input/dependencies/logging/fuzzing/pen-testing
-  - Specific verification commands for constant-time operations, ZeroizeOnDrop, unsafe blocks
-  - Penetration testing scope with attack scenarios
-  - Fuzzing and sanitizer command reference
-
-### Privacy & Obfuscation
-
-**Traffic Analysis Resistance:**
-- **Elligator2 Key Encoding**: X25519 public keys indistinguishable from random bytes
-- **Packet Padding**: 5 modes (None, PowerOfTwo, SizeClasses, ConstantRate, Statistical)
-  - PowerOfTwo: Round to next power of 2 (~15% overhead)
-  - SizeClasses: Fixed size buckets [128, 512, 1024, 4096, 8192, 16384] (~10% overhead)
-  - ConstantRate: Always maximum size (~50% overhead, maximum privacy)
-  - Statistical: Geometric distribution-based random padding (~20% overhead)
-- **Timing Obfuscation**: 5 distributions (None, Fixed, Uniform, Normal, Exponential)
-  - Uniform: Random delays within configurable range
-  - Normal: Gaussian distribution with mean and standard deviation
-  - Exponential: Poisson process simulation for natural traffic patterns
-- **Cover Traffic**: Constant, Poisson, and uniform distribution modes
-
-**Protocol Mimicry:**
-- **TLS 1.3 Record Layer**: Authentic-looking TLS application data records
-  - Content type 23 (application_data), version 0x0303
-  - Fake handshake generation (ClientHello, ServerHello, Finished)
-  - Sequence number tracking for realistic sessions
-- **WebSocket Binary Frames**: RFC 6455 compliant framing
-  - Binary frame encoding with FIN bit and opcode 0x02
-  - Client masking with random masking keys
-  - Extended length encoding (126 for 16-bit, 127 for 64-bit)
-- **DNS-over-HTTPS Tunneling**: Payload embedding in DNS queries
-  - base64url encoding for query parameters
-  - EDNS0 OPT records for payload carrier
-  - Query/response packet construction and parsing
-
-**Adaptive Obfuscation:**
-- Threat-level-based profile selection (Low, Medium, High, Paranoid)
-- Automatic mode selection based on operational context
-- Configurable per-session obfuscation strategies
-
-### Decentralization & Discovery
-
-**Privacy-Enhanced Kademlia DHT:**
-- **BLAKE3-based NodeId**: 256-bit cryptographic node identifiers
-- **K-bucket Routing Table**: XOR-distance-based routing with k=20
-- **Peer Discovery**: FIND_NODE queries with distance-based routing
-- **Value Storage**: STORE and FIND_VALUE operations for peer announcements
-- **S/Kademlia Sybil Resistance**: Crypto puzzle-based NodeId generation (20-bit difficulty)
-  - O(1) verification, O(2^difficulty) generation (~1M hash attempts)
-  - Protects DHT from Sybil and Eclipse attacks
-- **DHT Privacy Enhancement**: BLAKE3-keyed `info_hash` computation
-  - Real file hashes never exposed in DHT lookups
-  - Only participants with `group_secret` can derive lookup keys
-  - Privacy-preserving peer discovery
-
-**NAT Traversal:**
-- **STUN Client**: RFC 5389 compliant NAT type detection
-  - Full Cone, Restricted Cone, Port-Restricted Cone, Symmetric NAT detection
-  - Public IP and port mapping discovery
-  - Multiple STUN server support for reliability
-  - MESSAGE-INTEGRITY authentication (HMAC-SHA1) for secure STUN requests
-  - Transaction ID validation and CRC-32 fingerprint verification
-  - Rate limiting (10 req/s per IP default) for DoS protection
-- **ICE-like Candidate Gathering**: Host, Server Reflexive, Relayed candidates
-- **UDP Hole Punching**: Simultaneous open for NAT traversal
-- **Relay Fallback**: Automatic relay selection when direct connection fails
-
-**DERP-style Relay Infrastructure:**
-- **RelayClient**: Connect to relay servers, packet forwarding, keepalive
-- **RelayServer**: Multi-client support, packet routing, rate limiting
-- **RelaySelector**: Intelligent relay selection with latency tracking
-  - Selection strategies: LowestLatency, LowestLoad, HighestPriority, Balanced
-  - Geographic region filtering
-  - Load balancing across relays
-
-**Unified Connection Flow:**
-- **DiscoveryManager**: Orchestrates DHT, NAT traversal, and relay infrastructure
-- **Connection Types**: Direct, HolePunched, Relayed
-- **Automatic Fallback**: DHT lookup → Direct connection → Hole punch → Relay
-- **Connection Migration**: Seamless IP address changes with PATH_CHALLENGE/PATH_RESPONSE
+![WRAITH Protocol Architecture](images/wraith-protocol_arch-infographic.jpg)
 
 ## Installation
 
@@ -354,7 +135,7 @@ cargo test --workspace
 
 ## Quick Start
 
-**Note:** WRAITH Protocol is currently in early development (v0.1.0). The CLI interface is scaffolded but not yet functional. The following commands represent the planned interface:
+**Note:** WRAITH Protocol is currently in early development (v1.2.1). The CLI interface is scaffolded but not yet functional. The following commands represent the planned interface:
 
 ```bash
 # Send a file (coming soon)
@@ -370,9 +151,7 @@ wraith daemon --bind 0.0.0.0:0
 wraith keygen --output ~/.wraith/identity.key
 ```
 
-For current development status, see [ROADMAP.md](to-dos/ROADMAP.md) and [Phase 1 Sprint Plan](to-dos/protocol/phase-1-foundation.md).
-
-![WRAITH Protocol Architecture](images/wraith-protocol_arch-infographic.jpg)
+For current development status, see [ROADMAP.md](to-dos/ROADMAP.md).
 
 ## Project Structure
 
@@ -388,58 +167,97 @@ WRAITH-Protocol/
 │   ├── wraith-cli/             # Command-line interface
 │   └── wraith-xdp/             # eBPF/XDP programs (Linux-only)
 ├── docs/                        # Comprehensive documentation
+│   ├── archive/                # Archived documentation and development history
 │   ├── architecture/           # Protocol design (5 docs)
 │   ├── engineering/            # Development guides (4 docs)
 │   ├── integration/            # Embedding & platform support (3 docs)
 │   ├── testing/                # Testing strategies (3 docs)
 │   ├── operations/             # Deployment & monitoring (3 docs)
 │   └── clients/                # Client application docs (37 docs)
-│       ├── overview.md         # Client ecosystem overview
-│       ├── wraith-transfer/    # P2P file transfer (3 docs)
-│       ├── wraith-chat/        # E2EE messaging (3 docs)
-│       ├── wraith-sync/        # Backup sync (3 docs)
-│       ├── wraith-share/       # File sharing (3 docs)
-│       ├── wraith-stream/      # Media streaming (3 docs)
-│       ├── wraith-mesh/        # IoT networking (3 docs)
-│       ├── wraith-publish/     # Publishing (3 docs)
-│       ├── wraith-vault/       # Secret storage (3 docs)
-│       ├── wraith-recon/       # Security testing (6 docs)
-│       └── wraith-redops/      # Red team ops (6 docs)
 ├── to-dos/                      # Sprint planning
-│   ├── protocol/               # 7 implementation phases
-│   ├── clients/                # 10 client application sprints
+│   ├── protocol/               # Implementation phases
+│   ├── clients/                # Client application sprints
 │   ├── ROADMAP.md              # Project roadmap
-│   └── ROADMAP-clients.md      # Comprehensive client roadmap
+│   └── ROADMAP-clients.md      # Client roadmap
 ├── ref-docs/                    # Technical specifications
 └── xtask/                       # Build automation
 ```
 
-## Documentation Structure
+### Crate Overview
 
-WRAITH Protocol's documentation is organized across several directories to improve navigability and maintainability:
+| Crate | Description | LOC | Tests |
+|-------|-------------|-----|-------|
+| **wraith-core** | Frame parsing, session management, congestion control, Node API | ~4,800 | 357 |
+| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | ~2,500 | 152 |
+| **wraith-files** | File chunking, tree hashing, reassembly | ~1,300 | 38 |
+| **wraith-obfuscation** | Padding, timing, protocol mimicry | ~3,500 | 167 |
+| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | ~3,500 | 231 |
+| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | ~2,800 | 96 |
+| **wraith-cli** | Command-line interface | ~1,100 | 0 |
+| **wraith-xdp** | eBPF/XDP programs (future) | 0 | 0 |
 
-```
-docs/
-├── technical/          # Technical debt analysis, refactoring documentation
-├── engineering/        # Release guides, engineering practices
-├── architecture/       # System architecture documentation
-└── progress/           # Development progress reports
+**Total:** ~37,948 lines of Rust code across 104 source files, 1,289 tests
 
-to-dos/
-├── protocol/           # Phase planning, sprint documentation
-└── completed/          # Completed phase summaries
+## Documentation
 
-ref-docs/               # Protocol specifications and technical details
-```
+### Getting Started
+- [User Guide](docs/USER_GUIDE.md) - Installation, quick start, CLI reference
+- [Configuration Reference](docs/CONFIG_REFERENCE.md) - Complete TOML configuration
+- [Tutorial](docs/TUTORIAL.md) - Step-by-step getting started guide with practical examples
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
-**Documentation Highlights:**
-- **9 files reorganized** with git history preserved
-- **Technical debt analysis** moved to docs/technical/ for better discoverability
-- **Phase planning** consolidated in to-dos/protocol/
-- **Completed sessions** archived in to-dos/completed/ for reference
-- **README files** added to each new directory explaining their purpose
+### Architecture & Design
+- [Protocol Overview](docs/architecture/protocol-overview.md)
+- [Layer Design](docs/architecture/layer-design.md)
+- [Security Model](docs/architecture/security-model.md)
+- [Performance Architecture](docs/architecture/performance-architecture.md)
+- [Network Topology](docs/architecture/network-topology.md)
 
-See the [Documentation](docs/) section below for comprehensive guides and API references.
+### Development
+- [Development Guide](docs/engineering/development-guide.md)
+- [Coding Standards](docs/engineering/coding-standards.md)
+- [API Reference](docs/engineering/api-reference.md)
+- [Dependency Management](docs/engineering/dependency-management.md)
+- [Python Tooling Guide](docs/engineering/python-tooling.md)
+- [Protocol Development History](docs/archive/README_Protocol-DEV.md) - Detailed phase-by-phase development timeline
+
+### Integration
+- [Embedding Guide](docs/integration/embedding-guide.md)
+- [Integration Guide](docs/INTEGRATION_GUIDE.md) - Complete library integration guide with API examples
+- [Platform Support](docs/integration/platform-support.md)
+- [Interoperability](docs/integration/interoperability.md)
+
+### Security
+- [Security Audit Report](docs/SECURITY_AUDIT.md) - Comprehensive security validation and recommendations
+- [Security Policy](SECURITY.md) - Vulnerability reporting and responsible disclosure
+
+### Comparisons
+- [Protocol Comparison](docs/COMPARISON.md) - WRAITH vs QUIC, WireGuard, Noise Protocol, BitTorrent
+
+### Testing & Operations
+- [Testing Strategy](docs/testing/testing-strategy.md)
+- [Performance Benchmarks](docs/testing/performance-benchmarks.md)
+- [Deployment Guide](docs/operations/deployment-guide.md)
+- [Monitoring](docs/operations/monitoring.md)
+
+### Specifications
+- [Protocol Technical Details](ref-docs/protocol_technical_details.md)
+- [Implementation Guide](ref-docs/protocol_implementation_guide.md)
+
+### Client Applications
+- [Client Overview](docs/clients/overview.md)
+- [Reference Client Design](docs/clients/REFERENCE_CLIENT.md) - GUI design guidelines for client applications
+- [Client Roadmap](to-dos/ROADMAP-clients.md)
+
+### Project Planning
+- [Project Roadmap](to-dos/ROADMAP.md)
+- [Client Roadmap](to-dos/ROADMAP-clients.md)
+- [Documentation Status](docs/DOCUMENTATION_STATUS.md)
+
+### Technical Debt & Quality
+- [Technical Debt Analysis](docs/technical/technical-debt-analysis.md) - Comprehensive code quality assessment
+- [Technical Debt Action Plan](docs/technical/technical-debt-action-plan.md) - Prioritized remediation strategy
+- [Technical Debt TODO List](docs/technical/technical-debt-todo-list.md) - Actionable tracking checklist
 
 ## Client Applications
 
@@ -475,7 +293,7 @@ WRAITH Protocol powers a comprehensive ecosystem of secure applications across 3
 | **WRAITH-Recon** | Network reconnaissance & data exfiltration assessment | Planned | 55 |
 | **WRAITH-RedOps** | Red team operations platform with C2 infrastructure | Planned | 89 |
 
-**Total Ecosystem:** 10 clients, 1,028 story points, ~70 weeks development timeline.
+**Total Ecosystem:** 10 clients, 1,028 story points
 
 **Security Testing Notice:** WRAITH-Recon and WRAITH-RedOps require signed authorization and governance compliance. See [Security Testing Parameters](ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md) for authorized use requirements.
 
@@ -516,7 +334,7 @@ cargo xtask ci
 # Generate API documentation
 cargo doc --workspace --open
 
-# Run benchmarks (coming soon)
+# Run benchmarks
 cargo bench --workspace
 ```
 
@@ -570,95 +388,32 @@ See [Python Tooling Guide](docs/engineering/python-tooling.md) for detailed docu
 
 **Note:** Due to Claude Code's shell behavior, always chain commands with `&&` when using the venv.
 
-## Documentation
-
-### Getting Started
-- [User Guide](docs/USER_GUIDE.md) - Installation, quick start, CLI reference
-- [Configuration Reference](docs/CONFIG_REFERENCE.md) - Complete TOML configuration
-- [Tutorial](docs/TUTORIAL.md) - Step-by-step getting started guide with practical examples
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
-
-### Architecture & Design
-- [Protocol Overview](docs/architecture/protocol-overview.md)
-- [Layer Design](docs/architecture/layer-design.md)
-- [Security Model](docs/architecture/security-model.md)
-- [Performance Architecture](docs/architecture/performance-architecture.md)
-- [Network Topology](docs/architecture/network-topology.md)
-
-### Development
-- [Development Guide](docs/engineering/development-guide.md)
-- [Coding Standards](docs/engineering/coding-standards.md)
-- [API Reference](docs/engineering/api-reference.md)
-- [Dependency Management](docs/engineering/dependency-management.md)
-- [Python Tooling Guide](docs/engineering/python-tooling.md)
-
-### Integration
-- [Embedding Guide](docs/integration/embedding-guide.md)
-- [Integration Guide](docs/INTEGRATION_GUIDE.md) - Complete library integration guide with API examples
-- [Platform Support](docs/integration/platform-support.md)
-- [Interoperability](docs/integration/interoperability.md)
-
-### Security
-- [Security Audit Report](docs/SECURITY_AUDIT.md) - Comprehensive security validation and recommendations
-- [Security Policy](SECURITY.md) - Vulnerability reporting and responsible disclosure
-
-### Comparisons
-- [Protocol Comparison](docs/COMPARISON.md) - WRAITH vs QUIC, WireGuard, Noise Protocol, BitTorrent
-
-### Testing & Operations
-- [Testing Strategy](docs/testing/testing-strategy.md)
-- [Performance Benchmarks](docs/testing/performance-benchmarks.md)
-- [Deployment Guide](docs/operations/deployment-guide.md)
-- [Monitoring](docs/operations/monitoring.md)
-
-### Specifications
-- [Protocol Technical Details](ref-docs/protocol_technical_details.md)
-- [Implementation Guide](ref-docs/protocol_implementation_guide.md)
-
-### Client Applications
-- [Client Overview](docs/clients/overview.md)
-- [Reference Client Design](docs/clients/REFERENCE_CLIENT.md) - GUI design guidelines for client applications
-- [Client Roadmap](to-dos/ROADMAP-clients.md)
-- Individual client documentation (architecture, features, implementation, integration, testing, usage)
-
-### Project Planning
-- [Project Roadmap](to-dos/ROADMAP.md)
-- [Client Roadmap](to-dos/ROADMAP-clients.md)
-- [Documentation Status](docs/DOCUMENTATION_STATUS.md)
-
-### Technical Debt & Quality
-- [Technical Debt Analysis](docs/technical/technical-debt-analysis.md) - Comprehensive code quality assessment
-- [Technical Debt Action Plan](docs/technical/technical-debt-action-plan.md) - Prioritized remediation strategy
-- [Technical Debt TODO List](docs/technical/technical-debt-todo-list.md) - Actionable tracking checklist
-- [Pre-Phase 5 Review Summary](docs/technical/pre-phase-5-review-summary.md) - Phase 5 readiness assessment (15 items analyzed)
-- [Implementation Report](docs/technical/IMPLEMENTATION-REPORT.md) - Detailed findings and recommendations
-- [Phase 4 Technical Debt](docs/technical/phase-4-tech-debt.md) - Phase 4 technical debt tracking
-- **Current Metrics:** Grade A (92/100), 14% debt ratio, 607 tests, zero blocking items for Phase 5
-
-### Security Testing
-- [Security Testing Parameters](ref-docs/WRAITH-Security-Testing-Parameters-v1.0.md)
-- [WRAITH-Recon Documentation](docs/clients/wraith-recon/)
-- [WRAITH-RedOps Documentation](docs/clients/wraith-redops/)
-
 ## Roadmap
 
-WRAITH Protocol development follows a structured 7-phase approach spanning 32-44 weeks:
+WRAITH Protocol development follows a structured multi-phase approach:
 
-### Protocol Development (947 Story Points)
+### Protocol Development
 
-| Phase | Focus | Duration | Story Points | Status |
-|-------|-------|----------|--------------|--------|
-| **Phase 1** | Foundation & Core Types | 4-6 weeks | 89 | ✅ **Complete** |
-| **Phase 2** | Cryptographic Layer | 4-6 weeks | 102 | ✅ **Complete** |
-| **Phase 3** | Transport & Kernel Bypass | 6-8 weeks | 156 | ✅ **Complete** |
-| **Phase 4** | Optimization & Hardening (Part I) | 2-3 weeks | 76 | ✅ **Complete** |
-| **Phase 5** | Discovery & NAT Traversal | 5-7 weeks | 123 | ✅ **Complete** |
-| **Phase 6** | Integration & Testing | 4-5 weeks | 98 | ✅ **Complete** |
-| **Phase 7** | Hardening & Optimization | 6-8 weeks | 158 | ✅ **Complete** |
+**Completed Phases:**
+- ✅ Phase 1: Foundation & Core Types (89 SP)
+- ✅ Phase 2: Cryptographic Layer (102 SP)
+- ✅ Phase 3: Transport & Kernel Bypass (156 SP)
+- ✅ Phase 4: Obfuscation & Stealth (243 SP)
+- ✅ Phase 5: Discovery & NAT Traversal (123 SP)
+- ✅ Phase 6: Integration & Testing (98 SP)
+- ✅ Phase 7: Hardening & Optimization (158 SP)
+- ✅ Phase 9: Node API & Protocol Orchestration (85 SP)
+- ✅ Phase 10: Protocol Component Wiring (130 SP)
+- ✅ Phase 11: Production Readiness (92 SP)
+- ✅ Phase 12: Technical Excellence & Production Hardening (126 SP)
 
-**Progress:** 802/947 story points delivered (85% complete)
+**Upcoming:**
+- 📋 Phase 13: Advanced Optimizations (Planned Q1-Q2 2026)
+- 📋 Client Applications (1,028 SP across 10 applications)
 
-### Client Applications (1,028 Story Points)
+See [ROADMAP.md](to-dos/ROADMAP.md) and [Protocol Development History](docs/archive/README_Protocol-DEV.md) for detailed planning and phase accomplishments.
+
+### Client Applications
 
 10 client applications across 3 priority tiers, including:
 - **Tier 1:** WRAITH-Transfer (P2P file transfer), WRAITH-Chat (E2EE messaging)
@@ -666,7 +421,7 @@ WRAITH Protocol development follows a structured 7-phase approach spanning 32-44
 - **Tier 3:** WRAITH-Stream, WRAITH-Mesh, WRAITH-Publish, WRAITH-Vault
 - **Security Testing:** WRAITH-Recon, WRAITH-RedOps (authorized use only)
 
-See [ROADMAP.md](to-dos/ROADMAP.md) and [Client Roadmap](to-dos/ROADMAP-clients.md) for detailed planning.
+See [Client Roadmap](to-dos/ROADMAP-clients.md) for detailed planning.
 
 ## Performance Targets
 
@@ -678,6 +433,15 @@ See [ROADMAP.md](to-dos/ROADMAP.md) and [Client Roadmap](to-dos/ROADMAP-clients.
 | Packet Latency | <1 ms | NIC to application |
 | Memory per Session | <10 MB | Including buffers |
 | CPU @ 10 Gbps | <50% | 8-core system |
+
+**Measured Performance (Phase 10 benchmarks):**
+- Frame parsing: 172M frames/sec with SIMD acceleration
+- AEAD encryption: 3.2 GB/s (XChaCha20-Poly1305)
+- BLAKE3 hashing: 8.5 GB/s with parallelization
+- File chunking: 14.85 GiB/s
+- Tree hashing: 4.71 GiB/s in-memory, 3.78 GiB/s from disk
+- Chunk verification: 4.78 GiB/s
+- File reassembly: 5.42 GiB/s
 
 ## CI/CD Infrastructure
 
@@ -694,8 +458,8 @@ WRAITH Protocol uses comprehensive automated workflows for quality assurance and
 - **CodeQL:** Static analysis for security vulnerabilities
 - **cargo-audit:** RustSec advisory database scanning
 - **Gitleaks:** Secret scanning with false positive suppression
-- **Fuzzing:** 5 libFuzzer targets (frame_parser, dht_message, padding, crypto, tree_hash) with weekly automated runs
-- **Weekly Scans:** Automated security checks every Monday (audit, fuzz, CodeQL)
+- **Fuzzing:** 5 libFuzzer targets with weekly automated runs
+- **Weekly Scans:** Automated security checks every Monday
 
 ### Release Automation
 - **Multi-Platform Builds:** 6 platform targets (Linux x86_64/aarch64, macOS Intel/ARM, Windows)
@@ -717,11 +481,11 @@ WRAITH Protocol is designed with security as a core principle:
 | **Key Exchange** | X25519 | 128-bit | ECDH on Curve25519 |
 | **Key Encoding** | Elligator2 | Traffic analysis resistant | Indistinguishable from random |
 | **AEAD** | XChaCha20-Poly1305 | 256-bit key, 192-bit nonce | Key-committing, constant-time |
-| **Hash** | BLAKE3 | 128-bit collision resistance | Tree-parallelizable, faster than SHA-3 |
+| **Hash** | BLAKE3 | 128-bit collision resistance | Tree-parallelizable |
 | **KDF** | HKDF-BLAKE3 | 128-bit | Context-separated key derivation |
 | **Handshake** | Noise_XX_25519_ChaChaPoly_BLAKE2s | Mutual auth | Identity hiding, forward secrecy |
-| **Ratcheting** | Double Ratchet | Forward & post-compromise security | Symmetric per-packet + DH periodic |
-| **Replay Protection** | 64-bit sliding window | DoS resistant | Constant-time bitmap operations |
+| **Ratcheting** | Double Ratchet | Forward & post-compromise security | Symmetric + DH ratchets |
+| **Replay Protection** | 64-bit sliding window | DoS resistant | Constant-time operations |
 
 ### Security Features
 
@@ -730,7 +494,7 @@ WRAITH Protocol is designed with security as a core principle:
 - **Post-Compromise Security:** DH ratchet heals from key compromise
 - **Replay Protection:** 64-bit sliding window bitmap with constant-time operations
 - **Key Commitment:** BLAKE3-based AEAD key commitment prevents multi-key attacks
-- **Automatic Rekey:** Time-based (90% threshold), packet-count-based, byte-count-based triggers
+- **Automatic Rekey:** Time-based, packet-count-based, byte-count-based triggers
 
 **Traffic Analysis Resistance:**
 - **Elligator2 Key Encoding:** X25519 public keys indistinguishable from random
@@ -741,22 +505,15 @@ WRAITH Protocol is designed with security as a core principle:
 **Implementation Security:**
 - **Memory Safety:** Rust with zero unsafe code in cryptographic paths
 - **ZeroizeOnDrop:** Automatic zeroization of all secret key material
-- **Constant-Time Operations:** Side-channel resistant implementations for all critical paths
-- **SIMD Acceleration:** SSE2/NEON optimized frame parsing with security validation
-- **Buffer Pools:** Pre-allocated buffers reduce allocation overhead without compromising security
-- **Unsafe Code Audit:** 100% documentation coverage with SAFETY comments on all 40+ unsafe blocks
-  - All `unsafe impl Send/Sync` implementations documented and justified
-  - Thread safety analysis for kernel bypass operations
-  - Safety invariants documented for UMEM, io_uring, CPU affinity operations
+- **Constant-Time Operations:** Side-channel resistant implementations
+- **SIMD Acceleration:** SSE2/NEON optimized with security validation
+- **Unsafe Code Audit:** 100% documentation coverage with SAFETY comments
 
 **Validation:**
-- **Test Coverage:** 943 tests covering all protocol layers and security-critical paths
-- **Integration Tests:** 117 integration and benchmark tests validating end-to-end workflows
-- **Cryptographic Tests:** 123 tests for Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet
-- **Obfuscation Tests:** 167 tests (130 unit + 37 doctests) for traffic analysis resistance
-- **Fuzzing:** 5 libFuzzer targets continuously testing parsing robustness
-- **Property-Based Tests:** 29 proptest invariants for state machine validation
-- **Automated Security Scanning:** Dependabot, CodeQL, RustSec advisories, cargo-audit weekly scans
+- **Test Coverage:** 1,289 tests covering all protocol layers
+- **Fuzzing:** 5 libFuzzer targets continuously testing robustness
+- **Property-Based Tests:** QuickCheck-style invariant validation
+- **Security Scanning:** Dependabot, CodeQL, RustSec advisories, weekly scans
 
 ### Reporting Vulnerabilities
 
@@ -767,7 +524,7 @@ For security issues, please see [SECURITY.md](SECURITY.md) for our security poli
 WRAITH Protocol is in active development and we welcome contributions of all kinds:
 
 ### For Developers
-- **Phase 1 Implementation:** Help complete the core protocol foundation (session state machine, stream multiplexing)
+- **Protocol Implementation:** Help complete advanced features and optimizations
 - **Testing:** Write unit tests, integration tests, and property-based tests
 - **Documentation:** Improve API docs, add examples, clarify specifications
 - **Code Review:** Review pull requests and provide feedback
@@ -782,24 +539,7 @@ WRAITH Protocol is in active development and we welcome contributions of all kin
 - **Tutorials:** Create getting-started guides and usage examples
 - **Translations:** Translate documentation to other languages
 
-### Current Focus Areas
-1. ✅ **Phase 1 Complete** - Core protocol foundation (197 tests, 172M frames/sec, SIMD acceleration)
-2. ✅ **Phase 2 Complete** - Cryptographic layer (123 tests, full security suite with Ed25519)
-3. ✅ **Phase 3 Complete** - Transport & kernel bypass (54 tests, AF_XDP, io_uring, worker pools, NUMA)
-4. ✅ **Phase 4 Part I Complete** - Optimization & hardening (AF_XDP batch processing, BBR pacing, io_uring registered buffers, frame validation)
-5. ✅ **Phase 4 Part II Complete** - Obfuscation & stealth (167 tests, 5 padding modes, 5 timing distributions, TLS/WebSocket/DoH mimicry, adaptive profiles)
-6. ✅ **Phase 5 Complete** - Discovery & NAT traversal (184 tests, Kademlia DHT, STUN/ICE, relay infrastructure, unified DiscoveryManager)
-7. ✅ **Phase 6 Complete** - Integration & file transfer (transfer sessions, BLAKE3 tree hashing, CLI implementation)
-8. ✅ **Phase 7 Complete** - Security audit, fuzzing (5 targets), O(m) optimizations, comprehensive documentation, cross-platform packaging
-9. ✅ **Advanced Security Features** - Replay protection, key commitment, automatic rekey, reserved stream ID validation, constant-time operations
-10. ✅ **Performance Optimizations** - SIMD frame parsing, buffer pools, fixed-point BBR arithmetic, O(m) missing chunks, zero-copy batch processing
-11. ✅ **Comprehensive Documentation** - USER_GUIDE.md, CONFIG_REFERENCE.md, expanded API reference, deployment guide
-12. ✅ **Cross-Platform Packaging** - deb, rpm, tar.gz packages with systemd service
-13. ✅ **Fuzzing & Property Testing** - 5 libFuzzer targets, 29 proptest invariants
-14. **Next: Client Applications** - WRAITH-Transfer, WRAITH-Chat, and other protocol clients
-15. Maintain test coverage (current: 943 tests, target: maintain 80%+ coverage)
-
-See [ROADMAP.md](to-dos/ROADMAP.md) for detailed sprint planning and story point estimates.
+See [ROADMAP.md](to-dos/ROADMAP.md) for current focus areas and planned work.
 
 ## Contributing
 
@@ -861,4 +601,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v1.2.1 Patch Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,289 (1,270 passing + 19 ignored) | **Quality:** Grade A+ (95/100), 12% debt ratio, 0 vulnerabilities, 5 fuzz targets, zero warnings | **Protocol:** Phase 12 COMPLETE - Technical Excellence & Production Hardening (126 SP delivered) | **Next:** Phase 13 - Advanced Optimizations (Planned Q1-Q2 2026)
+**Status:** v1.2.1 Patch Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,289 (1,270 passing + 19 ignored) | **Quality:** Grade A+ (95/100), 0 vulnerabilities, 5 fuzz targets, zero warnings

@@ -141,6 +141,36 @@ impl Node {
         data: Vec<u8>,
         from: SocketAddr,
     ) -> Result<()> {
+        use crate::node::security_monitor::{SecurityEvent, SecurityEventType};
+
+        let source_ip = from.ip();
+
+        // Check IP reputation
+        if !self.inner.ip_reputation.check_allowed(source_ip).await {
+            tracing::debug!("Blocked packet from banned IP: {}", source_ip);
+            let event = SecurityEvent::new(SecurityEventType::IpPermBanned, source_ip)
+                .with_message("Connection attempt from banned IP");
+            self.inner.security_monitor.record_event(event).await;
+            return Ok(()); // Silently drop
+        }
+
+        // Apply backoff delay if IP is in backoff status
+        let backoff_delay = self.inner.ip_reputation.get_backoff_delay(source_ip).await;
+        if !backoff_delay.is_zero() {
+            tracing::debug!("Applying backoff delay {} ms for IP {}", backoff_delay.as_millis(), source_ip);
+            tokio::time::sleep(backoff_delay).await;
+        }
+
+        // Check connection rate limit
+        if !self.inner.rate_limiter.check_connection(source_ip).await {
+            tracing::warn!("Rate limit exceeded for IP: {}", source_ip);
+            self.inner.ip_reputation.record_failure(source_ip).await;
+            let event = SecurityEvent::new(SecurityEventType::RateLimitExceeded, source_ip)
+                .with_message("Connection rate limit exceeded");
+            self.inner.security_monitor.record_event(event).await;
+            return Ok(()); // Silently drop
+        }
+
         // Unwrap any protocol mimicry
         let unwrapped = self.unwrap_protocol(&data)?;
 
@@ -235,6 +265,9 @@ impl Node {
         msg1: &[u8],
         peer_addr: SocketAddr,
     ) -> Result<crate::node::session::SessionId> {
+        use crate::node::security_monitor::{SecurityEvent, SecurityEventType};
+
+        let source_ip = peer_addr.ip();
         let transport = self.get_transport().await?;
 
         tracing::info!(
@@ -242,6 +275,16 @@ impl Node {
             peer_addr,
             msg1.len()
         );
+
+        // Check session limit
+        if !self.inner.rate_limiter.check_session_limit().await {
+            tracing::warn!("Session limit exceeded for connection from {}", peer_addr);
+            self.inner.ip_reputation.record_failure(source_ip).await;
+            let event = SecurityEvent::new(SecurityEventType::ConnectionLimitExceeded, source_ip)
+                .with_message("Global session limit exceeded");
+            self.inner.security_monitor.record_event(event).await;
+            return Err(NodeError::Transport("Session limit exceeded".to_string()));
+        }
 
         // Create channel for receiving msg3
         let (msg3_tx, msg3_rx) = oneshot::channel();
@@ -260,7 +303,18 @@ impl Node {
         // Clean up pending handshake
         self.inner.pending_handshakes.remove(&peer_addr);
 
-        let (crypto, session_id, peer_id) = handshake_result?;
+        // Handle handshake failure
+        let (crypto, session_id, peer_id) = match handshake_result {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!("Handshake failed from {}: {}", peer_addr, e);
+                self.inner.ip_reputation.record_failure(source_ip).await;
+                let event = SecurityEvent::new(SecurityEventType::HandshakeFailed, source_ip)
+                    .with_message(format!("Handshake error: {}", e));
+                self.inner.security_monitor.record_event(event).await;
+                return Err(e);
+            }
+        };
 
         // Derive connection ID from session ID
         let mut connection_id_bytes = [0u8; 8];

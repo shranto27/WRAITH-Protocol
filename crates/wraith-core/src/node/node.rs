@@ -25,7 +25,10 @@ use crate::node::config::NodeConfig;
 use crate::node::error::{NodeError, Result};
 use crate::node::file_transfer::FileTransferContext;
 use crate::node::identity::{Identity, TransferId};
+use crate::node::ip_reputation::IpReputationSystem;
+use crate::node::rate_limiter::RateLimiter;
 use crate::node::routing::RoutingTable;
+use crate::node::security_monitor::SecurityMonitor;
 use crate::node::session::{HandshakePacket, PeerConnection, PeerId, SessionId};
 use crate::transfer::TransferSession;
 use crate::{ConnectionId, HandshakePhase, SessionState};
@@ -62,6 +65,12 @@ pub(crate) struct NodeInner {
     pub(crate) transport: Arc<Mutex<Option<Arc<AsyncUdpTransport>>>>,
     /// Discovery manager
     pub(crate) discovery: Arc<Mutex<Option<Arc<DiscoveryManager>>>>,
+    /// Rate limiter for DoS protection
+    pub(crate) rate_limiter: Arc<RateLimiter>,
+    /// IP reputation system
+    pub(crate) ip_reputation: Arc<IpReputationSystem>,
+    /// Security event monitor
+    pub(crate) security_monitor: Arc<SecurityMonitor>,
 }
 
 /// WRAITH Protocol Node
@@ -107,6 +116,13 @@ impl Node {
 
     /// Create node from existing identity
     pub async fn new_from_identity(identity: Identity, config: NodeConfig) -> Result<Self> {
+        use crate::node::ip_reputation::IpReputationConfig;
+        use crate::node::security_monitor::SecurityMonitorConfig;
+
+        let rate_limiter = RateLimiter::new(config.rate_limiting.clone());
+        let ip_reputation = IpReputationSystem::new(IpReputationConfig::default());
+        let security_monitor = SecurityMonitor::new(SecurityMonitorConfig::default());
+
         let inner = NodeInner {
             identity: Arc::new(identity),
             config,
@@ -117,6 +133,9 @@ impl Node {
             running: Arc::new(AtomicBool::new(false)),
             transport: Arc::new(Mutex::new(None)),
             discovery: Arc::new(Mutex::new(None)),
+            rate_limiter: Arc::new(rate_limiter),
+            ip_reputation: Arc::new(ip_reputation),
+            security_monitor: Arc::new(security_monitor),
         };
         Ok(Self {
             inner: Arc::new(inner),

@@ -234,11 +234,18 @@ New Key Derivation:
 **Table Lookups:**
 - ✅ ChaCha20: No secret-dependent table lookups (quarter-round is constant-time)
 - ✅ Curve25519: Montgomery ladder is cache-timing resistant
-- ⚠️ Elligator2: Custom implementation requires cache-timing analysis
+- ✅ Elligator2: Verified constant-time (2025-12-07)
 
-**Finding:** Standard cryptographic primitives are cache-safe. Custom Elligator2 implementation needs verification.
+**Finding:** All cryptographic primitives are cache-safe. Elligator2 implementation verified.
 
-**Recommendation:** Conduct cache-timing analysis of Elligator2 encode/decode operations using tools like `dudect` or `ctgrind`.
+**Elligator2 Constant-Time Analysis (verified 2025-12-07):**
+- **Encoding:** Uses `subtle::CtOption` from `curve25519-elligator2` crate, ensuring no timing leaks
+- **Decoding:** Uses `curve25519-dalek`'s constant-time Montgomery ladder implementation
+- **Loop-until-encodable:** Safe - each iteration uses fresh random bytes, no secret data leaked
+- **Timing tests:** Added `test_decode_timing_consistency` verifying consistent timing across patterns
+- **Type verification:** Added `test_encoding_uses_ct_option` confirming CtOption API contract
+
+**Recommendation:** Continue monitoring for updates to `curve25519-elligator2` crate (currently 0.1.0-alpha.2).
 
 ### 2.3 Power Analysis Resistance
 

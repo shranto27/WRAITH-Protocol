@@ -99,6 +99,7 @@ fn bench_worker_pool(c: &mut Criterion) {
                     queue_capacity: 1000,
                     pin_to_cpu: false,
                     numa_aware: false,
+                    buffer_pool: None,
                 };
 
                 let pool = WorkerPool::new(config);

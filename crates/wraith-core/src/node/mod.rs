@@ -86,7 +86,11 @@ pub mod transfer_manager;
 pub use circuit_breaker::{
     CircuitBreaker, CircuitBreakerConfig, CircuitMetrics, CircuitState, RetryConfig,
 };
-pub use config::NodeConfig;
+pub use config::{
+    CoverTrafficConfig, CoverTrafficDistribution, DiscoveryConfig, LogLevel, LoggingConfig,
+    MimicryMode, NodeConfig, ObfuscationConfig, PaddingMode, TimingMode, TransferConfig,
+    TransportConfig,
+};
 pub use connection::{HealthMetrics, HealthStatus};
 pub use discovery::{NatType, NodeCapabilities, PeerAnnouncement, PeerInfo};
 pub use error::{NodeError, Result};

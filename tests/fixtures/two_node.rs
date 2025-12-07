@@ -360,7 +360,7 @@ mod tests {
         let fixture3 = TwoNodeFixture::new().await.unwrap();
 
         // All should have different ports
-        let ports = vec![
+        let ports = [
             fixture1.initiator_addr.port(),
             fixture1.responder_addr.port(),
             fixture2.initiator_addr.port(),

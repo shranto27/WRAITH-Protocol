@@ -9,12 +9,16 @@ use wraith_files::tree_hash::{compute_tree_hash, compute_tree_hash_from_data};
 
 /// Create a NodeConfig optimized for benchmarking (NAT detection disabled)
 fn benchmark_node_config(port: u16) -> wraith_core::node::NodeConfig {
-    let mut config = wraith_core::node::NodeConfig::default();
-    config.listen_addr = format!("0.0.0.0:{}", port).parse().unwrap();
-    // Disable NAT traversal and relay to speed up startup
-    config.discovery.enable_nat_traversal = false;
-    config.discovery.enable_relay = false;
-    config
+    let default = wraith_core::node::NodeConfig::default();
+    wraith_core::node::NodeConfig {
+        listen_addr: format!("0.0.0.0:{}", port).parse().unwrap(),
+        discovery: wraith_core::node::DiscoveryConfig {
+            enable_nat_traversal: false,
+            enable_relay: false,
+            ..default.discovery
+        },
+        ..default
+    }
 }
 
 /// Benchmark file chunking performance
@@ -433,7 +437,7 @@ fn bench_multi_peer_speedup(c: &mut Criterion) {
                                 .unwrap();
                             receiver.start().await.unwrap();
                             let addr = receiver.listen_addr().await.unwrap();
-                            receiver_addrs.push((receiver.node_id().clone(), addr));
+                            receiver_addrs.push((*receiver.node_id(), addr));
                             receivers.push(receiver);
                         }
 

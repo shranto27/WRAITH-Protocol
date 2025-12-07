@@ -173,7 +173,7 @@ async fn test_multi_peer_round_robin() {
         .await;
 
     // Assign chunks - should rotate through peers
-    let assigned = vec![
+    let assigned = [
         coordinator.assign_chunk(0).await.unwrap(),
         coordinator.assign_chunk(1).await.unwrap(),
         coordinator.assign_chunk(2).await.unwrap(),
@@ -309,7 +309,7 @@ async fn test_multi_peer_adaptive() {
     for i in 2..10 {
         let _ = coordinator.assign_chunk(i).await;
         // Reassignment records failure for original peer and assigns to best available
-        if let Some(_) = coordinator.reassign_chunk(i).await {
+        if coordinator.reassign_chunk(i).await.is_some() {
             // Complete the reassigned chunk
             coordinator
                 .record_success(i, 256 * 1024, Duration::from_millis(100))

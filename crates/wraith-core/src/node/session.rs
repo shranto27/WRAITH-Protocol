@@ -770,7 +770,7 @@ mod tests {
         let bob = PeerConnection::new(session_id, peer_id, peer_addr, connection_id, bob_crypto);
 
         // Send multiple frames in sequence
-        let frames = vec![b"frame1", b"frame2", b"frame3", b"frame4", b"frame5"];
+        let frames = [b"frame1", b"frame2", b"frame3", b"frame4", b"frame5"];
 
         for (i, frame_data) in frames.iter().enumerate() {
             let encrypted = alice.encrypt_frame(*frame_data).await.unwrap();

@@ -600,7 +600,7 @@ mod chunk_properties {
             data_size in 1usize..100000,
             chunk_size in 256usize..4096,
         ) {
-            let expected_chunks = (data_size + chunk_size - 1) / chunk_size;
+            let expected_chunks = data_size.div_ceil(chunk_size);
             let data = vec![0u8; data_size];
 
             let actual_chunks = data.chunks(chunk_size).count();

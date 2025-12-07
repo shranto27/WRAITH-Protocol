@@ -64,6 +64,7 @@ impl WorkerConfig {
     /// let config = WorkerConfig::with_buffer_pool(1500, 1024);
     /// assert!(config.buffer_pool.is_some());
     /// ```
+    #[must_use]
     pub fn with_buffer_pool(buffer_size: usize, pool_size: usize) -> Self {
         Self {
             buffer_pool: Some(BufferPool::new(buffer_size, pool_size)),

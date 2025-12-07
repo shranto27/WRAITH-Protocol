@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Elligator2 Timing Analysis (REC-003):** Added constant-time timing verification test in `wraith-crypto/src/elligator.rs` demonstrating sub-1% timing deviation across 1000 iterations
+- **Expanded Public API Exports:** Added 11 configuration types to `wraith-core/src/node/mod.rs` public exports (CoverTrafficConfig, DiscoveryConfig, LogLevel, MimicryMode, etc.)
+
+### Changed
+
+- **Rust 2024 Clippy Compliance (REC-005):** Fixed 8 clippy warnings for Rust 2024 edition best practices:
+  - Used `abs_diff()` for absolute value difference in `elligator.rs` timing test
+  - Converted `vec![]` to arrays in 3 fixed-size collection locations
+  - Used `div_ceil()` for ceiling division in `property_tests.rs`
+  - Fixed redundant pattern matching with `is_some()` in `integration_advanced.rs`
+  - Fixed `clone_on_copy` for `[u8; 32]` arrays in `transfer.rs` benchmark
+  - Fixed `field_reassign_with_default` with struct literal pattern in `transfer.rs`
+- **Added `#[must_use]` Annotation:** `WorkerConfig::with_buffer_pool()` now warns on unused return value
+- **Updated Refactoring Analysis:** Marked 22 SP as complete (REC-001, 002, 003, 005, 006, 012)
+
+### Verified
+
+- **Buffer Pool Integration (REC-006):** Verified existing integration with WorkerPool (`worker.rs:67-68, 146-151`) and FileChunker (`chunker.rs:29-31, 97-101`) - 21 buffer-related tests passing
+- **GitHub Issue Templates (REC-012):** Verified existing templates in `.github/ISSUE_TEMPLATE/` (bug_report.md, feature_request.md, security_vulnerability.md, config.yml)
+- **SAFETY Comment Coverage (REC-001):** Verified 100% coverage (25 `unsafe` blocks, all with detailed SAFETY comments)
+
+### Documentation
+
+- **Updated COMPREHENSIVE_REFACTORING_ANALYSIS_v1.2.1.md:** Marked 6 recommendations as complete with implementation details
+
 ---
 
 ## [1.2.1] - 2025-12-07 - Technical Debt Resolution

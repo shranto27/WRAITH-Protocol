@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2025-12-07 - Technical Debt Resolution
+
+**WRAITH Protocol v1.2.1 - Patch Release**
+
+This release resolves critical technical debt items identified during Phase 12 completion, focusing on test infrastructure improvements and documentation updates.
+
+### Fixed
+
+- **TD-004: Two-Node Test Fixture Ed25519/X25519 Key Mismatch**
+  - Root cause: Sessions keyed by X25519 public keys (Noise handshake), not Ed25519 node IDs (identity signing)
+  - Changed 6 locations from `public_key()` to `x25519_public_key()` in tests/fixtures/two_node.rs
+  - Added clarifying comments about session key semantics
+  - Removed `#[ignore]` attribute from `test_fixture_file_transfer`
+  - All 5 two-node fixture tests now active and passing (previously 4/5 with 1 ignored)
+
+### Added
+
+- **Technical Debt Documentation**
+  - TECH-DEBT-v1.2.0-2025-12-07.md - Comprehensive audit of 38 debt items
+    - 0 Critical severity items
+    - 0 High severity items (2 resolved in this release)
+    - 9 Medium severity items
+    - 27 Low severity items
+  - v1.2.1-PATCH-COMPLETION-2025-12-07.md - Patch completion report
+
+### Deferred
+
+- **TD-008: rand Ecosystem Update**
+  - Deferred to v1.3.0+ due to crypto library dependencies (chacha20poly1305, ed25519-dalek, argon2 require rand_core 0.6)
+  - Pre-release crypto libraries unacceptable for production
+
+### Quality Metrics
+
+- **Tests:** 1,177 total (1,157 passing, 20 ignored) - 100% pass rate on active tests
+- **Two-Node Fixture Tests:** 5/5 passing (previously 4/5 with 1 ignored)
+- **Clippy Warnings:** 0 (strict `-D warnings`)
+- **Compiler Warnings:** 0
+- **Security Vulnerabilities:** 0
+
+---
+
 ## [1.2.0] - 2025-12-07 - Phase 12: Technical Excellence & Production Hardening
 
 **WRAITH Protocol v1.2.0 - Major Feature Release**

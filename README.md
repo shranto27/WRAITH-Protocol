@@ -19,15 +19,15 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 **Version:** 1.3.0 Performance & Security Release | **Development Phase:** Phase 13 Complete
 
-WRAITH Protocol is enterprise-ready with lock-free ring buffers for high-performance packet processing, comprehensive DPI evasion validation, and enhanced connection health monitoring. The protocol has completed Phase 13: Node API Integration & Performance.
+WRAITH Protocol is enterprise-ready with lock-free ring buffers for high-performance packet processing, comprehensive DPI evasion validation, and enhanced connection health monitoring. The protocol has completed Phase 13: Node API Integration & Performance Optimization.
 
 **Project Metrics (2025-12-07):**
-- **Code Volume:** ~37,948 lines of Rust code across 104 source files
-- **Test Coverage:** 1,289 total tests (1,270 passing, 19 ignored) - 100% pass rate on active tests
-- **Documentation:** 94 markdown files, ~50,391 lines of comprehensive documentation
-- **Dependencies:** 287 audited packages (zero vulnerabilities via cargo-audit)
-- **Security:** Grade A+ (95/100), zero vulnerabilities, 5 active fuzz targets
-- **Quality:** 12% technical debt ratio, zero compiler/clippy warnings
+- **Code Volume:** ~40,651 lines of Rust code (30,486 code + 2,664 comments + 7,501 blanks) across 110 source files
+- **Test Coverage:** 923 total tests (913 passing, 10 ignored) - 100% pass rate on active tests
+- **Documentation:** 99 markdown files, ~34,660 lines of comprehensive documentation
+- **Dependencies:** 286 audited packages (zero vulnerabilities via cargo-audit)
+- **Security:** Grade A+ (EXCELLENT), zero vulnerabilities, comprehensive DPI evasion validation
+- **Quality:** Zero compiler/clippy warnings, production-ready codebase
 
 For detailed development history and phase accomplishments, see [Protocol Development History](docs/archive/README_Protocol-DEV.md).
 
@@ -80,7 +80,9 @@ For detailed development history and phase accomplishments, see [Protocol Develo
 - File transfer coordination
 - DHT integration (peer discovery, announcements)
 - NAT traversal integration
-- Health monitoring and automatic cleanup
+- Health monitoring with failed ping detection
+- Connection migration (PATH_CHALLENGE/PATH_RESPONSE)
+- Lock-free ring buffers (SPSC/MPSC) for packet processing
 - Comprehensive configuration system (6 subsystems)
 
 ![WRAITH Protocol Architecture](images/wraith-protocol_arch-infographic.jpg)
@@ -135,7 +137,7 @@ cargo test --workspace
 
 ## Quick Start
 
-**Note:** WRAITH Protocol is currently in early development (v1.2.5). The CLI interface is scaffolded but not yet functional. The following commands represent the planned interface:
+**Note:** WRAITH Protocol v1.3.0 has a complete Node API and protocol implementation. The CLI interface is scaffolded but not yet fully integrated with the Node API. The following commands represent the planned interface:
 
 ```bash
 # Send a file (coming soon)
@@ -185,18 +187,18 @@ WRAITH-Protocol/
 
 ### Crate Overview
 
-| Crate | Description | LOC | Tests |
-|-------|-------------|-----|-------|
-| **wraith-core** | Frame parsing, session management, congestion control, Node API | ~4,800 | 357 |
-| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | ~2,500 | 152 |
-| **wraith-files** | File chunking, tree hashing, reassembly | ~1,300 | 38 |
-| **wraith-obfuscation** | Padding, timing, protocol mimicry | ~3,500 | 167 |
-| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | ~3,500 | 231 |
-| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | ~2,800 | 96 |
-| **wraith-cli** | Command-line interface | ~1,100 | 0 |
-| **wraith-xdp** | eBPF/XDP programs (future) | 0 | 0 |
+| Crate | Description | LOC | Code | Comments | Tests |
+|-------|-------------|-----|------|----------|-------|
+| **wraith-core** | Frame parsing, sessions, congestion, ring buffers, Node API | 17,081 | 12,841 | 1,124 | 400 (6 ignored) |
+| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | 4,435 | 3,249 | 306 | 127 (1 ignored) |
+| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | 5,971 | 4,634 | 292 | 15 |
+| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | 4,050 | 2,999 | 330 | 24 |
+| **wraith-obfuscation** | Padding, timing, protocol mimicry | 2,789 | 2,096 | 156 | 154 |
+| **wraith-files** | File chunking, tree hashing, reassembly | 1,680 | 1,257 | 102 | 15 |
+| **wraith-cli** | Command-line interface | 1,353 | 1,052 | 65 | 0 |
+| **wraith-xdp** | eBPF/XDP programs (future) | 0 | 0 | 0 | 0 |
 
-**Total:** ~37,948 lines of Rust code across 104 source files, 1,289 tests
+**Total:** ~40,651 lines (30,486 code + 2,664 comments + 7,501 blanks) across 110 Rust files, 923 tests (913 passing, 10 ignored)
 
 ## Documentation
 
@@ -230,6 +232,7 @@ WRAITH-Protocol/
 
 ### Security
 - [Security Audit Report](docs/SECURITY_AUDIT.md) - Comprehensive security validation and recommendations
+- [DPI Evasion Report](docs/security/DPI_EVASION_REPORT.md) - Deep packet inspection validation and analysis
 - [Security Policy](SECURITY.md) - Vulnerability reporting and responsible disclosure
 
 ### Comparisons
@@ -407,9 +410,12 @@ WRAITH Protocol development follows a structured multi-phase approach:
 - ✅ Phase 10: Protocol Component Wiring (130 SP)
 - ✅ Phase 11: Production Readiness (92 SP)
 - ✅ Phase 12: Technical Excellence & Production Hardening (126 SP)
+- ✅ Phase 13: Performance Optimization & DPI Validation (76 SP)
+
+**Total Development:** 1,478 story points delivered across 13 phases
 
 **Upcoming:**
-- 📋 Phase 13: Advanced Optimizations (Planned Q1-Q2 2026)
+- 📋 Phase 14+: Future enhancements and optimizations
 - 📋 Client Applications (1,028 SP across 10 applications)
 
 See [ROADMAP.md](to-dos/ROADMAP.md) and [Protocol Development History](docs/archive/README_Protocol-DEV.md) for detailed planning and phase accomplishments.
@@ -435,14 +441,15 @@ See [Client Roadmap](to-dos/ROADMAP-clients.md) for detailed planning.
 | Memory per Session | <10 MB | Including buffers |
 | CPU @ 10 Gbps | <50% | 8-core system |
 
-**Measured Performance (Phase 10 benchmarks):**
-- Frame parsing: 172M frames/sec with SIMD acceleration
-- AEAD encryption: 3.2 GB/s (XChaCha20-Poly1305)
-- BLAKE3 hashing: 8.5 GB/s with parallelization
-- File chunking: 14.85 GiB/s
-- Tree hashing: 4.71 GiB/s in-memory, 3.78 GiB/s from disk
-- Chunk verification: 4.78 GiB/s
-- File reassembly: 5.42 GiB/s
+**Measured Performance (Phase 13 benchmarks):**
+- **Ring Buffers:** ~100M ops/sec (SPSC), ~20M ops/sec (MPSC with 4 producers)
+- **Frame Parsing:** 172M frames/sec with SIMD acceleration (AVX2/SSE4.2/NEON)
+- **AEAD Encryption:** 3.2 GB/s (XChaCha20-Poly1305)
+- **BLAKE3 Hashing:** 8.5 GB/s with parallelization
+- **File Chunking:** 14.85 GiB/s
+- **Tree Hashing:** 4.71 GiB/s in-memory, 3.78 GiB/s from disk
+- **Chunk Verification:** 4.78 GiB/s
+- **File Reassembly:** 5.42 GiB/s
 
 ## CI/CD Infrastructure
 
@@ -511,7 +518,8 @@ WRAITH Protocol is designed with security as a core principle:
 - **Unsafe Code Audit:** 100% documentation coverage with SAFETY comments
 
 **Validation:**
-- **Test Coverage:** 1,289 tests covering all protocol layers
+- **Test Coverage:** 923 tests (913 passing, 10 ignored) covering all protocol layers
+- **DPI Evasion:** Comprehensive validation against Wireshark, Zeek, Suricata, nDPI (see [DPI Evasion Report](docs/security/DPI_EVASION_REPORT.md))
 - **Fuzzing:** 5 libFuzzer targets continuously testing robustness
 - **Property-Based Tests:** QuickCheck-style invariant validation
 - **Security Scanning:** Dependabot, CodeQL, RustSec advisories, weekly scans
@@ -602,4 +610,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v1.2.5 Maintenance Release | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,289 (1,270 passing + 19 ignored) | **Quality:** Grade A+ (95/100), 0 vulnerabilities, 5 fuzz targets, zero warnings
+**Status:** v1.3.0 Performance & Security Release (Phase 13 Complete) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 923 (913 passing + 10 ignored) | **Quality:** Production-ready, 0 vulnerabilities, DPI-validated, zero warnings

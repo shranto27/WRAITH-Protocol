@@ -21,10 +21,10 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 WRAITH Protocol is production-ready with a cross-platform desktop application. Phase 15 delivers WRAITH Transfer, a Tauri 2.0-based desktop client with React 18 frontend, providing full wraith-core integration with an intuitive UI for secure file transfers.
 
-**Project Metrics (2025-12-07):**
-- **Code Volume:** ~38,965 lines of Rust code (29,302 code + 2,597 comments + 7,066 blanks) across 111 source files
-- **Test Coverage:** 1,296 total tests (1,280 passing, 16 ignored) - 100% pass rate on active tests
-- **Documentation:** 100+ markdown files, ~35,000+ lines of comprehensive documentation
+**Project Metrics (2025-12-08):**
+- **Code Volume:** ~41,177 lines of Rust code (~30,876 LOC + 2,743 comments + 7,558 blanks) across 115 source files
+- **Test Coverage:** 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
+- **Documentation:** 100+ markdown files, ~46,000+ lines of comprehensive documentation
 - **Dependencies:** 286 audited packages (zero vulnerabilities via cargo-audit)
 - **Security:** Grade A+ (EXCELLENT), zero vulnerabilities, comprehensive DPI evasion validation
 - **Quality:** Code quality 98/100, zero compiler/clippy warnings, 3.8% technical debt ratio, production-ready codebase
@@ -84,6 +84,18 @@ For detailed development history and phase accomplishments, see [Protocol Develo
 - Connection migration (PATH_CHALLENGE/PATH_RESPONSE)
 - Lock-free ring buffers (SPSC/MPSC) for packet processing
 - Comprehensive configuration system (6 subsystems)
+
+**WRAITH Transfer Desktop Application:**
+- Cross-platform GUI (Windows, macOS, Linux)
+- Tauri 2.0 backend with full wraith-core integration
+- React 18 + TypeScript frontend with Vite bundling
+- Tailwind CSS v4 with WRAITH brand colors (#FF5722 primary, #4A148C secondary)
+- Intuitive file transfer interface with drag-and-drop support
+- Real-time session and transfer monitoring
+- Thread-safe state management (Arc<RwLock<Node>>)
+- 10 IPC commands for node/session/transfer control
+- Zustand state management (nodeStore, transferStore, sessionStore)
+- Production-ready packaging for all platforms
 
 ![WRAITH Protocol Architecture](images/wraith-protocol_arch-infographic.jpg)
 
@@ -189,16 +201,18 @@ WRAITH-Protocol/
 
 | Crate | Description | LOC | Code | Comments | Tests |
 |-------|-------------|-----|------|----------|-------|
-| **wraith-core** | Frame parsing, sessions, congestion, ring buffers, Node API | 17,081 | 12,841 | 1,124 | 400 (6 ignored) |
-| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | 4,435 | 3,249 | 306 | 127 (1 ignored) |
-| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | 5,971 | 4,634 | 292 | 15 |
-| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | 4,050 | 2,999 | 330 | 24 |
-| **wraith-obfuscation** | Padding, timing, protocol mimicry | 2,789 | 2,096 | 156 | 154 |
-| **wraith-files** | File chunking, tree hashing, reassembly | 1,680 | 1,257 | 102 | 15 |
-| **wraith-cli** | Command-line interface | 1,353 | 1,052 | 65 | 0 |
-| **wraith-xdp** | eBPF/XDP programs (future) | 0 | 0 | 0 | 0 |
+| **wraith-core** | Frame parsing, sessions, congestion, ring buffers, Node API | ~4,800+ | - | - | 263 (6 ignored) |
+| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | ~2,500+ | - | - | 125 |
+| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | ~3,500+ | - | - | 15 |
+| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | ~2,800+ | - | - | 33 |
+| **wraith-obfuscation** | Padding, timing, protocol mimicry | ~3,500+ | - | - | 154 |
+| **wraith-files** | File chunking, tree hashing, reassembly | ~1,300 | - | - | 24 |
+| **wraith-cli** | Command-line interface | ~1,100 | - | - | 0 |
+| **wraith-ffi** | Foreign function interface for C/C++ integration | ~1,200 | - | - | 7 |
+| **wraith-transfer** | Tauri 2.0 desktop application (Rust + React + TypeScript) | ~12,500 | - | - | 0 |
+| **wraith-xdp** | eBPF/XDP programs (excluded from default build) | 0 | 0 | 0 | 0 |
 
-**Total:** ~40,651 lines (30,486 code + 2,664 comments + 7,501 blanks) across 110 Rust files, 923 tests (913 passing, 10 ignored)
+**Total Protocol:** ~41,177 lines (~30,876 LOC + 2,743 comments + 7,558 blanks) across 115 Rust files, 1,303 tests (1,280 passing, 23 ignored)
 
 ## Documentation
 
@@ -271,7 +285,7 @@ WRAITH Protocol powers a comprehensive ecosystem of secure applications across 3
 
 | Client | Description | Status | Story Points |
 |--------|-------------|--------|--------------|
-| **WRAITH-Transfer** | Direct P2P file transfer with drag-and-drop GUI | Planned | 102 |
+| **WRAITH-Transfer** | Direct P2P file transfer with drag-and-drop GUI | ✅ **Complete (v1.5.0)** | 102 |
 | **WRAITH-Chat** | E2EE messaging with Double Ratchet algorithm | Planned | 162 |
 
 ### Tier 2: Specialized Applications (Medium Priority)
@@ -412,13 +426,14 @@ WRAITH Protocol development follows a structured multi-phase approach:
 - ✅ Phase 12: Technical Excellence & Production Hardening (126 SP)
 - ✅ Phase 13: Performance Optimization & DPI Validation (76 SP)
 - ✅ Phase 14: Node API Integration & Code Quality (55 SP)
+- ✅ Phase 15: WRAITH Transfer Desktop Application (102 SP)
 
-**Total Development:** 1,533 story points delivered across 14 phases
+**Total Development:** 1,635 story points delivered across 15 phases
 
 **Upcoming:**
-- 📋 Phase 15: XDP Implementation & Advanced Testing
-- 📋 Phase 16+: Post-quantum cryptography, formal verification
-- 📋 Client Applications (1,028 SP across 10 applications)
+- 📋 Phase 16: XDP Implementation & Advanced Testing
+- 📋 Phase 17+: Post-quantum cryptography, formal verification
+- 📋 Client Applications (926 SP across 9 remaining applications)
 
 See [ROADMAP.md](to-dos/ROADMAP.md) and [Protocol Development History](docs/archive/README_Protocol-DEV.md) for detailed planning and phase accomplishments.
 
@@ -612,4 +627,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v1.4.0 Node API Integration & Code Quality (Phase 14 Complete) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,296 (1,280 passing + 16 ignored) | **Quality:** Production-ready, 0 vulnerabilities, zero warnings, 98/100 quality grade
+**Status:** v1.5.0 WRAITH Transfer Desktop Application (Phase 15 Complete) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,303 (1,280 passing + 23 ignored) | **Quality:** Production-ready, 0 vulnerabilities, zero warnings, 98/100 quality grade

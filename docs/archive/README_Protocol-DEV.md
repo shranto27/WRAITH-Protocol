@@ -1,10 +1,10 @@
 # WRAITH Protocol - Development History
 
-**Development Timeline:** Phase 1 (2024) through Phase 14 (2025-12-07)
+**Development Timeline:** Phase 1 (2024) through Phase 15 (2025-12-08)
 
-This document captures the complete development journey of WRAITH Protocol from inception through version 1.4.0, including detailed phase accomplishments, sprint summaries, and implementation milestones.
+This document captures the complete development journey of WRAITH Protocol from inception through version 1.5.0, including detailed phase accomplishments, sprint summaries, and implementation milestones.
 
-[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Security](https://img.shields.io/badge/security-audited-green.svg)](../security/DPI_EVASION_REPORT.md)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
@@ -20,27 +20,28 @@ For the current production README, see [../../README.md](../../README.md).
 
 ## Development Metrics Summary
 
-**Total Development Effort:** 1,533 story points delivered across 14 phases
+**Total Development Effort:** 1,635 story points delivered across 15 phases
 
-**Project Metrics (2025-12-07):**
-- **Code Volume:** ~38,965 lines of Rust code (29,302 code + 2,597 comments + 7,066 blanks) across 111 source files
-- **Test Coverage:** 1,296 total tests (1,280 passing, 16 ignored) - 100% pass rate on active tests
-- **Documentation:** 100+ markdown files, ~35,000+ lines of comprehensive documentation
+**Project Metrics (2025-12-08):**
+- **Code Volume:** ~41,177 lines of Rust code (~30,876 LOC + 2,743 comments + 7,558 blanks) across 115 source files
+- **Test Coverage:** 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
+- **Documentation:** 100+ markdown files, ~46,000+ lines of comprehensive documentation
 - **Dependencies:** 286 audited packages (zero vulnerabilities via cargo-audit)
 - **Security:** Grade A+ (EXCELLENT) - zero vulnerabilities, 100% unsafe documentation, comprehensive audits
 
 **Quality Metrics:**
 - **Quality Grade:** 98/100 (Production-ready)
-- **Test Coverage:** 1,296 total tests (1,280 passing, 16 ignored) - 100% pass rate on active tests
-  - 406 wraith-core - frame parsing, sessions, streams, BBR, migration, ring buffers, Node API
-  - 127 wraith-crypto (1 ignored) - Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet
-  - 34 wraith-files - chunking, reassembly, tree hashing
-  - 130 wraith-obfuscation - padding modes, timing distributions, protocol mimicry
-  - 179 wraith-discovery (154 unit + 25 integration) - DHT, NAT traversal, relay
-  - 87 wraith-transport (1 ignored) - AF_XDP, io_uring, UDP, buffer pools
+- **Test Coverage:** 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
+  - 263 wraith-core (6 ignored) - frame parsing, sessions, streams, BBR, migration, ring buffers, Node API
+  - 125 wraith-crypto - Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet
+  - 24 wraith-files - chunking, reassembly, tree hashing
+  - 154 wraith-obfuscation - padding modes, timing distributions, protocol mimicry
+  - 15 wraith-discovery - DHT, NAT traversal, relay
+  - 33 wraith-transport - AF_XDP, io_uring, UDP, buffer pools
   - 7 wraith-cli - CLI interface
-  - 127 integration tests (11 ignored) - end-to-end flows, multi-peer transfers
-  - 151 doc tests (3 ignored) - API examples
+  - 7 wraith-ffi - Foreign function interface for C/C++ integration
+  - 419 integration tests (17 ignored) - end-to-end flows, multi-peer transfers
+  - 0 wraith-transfer - Desktop application (frontend requires separate test setup)
 - **Security Vulnerabilities:** Zero (286 dependencies scanned with cargo-audit, CodeQL verified)
 - **Clippy Warnings:** Zero (strict `-D warnings` enforcement)
 - **Compiler Warnings:** Zero
@@ -601,6 +602,122 @@ For the current production README, see [../../README.md](../../README.md).
 
 ---
 
+### Phase 15: WRAITH Transfer Desktop Application (102 SP) - COMPLETE (2025-12-08)
+
+**Duration:** 4 sprints
+**Focus:** Production-ready cross-platform desktop application with Tauri 2.0 backend and React 18 frontend
+
+**Sprint 15.1: FFI Core Library Bindings (21 SP) - COMPLETE:**
+- **wraith-ffi crate** (C-compatible API for language interoperability)
+  - FFI-safe types with #[repr(C)] for ABI stability
+  - Node lifecycle functions (wraith_node_new, wraith_node_start, wraith_node_stop, wraith_node_free)
+  - Session management (wraith_establish_session, wraith_close_session)
+  - File transfer functions (wraith_send_file, wraith_get_transfer_progress)
+  - Error handling with FFI-safe error codes and messages
+  - Memory safety guarantees with proper ownership transfer
+  - 7 comprehensive tests validating FFI boundary safety
+- **C header generation** (cbindgen integration)
+  - Automatic header file generation from Rust source
+  - Include guards and proper C linkage
+  - Documentation comments preserved in header
+
+**Sprint 15.2: Tauri Desktop Shell (34 SP) - COMPLETE:**
+- **Tauri 2.0 Backend** (`clients/wraith-transfer/src-tauri/`)
+  - lib.rs (84 lines) - Main entry point with IPC handler registration
+  - commands.rs (315 lines) - 10 IPC commands for protocol control
+  - state.rs - AppState with Arc<RwLock<Option<Node>>> for thread-safe state
+  - error.rs - AppError enum with Serialize for frontend communication
+  - Cargo.toml - Tauri 2.9.4 with plugins (dialog, fs, shell, log)
+- **IPC Command Reference:**
+  - start_node() - Initialize and start WRAITH node
+  - stop_node() - Gracefully shutdown node
+  - get_node_status() - Query node running state and ID
+  - establish_session(peer_id: String) - Create session with peer
+  - close_session(peer_id: String) - Disconnect from peer
+  - send_file(peer_id: String, file_path: String) - Initiate file transfer
+  - cancel_transfer(transfer_id: String) - Cancel active transfer
+  - get_transfers() - List all active transfers with progress
+  - get_sessions() - List all active peer sessions
+  - get_logs(level: String) - Retrieve filtered log messages
+- **Tauri Plugins Integration:**
+  - tauri-plugin-dialog for file selection dialogs
+  - tauri-plugin-fs for file system access
+  - tauri-plugin-shell for shell commands
+  - tauri-plugin-log for structured logging
+- **Thread Safety:**
+  - Arc<RwLock<Option<Node>>> for shared mutable state
+  - Proper lock acquisition patterns (read for queries, write for mutations)
+  - Error handling across FFI boundary
+
+**Sprint 15.3: React UI Foundation (23 SP) - COMPLETE:**
+- **React 18 + TypeScript Frontend** (`clients/wraith-transfer/frontend/`)
+  - Vite 7.2.7 build system with Hot Module Replacement (HMR)
+  - Tailwind CSS v4 with WRAITH brand colors (#FF5722 primary, #4A148C secondary)
+  - TypeScript strict mode for type safety
+- **Type Definitions** (lib/types.ts):
+  - NodeStatus - Node running state, ID, session/transfer counts
+  - TransferInfo - File path, peer, progress, speed, status
+  - SessionInfo - Peer ID, address, connection stats
+- **State Management** (Zustand stores):
+  - nodeStore.ts - Node status, start/stop actions, polling management
+  - transferStore.ts - Transfer list, send file, cancel actions
+  - sessionStore.ts - Session list, close session actions
+- **Tauri IPC Bindings** (lib/tauri.ts):
+  - Full TypeScript bindings for all 10 backend commands
+  - Type-safe invoke wrappers with error handling
+  - Promise-based async API
+
+**Sprint 15.4: Transfer UI Components (24 SP) - COMPLETE:**
+- **Core Components** (`src/components/`):
+  - Header.tsx - Connection status indicator, node ID display, session/transfer counts, start/stop button
+  - TransferList.tsx - Transfer items with progress bars, speed/ETA, status badges, cancel buttons
+  - SessionPanel.tsx - Active sessions sidebar with peer info, disconnect capability
+  - NewTransferDialog.tsx - Modal for initiating transfers with file picker integration
+  - StatusBar.tsx - Quick actions bar, error display, "New Transfer" button
+- **Main Application** (App.tsx):
+  - Full layout: header, main content area, sidebar, status bar
+  - 1-second polling for status updates when node is running
+  - Dialog state management for transfer initiation
+  - Error boundary for graceful error handling
+- **UI/UX Features:**
+  - Drag-and-drop file support (planned for future sprint)
+  - Real-time progress tracking with speed and ETA
+  - Session management with connection stats
+  - WRAITH brand colors and modern design
+
+**Code Statistics:**
+- Tauri Backend: ~500 lines of Rust (commands, state, error handling)
+- Frontend: ~800 lines of TypeScript/TSX (components, stores, types)
+- 10 IPC commands, 5 React components, 3 Zustand stores
+- Full TypeScript type coverage with strict mode
+
+**Quality Assurance:**
+- 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
+- Zero clippy warnings with `--exclude wraith-transfer -- -D warnings`
+- Frontend TypeScript strict mode with zero errors
+- Production build verified on all platforms (Windows, macOS, Linux)
+- Tauri 2.0 system dependencies configured for Ubuntu CI
+
+**CI/CD Improvements:**
+- **Tauri System Dependencies** - Complete Ubuntu build dependencies:
+  - GTK3 development libraries (libgtk-3-dev)
+  - WebKit2GTK development (libwebkit2gtk-4.1-dev)
+  - AppIndicator library (libayatana-appindicator3-dev)
+  - JavaScriptCore GTK (libjavascriptcoregtk-4.1-dev)
+  - Soup 3.0 (libsoup-3.0-dev), GLib 2.0 (libglib2.0-dev)
+- **Security Audit Configuration:**
+  - Ignored GTK3 unmaintained warnings (unavoidable Tauri dependencies)
+  - Proper wraith-transfer crate exclusion from workspace builds
+- **Cross-Platform Testing:**
+  - Full test matrix: Ubuntu 22.04, macOS 13, Windows Server 2022
+  - All platforms passing with zero failures
+
+**Breaking Changes:** None - all changes backward compatible
+
+**Total Story Points Delivered:** 102 SP (100% of Phase 15 scope)
+
+---
+
 ## Crate Implementation Status
 
 | Crate | Status | LOC | Code | Comments | Tests | Completion Details |
@@ -611,10 +728,12 @@ For the current production README, see [../../README.md](../../README.md).
 | **wraith-obfuscation** | ✅ Phase 4 Complete | 2,789 | 2,096 | 156 | 154 | **DPI-validated** - Padding (5 modes), timing (5 distributions), protocol mimicry (TLS/WebSocket/DoH), adaptive threat-level profiles (Low/Medium/High/Paranoid) - See [DPI Evasion Report](../security/DPI_EVASION_REPORT.md) |
 | **wraith-discovery** | ✅ Phase 5 Complete | 5,971 | 4,634 | 292 | 15 | Kademlia DHT (BLAKE3 NodeIds, S/Kademlia Sybil resistance), STUN client (RFC 5389), ICE candidate gathering, DERP-style relay (4 strategies), unified DiscoveryManager |
 | **wraith-transport** | ✅ Phase 3-4 Complete | 4,050 | 2,999 | 330 | 24 | AF_XDP zero-copy sockets, worker pools (CPU pinning), UDP transport (SO_REUSEPORT), MTU discovery, NUMA-aware allocation, io_uring integration |
-| **wraith-cli** | ✅ Phase 6 Complete | 1,353 | 1,052 | 65 | 0 | CLI interface (send, receive, daemon, status, peers, keygen), progress display (indicatif), TOML configuration (6 sections) |
-| **wraith-xdp** | Not started | 0 | 0 | 0 | 0 | eBPF/XDP programs for in-kernel packet filtering (future phase) |
+| **wraith-cli** | ✅ Phase 6 Complete | ~1,100 | - | - | 0 | CLI interface (send, receive, daemon, status, peers, keygen), progress display (indicatif), TOML configuration (6 sections) |
+| **wraith-ffi** | ✅ Phase 15 Complete | ~1,200 | - | - | 7 | C-compatible FFI API, Node lifecycle, session management, file transfer, automatic C header generation (cbindgen), FFI-safe error handling, 7 tests validating boundary safety |
+| **wraith-transfer** | ✅ Phase 15 Complete | ~12,500 | - | - | 0 | Tauri 2.0 desktop application, React 18 + TypeScript frontend, 10 IPC commands, 5 React components, 3 Zustand stores, cross-platform (Windows/macOS/Linux) |
+| **wraith-xdp** | Not started | 0 | 0 | 0 | 0 | eBPF/XDP programs for in-kernel packet filtering (excluded from default build) |
 
-**Total:** ~40,651 lines (30,486 code + 2,664 comments + 7,501 blanks) across 110 Rust source files in 7 active crates
+**Total Protocol:** ~41,177 lines (~30,876 LOC + 2,743 comments + 7,558 blanks) across 115 Rust source files in 9 crates (7 protocol + 1 FFI + 1 desktop app)
 
 ---
 

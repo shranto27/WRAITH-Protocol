@@ -525,14 +525,21 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "TODO(Session 3.4): Requires two-node end-to-end setup"]
     async fn test_get_connection_health_with_session() {
+        use crate::node::session::PeerConnection;
+        use std::sync::Arc;
+
         let node = Node::new_random().await.unwrap();
-        node.start().await.unwrap();
 
+        // Create a mock session by directly inserting into sessions map
         let peer_id = [42u8; 32];
-        node.establish_session(&peer_id).await.unwrap();
+        let mock_session = Arc::new(PeerConnection::new_for_test(
+            peer_id,
+            "127.0.0.1:8420".parse().unwrap(),
+        ));
+        node.inner.sessions.insert(peer_id, mock_session);
 
+        // Test that health check finds the session
         let health = node.get_connection_health(&peer_id).await;
         assert!(health.is_some());
 
@@ -541,16 +548,27 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "TODO(Session 3.4): Requires two-node end-to-end setup"]
     async fn test_get_all_connection_health_with_sessions() {
-        let node = Node::new_random().await.unwrap();
-        node.start().await.unwrap();
+        use crate::node::session::PeerConnection;
+        use std::sync::Arc;
 
+        let node = Node::new_random().await.unwrap();
+
+        // Insert two mock sessions
         let peer1 = [1u8; 32];
         let peer2 = [2u8; 32];
 
-        node.establish_session(&peer1).await.unwrap();
-        node.establish_session(&peer2).await.unwrap();
+        let session1 = Arc::new(PeerConnection::new_for_test(
+            peer1,
+            "127.0.0.1:8421".parse().unwrap(),
+        ));
+        let session2 = Arc::new(PeerConnection::new_for_test(
+            peer2,
+            "127.0.0.1:8422".parse().unwrap(),
+        ));
+
+        node.inner.sessions.insert(peer1, session1);
+        node.inner.sessions.insert(peer2, session2);
 
         let health = node.get_all_connection_health().await;
         assert_eq!(health.len(), 2);

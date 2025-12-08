@@ -2188,7 +2188,7 @@ async fn test_discovery_node_integration() {
 /// 4. Wait for transfer completion
 /// 5. Verify file integrity
 #[tokio::test]
-#[ignore = "TODO(Sprint 14.3): Requires two-node infrastructure with real peer connections"]
+#[ignore = "Sprint 14.4+: Requires complete file transfer pipeline (chunks not sent yet)"]
 async fn test_end_to_end_file_transfer() {
     use std::fs;
     use tempfile::TempDir;
@@ -2214,6 +2214,7 @@ async fn test_end_to_end_file_transfer() {
     let receiver_addr = receiver.listen_addr().await.unwrap();
 
     // Establish session first (so receiver knows about sender)
+    // Use Ed25519 node_id for addressing, session is stored by X25519 key
     let _session = sender
         .establish_session_with_addr(receiver.node_id(), receiver_addr)
         .await
@@ -2222,9 +2223,9 @@ async fn test_end_to_end_file_transfer() {
     // Give time for session establishment
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    // Send file
+    // Send file - use X25519 key since sessions are keyed by X25519
     let transfer_id = sender
-        .send_file(&send_path, receiver.node_id())
+        .send_file(&send_path, receiver.x25519_public_key())
         .await
         .unwrap();
 
@@ -2392,7 +2393,7 @@ async fn test_discovery_and_peer_finding() {
 /// 2. Initiate multi-peer send
 /// 3. Verify all transfers complete
 #[tokio::test]
-#[ignore = "TODO(Sprint 14.3): Requires two-node infrastructure with real peer connections"]
+#[ignore = "Sprint 14.4+: Requires complete file transfer pipeline (chunks not sent yet)"]
 async fn test_multi_path_transfer_node_api() {
     use std::fs;
     use tempfile::TempDir;
@@ -2418,6 +2419,7 @@ async fn test_multi_path_transfer_node_api() {
     let receiver2_addr = receiver2.listen_addr().await.unwrap();
 
     // Establish sessions with multiple peers
+    // Use Ed25519 node_id for addressing, session is stored by X25519 key
     let _session1 = sender
         .establish_session_with_addr(receiver1.node_id(), receiver1_addr)
         .await
@@ -2434,8 +2436,8 @@ async fn test_multi_path_transfer_node_api() {
     let sessions = sender.active_sessions().await;
     assert_eq!(sessions.len(), 2);
 
-    // Send file to multiple peers using multi-peer transfer
-    let peers = vec![*receiver1.node_id(), *receiver2.node_id()];
+    // Send file to multiple peers - use X25519 keys since sessions are keyed by X25519
+    let peers = vec![*receiver1.x25519_public_key(), *receiver2.x25519_public_key()];
     let transfer_id = sender.send_file_to_peers(&send_path, &peers).await.unwrap();
 
     // Verify transfer was created
@@ -2536,7 +2538,7 @@ async fn test_error_recovery_node_api() {
 /// 2. Verify isolation between transfers
 /// 3. Test concurrent execution and completion
 #[tokio::test]
-#[ignore = "TODO(Sprint 14.3): Requires two-node infrastructure with real peer connections"]
+#[ignore = "Sprint 14.4+: Requires complete file transfer pipeline (chunks not sent yet)"]
 async fn test_concurrent_transfers_node_api() {
     use std::fs;
     use tempfile::TempDir;
@@ -2555,6 +2557,7 @@ async fn test_concurrent_transfers_node_api() {
     receiver3.start().await.unwrap();
 
     // Get receiver addresses and establish sessions
+    // Use Ed25519 node_id for addressing, session is stored by X25519 key
     let receiver1_addr = receiver1.listen_addr().await.unwrap();
     let receiver2_addr = receiver2.listen_addr().await.unwrap();
     let receiver3_addr = receiver3.listen_addr().await.unwrap();
@@ -2575,7 +2578,8 @@ async fn test_concurrent_transfers_node_api() {
     // Give time for session establishment
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    // Create multiple test files
+    // Create multiple test files and send to different receivers
+    // Use X25519 keys since sessions are keyed by X25519
     let mut transfer_ids = Vec::new();
     for i in 0..3 {
         let data = vec![i as u8; 512 * 1024]; // 512KB each
@@ -2583,9 +2587,9 @@ async fn test_concurrent_transfers_node_api() {
         fs::write(&path, &data).unwrap();
 
         let receiver = match i {
-            0 => receiver1.node_id(),
-            1 => receiver2.node_id(),
-            _ => receiver3.node_id(),
+            0 => receiver1.x25519_public_key(),
+            1 => receiver2.x25519_public_key(),
+            _ => receiver3.x25519_public_key(),
         };
 
         let id = sender.send_file(&path, receiver).await.unwrap();

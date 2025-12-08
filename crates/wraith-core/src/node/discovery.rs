@@ -482,7 +482,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "Requires node.start() to initialize discovery manager (Phase 13 Sprint 13.2)"]
     async fn test_bootstrap_success() {
         let node = Node::new_random().await.unwrap();
         node.start().await.unwrap();
@@ -499,7 +498,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "TODO(Session 3.4): Requires node.start() and discovery manager initialization"]
     async fn test_announce() {
         let node = Node::new_random().await.unwrap();
         node.start().await.unwrap();
@@ -512,7 +510,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "Requires node.start() to initialize discovery manager (Phase 13 Sprint 13.2)"]
     async fn test_lookup_peer() {
         let node = Node::new_random().await.unwrap();
         node.start().await.unwrap();
@@ -527,7 +524,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "Requires node.start() to initialize discovery manager (Phase 13 Sprint 13.2)"]
     async fn test_find_peers() {
         let node = Node::new_random().await.unwrap();
         node.start().await.unwrap();

@@ -680,19 +680,21 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "TODO(Sprint 14.3): Requires two-node end-to-end test infrastructure"]
-    async fn test_fetch_file_metadata() {
+    async fn test_fetch_file_metadata_no_sessions() {
+        // Test behavior when peers exist but have no established sessions
         let node = Node::new_random().await.unwrap();
 
         let file_hash = [42u8; 32];
+        // These peer IDs don't have established sessions
         let peers = vec![[1u8; 32], [2u8; 32]];
 
         let result = node.fetch_file_metadata(&file_hash, &peers).await;
 
-        assert!(result.is_ok());
-
-        let metadata = result.unwrap();
-        assert_eq!(metadata.root_hash, file_hash);
+        // Should fail because we can't fetch metadata from peers without sessions
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Error should indicate failure to fetch from any peer
+        assert!(err.to_string().contains("Failed to fetch metadata"));
     }
 
     #[tokio::test]

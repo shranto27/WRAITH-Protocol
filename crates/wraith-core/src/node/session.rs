@@ -179,6 +179,45 @@ impl PeerConnection {
         current_time_ms().saturating_sub(last_ms)
     }
 
+    /// Create a mock peer connection for testing
+    ///
+    /// Creates a PeerConnection with random session crypto for unit tests
+    /// that need to insert sessions into the sessions map.
+    #[cfg(test)]
+    pub fn new_for_test(peer_id: PeerId, peer_addr: SocketAddr) -> Self {
+        use wraith_crypto::aead::SessionCrypto;
+
+        // Generate random session ID from peer_id
+        let mut session_id = [0u8; 32];
+        session_id.copy_from_slice(&peer_id);
+
+        // Create random session crypto with random keys
+        let mut send_key = [0u8; 32];
+        let mut recv_key = [0u8; 32];
+        let mut chain_key = [0u8; 32];
+        getrandom::getrandom(&mut send_key).expect("getrandom failed");
+        getrandom::getrandom(&mut recv_key).expect("getrandom failed");
+        getrandom::getrandom(&mut chain_key).expect("getrandom failed");
+        let crypto = SessionCrypto::new(send_key, recv_key, &chain_key);
+
+        // Generate connection ID from peer_id bytes
+        let mut cid_bytes = [0u8; 8];
+        cid_bytes.copy_from_slice(&peer_id[..8]);
+        let connection_id = crate::ConnectionId::from_bytes(cid_bytes);
+
+        Self {
+            session_id,
+            peer_id,
+            peer_addr: std::sync::RwLock::new(peer_addr),
+            connection_id,
+            session: Arc::new(RwLock::new(crate::Session::new())),
+            crypto: Arc::new(RwLock::new(crypto)),
+            stats: ConnectionStats::default(),
+            last_activity_ms: AtomicU64::new(current_time_ms()),
+            failed_pings: std::sync::atomic::AtomicU32::new(0),
+        }
+    }
+
     /// Get session state
     pub async fn state(&self) -> SessionState {
         self.session.read().await.state()

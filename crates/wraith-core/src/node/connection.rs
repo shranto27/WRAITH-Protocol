@@ -123,6 +123,9 @@ impl Node {
     }
 
     /// Send ping to a session and measure latency
+    ///
+    /// Sends a PING frame and waits for the corresponding PONG response.
+    /// Uses the `pending_pings` map to coordinate with `handle_pong_frame()`.
     async fn ping_session(
         &self,
         peer_id: &PeerId,
@@ -132,8 +135,8 @@ impl Node {
 
         let start = std::time::Instant::now();
 
-        // Build PING frame with current timestamp as sequence number for matching
-        let sequence = (start.elapsed().as_micros() & 0xFFFFFFFF) as u32;
+        // Build PING frame with a unique sequence number for matching PONG
+        let sequence = (start.elapsed().as_nanos() & 0xFFFFFFFF) as u32;
 
         let frame = FrameBuilder::new()
             .frame_type(FrameType::Ping)
@@ -142,8 +145,16 @@ impl Node {
             .build(128) // Minimum size with padding
             .map_err(|e| NodeError::Other(format!("Failed to build PING frame: {}", e).into()))?;
 
+        // Create oneshot channel for PONG response
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        // Register pending ping before sending (so handle_pong_frame can find it)
+        self.inner.pending_pings.insert((*peer_id, sequence), tx);
+
         // Encrypt frame
-        let encrypted = session.encrypt_frame(&frame).await?;
+        let encrypted = session.encrypt_frame(&frame).await.inspect_err(|_| {
+            self.inner.pending_pings.remove(&(*peer_id, sequence));
+        })?;
 
         // Send via transport
         let transport_guard = self.inner.transport.lock().await;
@@ -151,36 +162,60 @@ impl Node {
             transport
                 .send_to(&encrypted, session.peer_addr())
                 .await
-                .map_err(|e| NodeError::Transport(format!("Failed to send PING: {}", e).into()))?;
+                .map_err(|e| {
+                    self.inner.pending_pings.remove(&(*peer_id, sequence));
+                    NodeError::Transport(format!("Failed to send PING: {}", e).into())
+                })?;
         } else {
+            self.inner.pending_pings.remove(&(*peer_id, sequence));
             return Err(NodeError::Transport("Transport not initialized".into()));
         }
         drop(transport_guard);
 
-        // TODO: Wait for PONG response with matching sequence number
-        // For full implementation, this requires:
-        // 1. A pending_pings map: HashMap<(PeerId, u32 sequence), oneshot::Sender<Instant>>
-        // 2. packet_receive_loop to check for PONG frames and route to the channel
-        // 3. Timeout handling with exponential backoff
-        //
-        // For now, we rely on the activity timestamp being updated when any packet
-        // is received from the peer, which provides basic liveness detection.
+        // Wait for PONG response with timeout
+        let ping_timeout = Duration::from_secs(5);
+        match tokio::time::timeout(ping_timeout, rx).await {
+            Ok(Ok(pong_time)) => {
+                // PONG received - calculate RTT
+                let latency = pong_time.duration_since(start);
 
-        // Simulate successful ping for now
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        let latency = start.elapsed();
+                // Reset failed ping counter on successful PONG
+                session.reset_failed_pings();
+                session.touch(); // Update last activity
 
-        // Reset failed ping counter on successful send
-        session.reset_failed_pings();
-        session.touch(); // Update last activity
+                tracing::trace!(
+                    "PONG received from {:?}: {} µs RTT",
+                    peer_id,
+                    latency.as_micros()
+                );
 
-        tracing::trace!(
-            "Ping to {:?}: {:?} (PING sent, PONG handling pending)",
-            peer_id,
-            latency
-        );
+                Ok(latency)
+            }
+            Ok(Err(_)) => {
+                // Channel closed (sender dropped without sending)
+                self.inner.pending_pings.remove(&(*peer_id, sequence));
+                session.increment_failed_pings();
+                Err(NodeError::Other(
+                    format!("PING to {:?} failed: channel closed", peer_id).into(),
+                ))
+            }
+            Err(_) => {
+                // Timeout - no PONG received
+                self.inner.pending_pings.remove(&(*peer_id, sequence));
+                session.increment_failed_pings();
 
-        Ok(latency)
+                tracing::debug!(
+                    "PING to {:?} timed out after {:?} (failed pings: {})",
+                    peer_id,
+                    ping_timeout,
+                    session.failed_ping_count()
+                );
+
+                Err(NodeError::Timeout(
+                    format!("PING to {:?} timed out", peer_id).into(),
+                ))
+            }
+        }
     }
 
     /// Migrate a session to a new address
@@ -283,9 +318,10 @@ impl Node {
         let timeout = Duration::from_secs(5);
         match tokio::time::timeout(timeout, response_rx).await {
             Ok(Ok(Ok(latency))) => {
-                // Migration successful
-                // TODO: Update session peer address in sessions map
-                // Note: PeerConnection is immutable (behind Arc), need to update sessions map entry
+                // Migration successful - update session peer address
+                session.update_peer_addr(new_addr);
+                session.touch(); // Update last activity
+
                 tracing::info!(
                     "Migration to {} verified with {}µs RTT",
                     new_addr,

@@ -286,19 +286,19 @@ fn encrypt_private_key(private_key: &[u8; 32], passphrase: &str) -> anyhow::Resu
         ARGON2_PARALLELISM,
         Some(32),
     )
-    .map_err(|e| anyhow::anyhow!("Argon2 params error: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Argon2 params error: {e}"))?;
 
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut derived_key = [0u8; 32];
     argon2
         .hash_password_into(passphrase.as_bytes(), &salt, &mut derived_key)
-        .map_err(|e| anyhow::anyhow!("Argon2 derivation failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Argon2 derivation failed: {e}"))?;
 
     // Encrypt the private key
     let cipher = XChaCha20Poly1305::new((&derived_key).into());
     let ciphertext = cipher
         .encrypt((&nonce).into(), private_key.as_ref())
-        .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Encryption failed: {e}"))?;
 
     // Zeroize the derived key
     derived_key.zeroize();
@@ -351,13 +351,13 @@ fn decrypt_private_key(encrypted_data: &[u8], passphrase: &str) -> anyhow::Resul
         ARGON2_PARALLELISM,
         Some(32),
     )
-    .map_err(|e| anyhow::anyhow!("Argon2 params error: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Argon2 params error: {e}"))?;
 
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut derived_key = [0u8; 32];
     argon2
         .hash_password_into(passphrase.as_bytes(), salt, &mut derived_key)
-        .map_err(|e| anyhow::anyhow!("Argon2 derivation failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Argon2 derivation failed: {e}"))?;
 
     // Decrypt the private key
     let cipher = XChaCha20Poly1305::new((&derived_key).into());
@@ -414,7 +414,7 @@ async fn send_file(
 
     // Verify file exists
     if !file.exists() {
-        anyhow::bail!("File not found: {:?}", file);
+        anyhow::bail!("File not found: {file:?}");
     }
 
     let file_size = std::fs::metadata(&file)?.len();
@@ -425,8 +425,8 @@ async fn send_file(
 
     println!("File: {}", file.display());
     println!("Size: {}", format_bytes(file_size));
-    println!("Recipient: {}", recipient);
-    println!("Obfuscation: {}", mode);
+    println!("Recipient: {recipient}");
+    println!("Obfuscation: {mode}");
 
     // Create progress bar
     let progress = TransferProgress::new(file_size, filename);
@@ -458,7 +458,7 @@ async fn receive_files(output: PathBuf, bind: String, config: &Config) -> anyhow
     }
 
     println!("Output directory: {}", output.display());
-    println!("Listening on: {}", bind);
+    println!("Listening on: {bind}");
     println!(
         "Chunk size: {}",
         format_bytes(config.transfer.chunk_size as u64)
@@ -484,13 +484,13 @@ async fn run_daemon(bind: String, relay: bool, config: &Config) -> anyhow::Resul
 
     println!("WRAITH Daemon");
     println!("Version: {}", env!("CARGO_PKG_VERSION"));
-    println!("Listen: {}", bind);
-    println!("Relay mode: {}", relay);
+    println!("Listen: {bind}");
+    println!("Relay mode: {relay}");
     println!("XDP: {}", config.network.enable_xdp);
 
     if config.network.enable_xdp {
         if let Some(iface) = &config.network.xdp_interface {
-            println!("XDP interface: {}", iface);
+            println!("XDP interface: {iface}");
         }
     }
 
@@ -523,8 +523,8 @@ async fn send_batch(
 
     println!("Batch Transfer");
     println!("Files: {}", files.len());
-    println!("Recipient: {}", recipient);
-    println!("Obfuscation: {}", mode);
+    println!("Recipient: {recipient}");
+    println!("Obfuscation: {mode}");
     println!();
 
     // Validate and sanitize all file paths
@@ -536,12 +536,12 @@ async fn send_batch(
         let sanitized = sanitize_path(&file_path)?;
 
         if !sanitized.exists() {
-            anyhow::bail!("File not found: {:?}", file_path);
+            anyhow::bail!("File not found: {file_path:?}");
         }
 
         let metadata = std::fs::metadata(&sanitized)?;
         if !metadata.is_file() {
-            anyhow::bail!("Not a file: {:?}", file_path);
+            anyhow::bail!("Not a file: {file_path:?}");
         }
 
         total_size += metadata.len();
@@ -594,7 +594,7 @@ async fn show_status(
 
     if let Some(transfer_id) = transfer {
         // Show specific transfer status
-        println!("Transfer: {}", transfer_id);
+        println!("Transfer: {transfer_id}");
         println!("Status: Active (placeholder)");
         println!("Progress: 45% (placeholder)");
         println!("Speed: 8.5 Gbps (placeholder)");
@@ -654,7 +654,7 @@ async fn list_peers(dht_query: Option<String>, config: &Config) -> anyhow::Resul
 
     if let Some(peer_id) = dht_query {
         // Query DHT for specific peer
-        println!("Querying DHT for peer: {}", peer_id);
+        println!("Querying DHT for peer: {peer_id}");
         println!();
 
         tracing::warn!("DHT query requires Phase 7 protocol integration");
@@ -785,10 +785,7 @@ async fn show_metrics(json: bool, watch: Option<u64>, config: &Config) -> anyhow
 
     // Text output
     if let Some(interval) = watch {
-        println!(
-            "Watching metrics (refresh every {}s, Ctrl+C to stop)",
-            interval
-        );
+        println!("Watching metrics (refresh every {interval}s, Ctrl+C to stop)");
         println!();
 
         loop {

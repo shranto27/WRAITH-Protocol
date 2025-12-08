@@ -146,9 +146,9 @@ pub enum RelayError {
 impl fmt::Display for RelayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RelayError::Serialization(e) => write!(f, "Serialization error: {}", e),
-            RelayError::Deserialization(e) => write!(f, "Deserialization error: {}", e),
-            RelayError::Io(e) => write!(f, "I/O error: {}", e),
+            RelayError::Serialization(e) => write!(f, "Serialization error: {e}"),
+            RelayError::Deserialization(e) => write!(f, "Deserialization error: {e}"),
+            RelayError::Io(e) => write!(f, "I/O error: {e}"),
             RelayError::Timeout => write!(f, "Connection timeout"),
             RelayError::NotRegistered => write!(f, "Client not registered"),
             RelayError::PeerNotFound => write!(f, "Peer not found"),
@@ -156,7 +156,7 @@ impl fmt::Display for RelayError {
             RelayError::InvalidMessage => write!(f, "Invalid message"),
             RelayError::ServerFull => write!(f, "Server at capacity"),
             RelayError::AuthFailed => write!(f, "Authentication failed"),
-            RelayError::Internal(e) => write!(f, "Internal error: {}", e),
+            RelayError::Internal(e) => write!(f, "Internal error: {e}"),
         }
     }
 }

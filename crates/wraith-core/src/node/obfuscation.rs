@@ -274,7 +274,7 @@ impl Node {
 
         let unwrapped = wrapper
             .unwrap(data)
-            .map_err(|e| NodeError::Other(format!("TLS unwrap failed: {}", e).into()))?;
+            .map_err(|e| NodeError::Other(format!("TLS unwrap failed: {e}").into()))?;
 
         tracing::trace!(
             "Unwrapped TLS: {} bytes -> {} bytes",
@@ -292,7 +292,7 @@ impl Node {
 
         let unwrapped = wrapper
             .unwrap(data)
-            .map_err(|e| NodeError::Other(format!("WebSocket unwrap failed: {}", e).into()))?;
+            .map_err(|e| NodeError::Other(format!("WebSocket unwrap failed: {e}").into()))?;
 
         tracing::trace!(
             "Unwrapped WebSocket: {} bytes -> {} bytes",
@@ -310,7 +310,7 @@ impl Node {
 
         let unwrapped = tunnel
             .parse_dns_response(data)
-            .map_err(|e| NodeError::Other(format!("DoH unwrap failed: {}", e).into()))?;
+            .map_err(|e| NodeError::Other(format!("DoH unwrap failed: {e}").into()))?;
 
         tracing::trace!(
             "Unwrapped DoH: {} bytes -> {} bytes",

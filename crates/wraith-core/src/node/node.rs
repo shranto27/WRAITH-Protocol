@@ -222,7 +222,7 @@ impl Node {
         match transport.as_ref() {
             Some(t) => {
                 let mut addr = t.local_addr().map_err(|e| {
-                    NodeError::Transport(format!("Failed to get local address: {}", e).into())
+                    NodeError::Transport(format!("Failed to get local address: {e}").into())
                 })?;
                 if addr.ip().is_unspecified() {
                     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -267,7 +267,7 @@ impl Node {
         // Initialize transport
         let transport = AsyncUdpTransport::bind(self.inner.config.listen_addr)
             .await
-            .map_err(|e| NodeError::Transport(format!("Failed to bind transport: {}", e).into()))?;
+            .map_err(|e| NodeError::Transport(format!("Failed to bind transport: {e}").into()))?;
         let transport = Arc::new(transport);
         *self.inner.transport.lock().await = Some(Arc::clone(&transport));
 
@@ -279,13 +279,14 @@ impl Node {
         discovery_config.relay_enabled = self.inner.config.discovery.enable_relay;
 
         let discovery = DiscoveryManager::new(discovery_config).await.map_err(|e| {
-            NodeError::Discovery(format!("Failed to create discovery manager: {}", e).into())
+            NodeError::Discovery(format!("Failed to create discovery manager: {e}").into())
         })?;
         let discovery = Arc::new(discovery);
         *self.inner.discovery.lock().await = Some(Arc::clone(&discovery));
-        discovery.start().await.map_err(|e| {
-            NodeError::Discovery(format!("Failed to start discovery: {}", e).into())
-        })?;
+        discovery
+            .start()
+            .await
+            .map_err(|e| NodeError::Discovery(format!("Failed to start discovery: {e}").into()))?;
 
         // Start packet receive loop (defined in packet_handler.rs)
         let node = self.clone();
@@ -383,7 +384,7 @@ impl Node {
                     e
                 );
                 Err(NodeError::Discovery(
-                    format!("Peer discovery failed: {}", e).into(),
+                    format!("Peer discovery failed: {e}").into(),
                 ))
             }
         }

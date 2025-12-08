@@ -314,11 +314,7 @@ impl Config {
         // Check for basic format: host:port
         let parts: Vec<&str> = addr.rsplitn(2, ':').collect();
         if parts.len() != 2 {
-            anyhow::bail!(
-                "{} '{}' missing port (expected format: host:port)",
-                name,
-                addr
-            );
+            anyhow::bail!("{name} '{addr}' missing port (expected format: host:port)");
         }
 
         let port_str = parts[0];
@@ -327,20 +323,20 @@ impl Config {
         // Validate port
         let port: u16 = port_str
             .parse()
-            .map_err(|_| anyhow::anyhow!("{} '{}' has invalid port: {}", name, addr, port_str))?;
+            .map_err(|_| anyhow::anyhow!("{name} '{addr}' has invalid port: {port_str}"))?;
 
         if port == 0 {
-            anyhow::bail!("{} '{}' has invalid port: 0", name, addr);
+            anyhow::bail!("{name} '{addr}' has invalid port: 0");
         }
 
         // Validate host (basic check - not empty and doesn't contain dangerous chars)
         if host.is_empty() {
-            anyhow::bail!("{} '{}' has empty hostname", name, addr);
+            anyhow::bail!("{name} '{addr}' has empty hostname");
         }
 
         // Check for path traversal in hostname
         if host.contains("..") || host.contains('/') || host.contains('\\') {
-            anyhow::bail!("{} '{}' contains invalid characters", name, addr);
+            anyhow::bail!("{name} '{addr}' contains invalid characters");
         }
 
         Ok(())

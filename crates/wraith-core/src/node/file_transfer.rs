@@ -183,10 +183,8 @@ impl FileMetadata {
             return Err(NodeError::invalid_state("Metadata truncated (file name)"));
         }
 
-        let file_name =
-            String::from_utf8(data[offset..offset + file_name_len].to_vec()).map_err(|e| {
-                NodeError::InvalidState(format!("Invalid file name UTF-8: {}", e).into())
-            })?;
+        let file_name = String::from_utf8(data[offset..offset + file_name_len].to_vec())
+            .map_err(|e| NodeError::InvalidState(format!("Invalid file name UTF-8: {e}").into()))?;
         offset += file_name_len;
 
         // File size (8 bytes)
@@ -239,9 +237,7 @@ pub fn build_metadata_frame(stream_id: u16, metadata: &FileMetadata) -> Result<V
         .sequence(0)
         .payload(&metadata_bytes)
         .build(frame_size)
-        .map_err(|e| {
-            NodeError::InvalidState(format!("Failed to build metadata frame: {}", e).into())
-        })
+        .map_err(|e| NodeError::InvalidState(format!("Failed to build metadata frame: {e}").into()))
 }
 
 /// Build a data frame for file chunk
@@ -258,7 +254,7 @@ pub fn build_chunk_frame(stream_id: u16, chunk_index: u64, chunk_data: &[u8]) ->
         .offset(chunk_index * chunk_data.len() as u64) // File offset
         .payload(chunk_data)
         .build(frame_size)
-        .map_err(|e| NodeError::InvalidState(format!("Failed to build chunk frame: {}", e).into()))
+        .map_err(|e| NodeError::InvalidState(format!("Failed to build chunk frame: {e}").into()))
 }
 
 #[cfg(test)]

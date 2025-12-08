@@ -396,7 +396,7 @@ impl Worker {
         buffer_pool: Option<BufferPool>,
     ) -> Self {
         let handle = thread::Builder::new()
-            .name(format!("wraith-worker-{}", id))
+            .name(format!("wraith-worker-{id}"))
             .spawn(move || {
                 debug!("Worker {} starting", id);
 
@@ -487,7 +487,7 @@ impl Worker {
             );
 
             if ret != 0 {
-                Err(format!("sched_setaffinity failed with code {}", ret))
+                Err(format!("sched_setaffinity failed with code {ret}"))
             } else {
                 Ok(())
             }

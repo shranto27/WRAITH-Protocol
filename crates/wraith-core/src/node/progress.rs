@@ -127,7 +127,7 @@ impl TransferProgress {
             Some(duration) => {
                 let seconds = duration.as_secs();
                 if seconds < 60 {
-                    format!("{}s", seconds)
+                    format!("{seconds}s")
                 } else if seconds < 3600 {
                     format!("{}m {}s", seconds / 60, seconds % 60)
                 } else {

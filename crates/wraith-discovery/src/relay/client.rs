@@ -238,7 +238,7 @@ impl RelayClient {
                                     // Could notify application layer
                                 }
                                 RelayMessage::Error { code, message: _ } => {
-                                    eprintln!("Relay error: {:?}", code);
+                                    eprintln!("Relay error: {code:?}");
                                     *state.lock().await = RelayClientState::Error;
                                 }
                                 _ => {
@@ -248,7 +248,7 @@ impl RelayClient {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Receive error: {}", e);
+                        eprintln!("Receive error: {e}");
                         *state.lock().await = RelayClientState::Error;
                         break;
                     }

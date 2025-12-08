@@ -210,7 +210,7 @@ impl RelayServer {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Receive error: {}", e);
+                    eprintln!("Receive error: {e}");
                 }
             }
         }

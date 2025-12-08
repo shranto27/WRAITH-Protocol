@@ -96,8 +96,8 @@ impl TwoNodeFixture {
     ) -> Result<Self, NodeError> {
         // Allocate unique ports
         let (initiator_port, responder_port) = allocate_port_pair();
-        let initiator_addr: SocketAddr = format!("127.0.0.1:{}", initiator_port).parse().unwrap();
-        let responder_addr: SocketAddr = format!("127.0.0.1:{}", responder_port).parse().unwrap();
+        let initiator_addr: SocketAddr = format!("127.0.0.1:{initiator_port}").parse().unwrap();
+        let responder_addr: SocketAddr = format!("127.0.0.1:{responder_port}").parse().unwrap();
 
         // Verify ports are available
         Self::verify_port_available(initiator_addr).await?;

@@ -128,8 +128,7 @@ impl UmemConfig {
 
         if self.frame_size < XDP_UMEM_MIN_CHUNK_SIZE {
             return Err(AfXdpError::InvalidConfig(format!(
-                "frame_size must be >= {}",
-                XDP_UMEM_MIN_CHUNK_SIZE
+                "frame_size must be >= {XDP_UMEM_MIN_CHUNK_SIZE}"
             )));
         }
 
@@ -587,8 +586,7 @@ impl AfXdpSocket {
         let available = self.tx_ring.available();
         if available < count {
             return Err(AfXdpError::RingBufferError(format!(
-                "TX ring full: {} available, {} requested",
-                available, count
+                "TX ring full: {available} available, {count} requested"
             )));
         }
 

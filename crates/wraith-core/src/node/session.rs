@@ -409,7 +409,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     // 1. Send message 1 (-> e)
     let msg1 = noise
         .write_message(&[])
-        .map_err(|e| NodeError::Handshake(format!("Failed to create msg1: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg1: {e}").into()))?;
 
     tracing::trace!(
         "Sending handshake msg1 ({} bytes) to {}",
@@ -420,7 +420,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     transport
         .send_to(&msg1, peer_addr)
         .await
-        .map_err(|e| NodeError::Transport(format!("Failed to send msg1: {}", e).into()))?;
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg1: {e}").into()))?;
 
     // 2. Receive message 2 (<- e, ee, s, es)
     // Use channel if provided (prevents racing with packet_receive_loop)
@@ -439,9 +439,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
             tokio::time::timeout(Duration::from_secs(5), transport.recv_from(&mut buf))
                 .await
                 .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg2".into()))?
-                .map_err(|e| {
-                    NodeError::Transport(format!("Failed to receive msg2: {}", e).into())
-                })?;
+                .map_err(|e| NodeError::Transport(format!("Failed to receive msg2: {e}").into()))?;
         (buf[..size].to_vec(), from)
     };
 
@@ -456,11 +454,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
 
     if !addr_matches {
         return Err(NodeError::Handshake(
-            format!(
-                "Received msg2 from unexpected address: {} (expected {})",
-                from, peer_addr
-            )
-            .into(),
+            format!("Received msg2 from unexpected address: {from} (expected {peer_addr})").into(),
         ));
     }
 
@@ -472,12 +466,12 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
 
     let _payload2 = noise
         .read_message(&msg2_data)
-        .map_err(|e| NodeError::Handshake(format!("Failed to process msg2: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg2: {e}").into()))?;
 
     // 3. Send message 3 (-> s, se)
     let msg3 = noise
         .write_message(&[])
-        .map_err(|e| NodeError::Handshake(format!("Failed to create msg3: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg3: {e}").into()))?;
 
     tracing::trace!(
         "Sending handshake msg3 ({} bytes) to {}",
@@ -488,7 +482,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
     transport
         .send_to(&msg3, peer_addr)
         .await
-        .map_err(|e| NodeError::Transport(format!("Failed to send msg3: {}", e).into()))?;
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg3: {e}").into()))?;
 
     // Extract session keys after handshake completes
     if !noise.is_complete() {
@@ -504,7 +498,7 @@ pub async fn perform_handshake_initiator<T: Transport + Send + Sync>(
 
     let keys = noise
         .into_session_keys()
-        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {e}").into()))?;
 
     // Create session crypto (initiator: send=send_key, recv=recv_key)
     let crypto = SessionCrypto::new(keys.send_key, keys.recv_key, &keys.chain_key);
@@ -570,12 +564,12 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
 
     let _payload1 = noise
         .read_message(msg1)
-        .map_err(|e| NodeError::Handshake(format!("Failed to process msg1: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg1: {e}").into()))?;
 
     // 2. Send message 2 (-> e, ee, s, es)
     let msg2 = noise
         .write_message(&[])
-        .map_err(|e| NodeError::Handshake(format!("Failed to create msg2: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to create msg2: {e}").into()))?;
 
     tracing::trace!(
         "Sending handshake msg2 ({} bytes) to {}",
@@ -586,7 +580,7 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
     transport
         .send_to(&msg2, peer_addr)
         .await
-        .map_err(|e| NodeError::Transport(format!("Failed to send msg2: {}", e).into()))?;
+        .map_err(|e| NodeError::Transport(format!("Failed to send msg2: {e}").into()))?;
 
     // 3. Receive message 3 (<- s, se)
     // Use channel if provided (prevents racing with packet_receive_loop)
@@ -605,9 +599,7 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
             tokio::time::timeout(Duration::from_secs(5), transport.recv_from(&mut buf))
                 .await
                 .map_err(|_| NodeError::Handshake("Handshake timeout waiting for msg3".into()))?
-                .map_err(|e| {
-                    NodeError::Transport(format!("Failed to receive msg3: {}", e).into())
-                })?;
+                .map_err(|e| NodeError::Transport(format!("Failed to receive msg3: {e}").into()))?;
         (buf[..size].to_vec(), from)
     };
 
@@ -622,11 +614,7 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
 
     if !addr_matches {
         return Err(NodeError::Handshake(
-            format!(
-                "Received msg3 from unexpected address: {} (expected {})",
-                from, peer_addr
-            )
-            .into(),
+            format!("Received msg3 from unexpected address: {from} (expected {peer_addr})").into(),
         ));
     }
 
@@ -638,7 +626,7 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
 
     let _payload3 = noise
         .read_message(&msg3_data)
-        .map_err(|e| NodeError::Handshake(format!("Failed to process msg3: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to process msg3: {e}").into()))?;
 
     // Extract session keys after handshake completes
     if !noise.is_complete() {
@@ -654,7 +642,7 @@ pub async fn perform_handshake_responder<T: Transport + Send + Sync>(
 
     let keys = noise
         .into_session_keys()
-        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {}", e).into()))?;
+        .map_err(|e| NodeError::Handshake(format!("Failed to extract keys: {e}").into()))?;
 
     // Create session crypto (responder: recv=send_key, send=recv_key - reversed from initiator)
     let crypto = SessionCrypto::new(keys.recv_key, keys.send_key, &keys.chain_key);

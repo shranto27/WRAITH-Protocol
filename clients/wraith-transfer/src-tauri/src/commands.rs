@@ -46,11 +46,11 @@ pub async fn start_node(state: State<'_, AppState>) -> AppResult<NodeStatus> {
     let config = NodeConfig::default();
     let node = Node::new_with_config(config)
         .await
-        .map_err(|e| AppError::Node(format!("Failed to create node: {}", e)))?;
+        .map_err(|e| AppError::Node(format!("Failed to create node: {e}")))?;
 
     node.start()
         .await
-        .map_err(|e| AppError::Node(format!("Failed to start node: {}", e)))?;
+        .map_err(|e| AppError::Node(format!("Failed to start node: {e}")))?;
 
     let node_id = hex::encode(node.node_id());
     info!("Node started with ID: {}", node_id);
@@ -78,7 +78,7 @@ pub async fn stop_node(state: State<'_, AppState>) -> AppResult<()> {
     if let Some(node) = node_lock.take() {
         node.stop()
             .await
-            .map_err(|e| AppError::Node(format!("Failed to stop node: {}", e)))?;
+            .map_err(|e| AppError::Node(format!("Failed to stop node: {e}")))?;
         info!("Node stopped");
     }
 
@@ -137,8 +137,8 @@ pub async fn close_session(state: State<'_, AppState>, peer_id: String) -> AppRe
         return Err(AppError::NodeNotRunning);
     };
 
-    let peer_bytes = hex::decode(&peer_id)
-        .map_err(|e| AppError::InvalidPeerId(format!("Invalid hex: {}", e)))?;
+    let peer_bytes =
+        hex::decode(&peer_id).map_err(|e| AppError::InvalidPeerId(format!("Invalid hex: {e}")))?;
 
     if peer_bytes.len() != 32 {
         return Err(AppError::InvalidPeerId("Peer ID must be 32 bytes".into()));
@@ -167,8 +167,8 @@ pub async fn send_file(
         return Err(AppError::NodeNotRunning);
     };
 
-    let peer_bytes = hex::decode(&peer_id)
-        .map_err(|e| AppError::InvalidPeerId(format!("Invalid hex: {}", e)))?;
+    let peer_bytes =
+        hex::decode(&peer_id).map_err(|e| AppError::InvalidPeerId(format!("Invalid hex: {e}")))?;
 
     if peer_bytes.len() != 32 {
         return Err(AppError::InvalidPeerId("Peer ID must be 32 bytes".into()));

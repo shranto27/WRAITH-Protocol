@@ -249,7 +249,7 @@ impl Node {
         peer_id: crate::node::session::PeerId,
     ) -> Result<()> {
         let frame = Frame::parse(&frame_bytes)
-            .map_err(|e| NodeError::Other(format!("Failed to parse frame: {}", e).into()))?;
+            .map_err(|e| NodeError::Other(format!("Failed to parse frame: {e}").into()))?;
 
         match frame.frame_type() {
             FrameType::StreamOpen => self.handle_stream_open_frame(frame).await,
@@ -321,7 +321,7 @@ impl Node {
                 tracing::warn!("Handshake failed from {}: {}", peer_addr, e);
                 self.inner.ip_reputation.record_failure(source_ip).await;
                 let event = SecurityEvent::new(SecurityEventType::HandshakeFailed, source_ip)
-                    .with_message(format!("Handshake error: {}", e));
+                    .with_message(format!("Handshake error: {e}"));
                 self.inner.security_monitor.record_event(event).await;
                 return Err(e);
             }
@@ -468,7 +468,7 @@ impl Node {
         }
 
         let context = matched_context.ok_or_else(|| {
-            NodeError::InvalidState(format!("No transfer for stream_id {}", stream_id).into())
+            NodeError::InvalidState(format!("No transfer for stream_id {stream_id}").into())
         })?;
         let transfer_id = context.transfer_id;
 
@@ -652,7 +652,7 @@ impl Node {
         transport
             .send_to(&wrapped, connection.peer_addr())
             .await
-            .map_err(|e| NodeError::Transport(format!("Failed to send packet: {}", e).into()))?;
+            .map_err(|e| NodeError::Transport(format!("Failed to send packet: {e}").into()))?;
 
         tracing::trace!(
             "Sent {} obfuscated bytes to {} (original: {} encrypted)",

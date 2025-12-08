@@ -283,7 +283,7 @@ impl Node {
                             e
                         );
                         Err(NodeError::NatTraversal(
-                            format!("Relay handshake failed: {}", e).into(),
+                            format!("Relay handshake failed: {e}").into(),
                         ))
                     }
                 }
@@ -291,7 +291,7 @@ impl Node {
             Err(e) => {
                 tracing::warn!("Relay connection failed: {}", e);
                 Err(NodeError::NatTraversal(
-                    format!("Relay connection failed: {}", e).into(),
+                    format!("Relay connection failed: {e}").into(),
                 ))
             }
         }
@@ -307,7 +307,7 @@ impl Node {
                 address: addr,
                 candidate_type: CandidateType::Host,
                 priority: 126, // Type preference for host
-                foundation: format!("host-{}", addr),
+                foundation: format!("host-{addr}"),
             });
         }
 
@@ -397,7 +397,7 @@ impl Node {
                     address: *addr,
                     candidate_type: CandidateType::Host,
                     priority,
-                    foundation: format!("host-{}-{}", idx, addr),
+                    foundation: format!("host-{idx}-{addr}"),
                 }
             })
             .collect();
@@ -535,7 +535,7 @@ impl Node {
                     e
                 );
                 Err(NodeError::NatTraversal(
-                    format!("Candidate connection failed: {}", e).into(),
+                    format!("Candidate connection failed: {e}").into(),
                 ))
             }
         }

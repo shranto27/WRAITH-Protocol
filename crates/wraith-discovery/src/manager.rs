@@ -246,10 +246,10 @@ impl DiscoveryManager {
             match detector.detect().await {
                 Ok(nat_type) => {
                     *self.nat_type.write().await = Some(nat_type);
-                    println!("Detected NAT type: {:?}", nat_type);
+                    println!("Detected NAT type: {nat_type:?}");
                 }
                 Err(e) => {
-                    eprintln!("NAT detection failed: {:?}", e);
+                    eprintln!("NAT detection failed: {e:?}");
                 }
             }
         }
@@ -270,7 +270,7 @@ impl DiscoveryManager {
         for bootstrap_addr in &self.config.bootstrap_nodes {
             // In a real implementation, we would send FIND_NODE requests
             // to bootstrap nodes and populate the routing table
-            println!("Bootstrapping from {}", bootstrap_addr);
+            println!("Bootstrapping from {bootstrap_addr}");
         }
 
         Ok(())
@@ -405,7 +405,7 @@ impl DiscoveryManager {
                     });
                 }
                 Ok(Err(e)) => {
-                    eprintln!("Hole punch failed: {:?}", e);
+                    eprintln!("Hole punch failed: {e:?}");
                 }
                 Err(_) => {
                     eprintln!("Hole punch timeout");

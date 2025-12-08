@@ -143,7 +143,7 @@ impl Node {
             .stream_id(0) // Connection-level (stream 0)
             .sequence(sequence)
             .build(128) // Minimum size with padding
-            .map_err(|e| NodeError::Other(format!("Failed to build PING frame: {}", e).into()))?;
+            .map_err(|e| NodeError::Other(format!("Failed to build PING frame: {e}").into()))?;
 
         // Create oneshot channel for PONG response
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -164,7 +164,7 @@ impl Node {
                 .await
                 .map_err(|e| {
                     self.inner.pending_pings.remove(&(*peer_id, sequence));
-                    NodeError::Transport(format!("Failed to send PING: {}", e).into())
+                    NodeError::Transport(format!("Failed to send PING: {e}").into())
                 })?;
         } else {
             self.inner.pending_pings.remove(&(*peer_id, sequence));
@@ -196,7 +196,7 @@ impl Node {
                 self.inner.pending_pings.remove(&(*peer_id, sequence));
                 session.increment_failed_pings();
                 Err(NodeError::Other(
-                    format!("PING to {:?} failed: channel closed", peer_id).into(),
+                    format!("PING to {peer_id:?} failed: channel closed").into(),
                 ))
             }
             Err(_) => {
@@ -212,7 +212,7 @@ impl Node {
                 );
 
                 Err(NodeError::Timeout(
-                    format!("PING to {:?} timed out", peer_id).into(),
+                    format!("PING to {peer_id:?} timed out").into(),
                 ))
             }
         }
@@ -291,7 +291,7 @@ impl Node {
             .payload(&challenge)
             .build(128)
             .map_err(|e| {
-                NodeError::Migration(format!("Failed to build PATH_CHALLENGE: {}", e).into())
+                NodeError::Migration(format!("Failed to build PATH_CHALLENGE: {e}").into())
             })?;
 
         // Encrypt and send to new address
@@ -301,7 +301,7 @@ impl Node {
         if let Some(transport) = transport_guard.as_ref() {
             transport.send_to(&encrypted, new_addr).await.map_err(|e| {
                 self.inner.pending_migrations.remove(&path_id);
-                NodeError::Migration(format!("Failed to send PATH_CHALLENGE: {}", e).into())
+                NodeError::Migration(format!("Failed to send PATH_CHALLENGE: {e}").into())
             })?;
         } else {
             self.inner.pending_migrations.remove(&path_id);

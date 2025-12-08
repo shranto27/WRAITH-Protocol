@@ -36,7 +36,7 @@ pub fn get_numa_node_for_cpu(cpu: usize) -> Option<usize> {
     // Try to read from sysfs
     for node in 0..8 {
         // Support up to 8 NUMA nodes
-        let path = format!("/sys/devices/system/node/node{}/cpu{}", node, cpu);
+        let path = format!("/sys/devices/system/node/node{node}/cpu{cpu}");
         if fs::metadata(&path).is_ok() {
             debug!("CPU {} found on NUMA node {}", cpu, node);
             return Some(node);
@@ -70,7 +70,7 @@ pub fn get_numa_node_for_cpu(_cpu: usize) -> Option<usize> {
 #[cfg(target_os = "linux")]
 pub fn get_numa_node_count() -> usize {
     for node in 0..8 {
-        let path = format!("/sys/devices/system/node/node{}", node);
+        let path = format!("/sys/devices/system/node/node{node}");
         if fs::metadata(&path).is_err() {
             return node.max(1);
         }

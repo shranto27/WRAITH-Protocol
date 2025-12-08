@@ -5,7 +5,7 @@ fn main() {
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let package_name = env::var("CARGO_PKG_NAME").unwrap();
     let output_file = target_dir()
-        .join(format!("{}.h", package_name))
+        .join(format!("{package_name}.h"))
         .display()
         .to_string();
 
@@ -23,7 +23,7 @@ fn main() {
         .write_to_file(&output_file);
 
     println!("cargo:rerun-if-changed=src/");
-    println!("cargo:warning=Generated C header: {}", output_file);
+    println!("cargo:warning=Generated C header: {output_file}");
 }
 
 fn target_dir() -> PathBuf {

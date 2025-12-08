@@ -146,7 +146,7 @@ impl Node {
                 }
                 Err(e) => {
                     tracing::error!("Download task {} panicked: {}", i, e);
-                    return Err(NodeError::Other(format!("Task join error: {}", e).into()));
+                    return Err(NodeError::Other(format!("Task join error: {e}").into()));
                 }
             }
         }
@@ -227,7 +227,7 @@ impl Node {
             .payload(&payload)
             .build(crate::FRAME_HEADER_SIZE + payload.len())
             .map_err(|e| {
-                NodeError::InvalidState(format!("Failed to build request frame: {}", e).into())
+                NodeError::InvalidState(format!("Failed to build request frame: {e}").into())
             })?;
 
         // Send encrypted frame
@@ -298,7 +298,7 @@ impl Node {
             .payload(&payload)
             .build(crate::FRAME_HEADER_SIZE + payload.len())
             .map_err(|e| {
-                NodeError::InvalidState(format!("Failed to build chunk request: {}", e).into())
+                NodeError::InvalidState(format!("Failed to build chunk request: {e}").into())
             })?;
 
         // Create oneshot channel for chunk response
@@ -329,13 +329,13 @@ impl Node {
             Ok(Err(_)) => {
                 self.inner.pending_chunks.remove(&chunk_key);
                 Err(NodeError::Other(
-                    format!("Chunk {} request failed: channel closed", chunk_idx).into(),
+                    format!("Chunk {chunk_idx} request failed: channel closed").into(),
                 ))
             }
             Err(_) => {
                 self.inner.pending_chunks.remove(&chunk_key);
                 Err(NodeError::Timeout(
-                    format!("Chunk {} request timed out", chunk_idx).into(),
+                    format!("Chunk {chunk_idx} request timed out").into(),
                 ))
             }
         }
@@ -447,7 +447,7 @@ impl Node {
                 .payload(&chunk_data)
                 .build(crate::FRAME_HEADER_SIZE + chunk_data.len())
                 .map_err(|e| {
-                    NodeError::InvalidState(format!("Failed to build data frame: {}", e).into())
+                    NodeError::InvalidState(format!("Failed to build data frame: {e}").into())
                 })?;
 
             // Send encrypted chunk

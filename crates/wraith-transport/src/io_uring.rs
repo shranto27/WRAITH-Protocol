@@ -150,8 +150,7 @@ impl IoUringContext {
 
         if queue_depth == 0 || queue_depth > 4096 {
             return Err(IoUringError::RingCreation(format!(
-                "Invalid queue depth: {} (must be 1-4096)",
-                queue_depth
+                "Invalid queue depth: {queue_depth} (must be 1-4096)"
             )));
         }
 

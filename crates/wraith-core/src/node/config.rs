@@ -46,12 +46,14 @@ pub struct NodeConfig {
 
 impl Default for NodeConfig {
     fn default() -> Self {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+
         Self {
             // Use port 0 (auto-select) in tests to avoid port conflicts
             #[cfg(test)]
-            listen_addr: "0.0.0.0:0".parse().unwrap(),
+            listen_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)),
             #[cfg(not(test))]
-            listen_addr: "0.0.0.0:8420".parse().unwrap(),
+            listen_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8420)),
             transport: TransportConfig::default(),
             obfuscation: ObfuscationConfig::default(),
             discovery: DiscoveryConfig::default(),

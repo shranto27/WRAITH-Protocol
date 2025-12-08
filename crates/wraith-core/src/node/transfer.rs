@@ -308,9 +308,11 @@ impl Node {
         self.inner.pending_chunks.insert(chunk_key, tx);
 
         // Send chunk request
-        self.send_encrypted_frame(session, &frame).await.inspect_err(|_| {
-            self.inner.pending_chunks.remove(&chunk_key);
-        })?;
+        self.send_encrypted_frame(session, &frame)
+            .await
+            .inspect_err(|_| {
+                self.inner.pending_chunks.remove(&chunk_key);
+            })?;
 
         tracing::debug!(
             "Chunk request sent for chunk {}, awaiting response",
@@ -551,9 +553,7 @@ impl Node {
                 // Value format: node_id (32 bytes) + listen_addr as string
                 let mut value = Vec::with_capacity(64);
                 value.extend_from_slice(self.node_id());
-                value.extend_from_slice(
-                    self.inner.config.listen_addr.to_string().as_bytes(),
-                );
+                value.extend_from_slice(self.inner.config.listen_addr.to_string().as_bytes());
 
                 let ttl = self.inner.config.discovery.announcement_interval * 3;
                 discovery.dht().write().await.store(root_hash, value, ttl);
@@ -595,10 +595,7 @@ impl Node {
                     let discovery_guard = self.inner.discovery.lock().await;
                     if let Some(discovery) = discovery_guard.as_ref() {
                         discovery.dht().write().await.remove(file_hash);
-                        tracing::debug!(
-                            "File {:?} removed from DHT",
-                            &file_hash[..8]
-                        );
+                        tracing::debug!("File {:?} removed from DHT", &file_hash[..8]);
                     }
                 }
 

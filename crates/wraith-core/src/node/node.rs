@@ -143,9 +143,11 @@ impl Node {
 
     /// Create node with specific port (useful for testing)
     pub async fn new_random_with_port(port: u16) -> Result<Self> {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+
         let identity = Identity::generate()?;
         let config = NodeConfig {
-            listen_addr: format!("0.0.0.0:{}", port).parse().unwrap(),
+            listen_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)),
             ..NodeConfig::default()
         };
         Self::new_from_identity(identity, config).await

@@ -9,7 +9,7 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 [![CI Status](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/codeql.yml)
 [![Release](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml/badge.svg)](https://github.com/doublegate/WRAITH-Protocol/actions/workflows/release.yml)
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Security](https://img.shields.io/badge/security-audited-green.svg)](docs/security/SECURITY_AUDIT_v1.1.0.md)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
@@ -17,17 +17,17 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 ## Current Status
 
-**Version:** 1.3.0 Performance & Security Release | **Development Phase:** Phase 13 Complete
+**Version:** 1.4.0 Node API Integration & Code Quality | **Development Phase:** Phase 14 Complete
 
-WRAITH Protocol is enterprise-ready with lock-free ring buffers for high-performance packet processing, comprehensive DPI evasion validation, and enhanced connection health monitoring. The protocol has completed Phase 13: Node API Integration & Performance Optimization.
+WRAITH Protocol is production-ready with full Node API integration, comprehensive error handling audit, and 100% unsafe block documentation. The protocol has completed Phase 14: Node API Integration & Code Quality, delivering PING/PONG response handling, PATH_CHALLENGE/RESPONSE connection migration, and compile-time address construction.
 
 **Project Metrics (2025-12-07):**
-- **Code Volume:** ~41,177 lines of Rust code (30,876 code + 2,743 comments + 7,558 blanks) across 110 source files
-- **Test Coverage:** 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
-- **Documentation:** 99 markdown files, ~34,660 lines of comprehensive documentation
+- **Code Volume:** ~38,965 lines of Rust code (29,302 code + 2,597 comments + 7,066 blanks) across 111 source files
+- **Test Coverage:** 1,296 total tests (1,280 passing, 16 ignored) - 100% pass rate on active tests
+- **Documentation:** 100+ markdown files, ~35,000+ lines of comprehensive documentation
 - **Dependencies:** 286 audited packages (zero vulnerabilities via cargo-audit)
 - **Security:** Grade A+ (EXCELLENT), zero vulnerabilities, comprehensive DPI evasion validation
-- **Quality:** Zero compiler/clippy warnings, production-ready codebase
+- **Quality:** Code quality 98/100, zero compiler/clippy warnings, 3.8% technical debt ratio, production-ready codebase
 
 For detailed development history and phase accomplishments, see [Protocol Development History](docs/archive/README_Protocol-DEV.md).
 

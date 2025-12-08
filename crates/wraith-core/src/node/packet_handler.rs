@@ -468,9 +468,7 @@ impl Node {
         }
 
         let context = matched_context.ok_or_else(|| {
-            NodeError::InvalidState(
-                format!("No transfer for stream_id {}", stream_id).into(),
-            )
+            NodeError::InvalidState(format!("No transfer for stream_id {}", stream_id).into())
         })?;
         let transfer_id = context.transfer_id;
 

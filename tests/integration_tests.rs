@@ -2437,7 +2437,10 @@ async fn test_multi_path_transfer_node_api() {
     assert_eq!(sessions.len(), 2);
 
     // Send file to multiple peers - use X25519 keys since sessions are keyed by X25519
-    let peers = vec![*receiver1.x25519_public_key(), *receiver2.x25519_public_key()];
+    let peers = vec![
+        *receiver1.x25519_public_key(),
+        *receiver2.x25519_public_key(),
+    ];
     let transfer_id = sender.send_file_to_peers(&send_path, &peers).await.unwrap();
 
     // Verify transfer was created

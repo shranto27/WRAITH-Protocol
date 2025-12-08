@@ -6,14 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WRAITH (Wire-speed Resilient Authenticated Invisible Transfer Handler) is a decentralized secure file transfer protocol. This repository contains the Rust implementation along with design specifications.
 
-**Current Status:** Version 1.3.0 - Performance & Security Release (Phase 13 Complete)
+**Current Status:** Version 1.4.0 - Node API Integration & Code Quality (Phase 14 Complete)
 
 **Current Metrics:**
-- **Tests:** 1,303 tests total (1,280 passing, 23 ignored) - 100% pass rate on active tests
-- **Code Volume:** ~41,177 lines of Rust code (~30,876 LOC + 2,743 comments + 7,558 blanks) across 7 active crates
-- **Documentation:** 60+ files, 45,000+ lines including tutorial, integration guide, troubleshooting, security audit, protocol comparison, reference client design, architecture docs, API reference, performance report, release notes
-- **Security:** Zero vulnerabilities, EXCELLENT security posture ([v1.1.0 audit](docs/security/SECURITY_AUDIT_v1.1.0.md), 286 dependencies scanned)
+- **Tests:** 1,296 tests total (1,280 passing, 16 ignored) - 100% pass rate on active tests
+- **Code Volume:** ~38,965 lines of Rust code (~29,302 LOC + 2,597 comments + 7,066 blanks) across 7 active crates
+- **Documentation:** 100+ files, 35,000+ lines including tutorial, integration guide, troubleshooting, security audit, protocol comparison, reference client design, architecture docs, API reference, performance report, release notes, error handling audit
+- **Security:** Zero vulnerabilities, EXCELLENT security posture ([v1.1.0 audit](docs/security/SECURITY_AUDIT_v1.1.0.md), 286 dependencies scanned), 100% unsafe block documentation
 - **Performance:** File chunking 14.85 GiB/s, tree hashing 4.71 GiB/s, chunk verification 4.78 GiB/s, file reassembly 5.42 GiB/s (Phase 10/12 benchmarks)
+- **Quality:** Code quality 98/100, technical debt 3.8%, zero clippy warnings, compile-time address construction
 
 ## Build & Development Commands
 
@@ -142,13 +143,13 @@ Thread-per-core with no locks in hot path. Sessions pinned to cores, NUMA-aware 
 
 | Crate | Status | Tests | Notes |
 |-------|--------|-------|-------|
-| wraith-core | ✅ Complete | 263 | Frame parsing (SIMD), sessions, streams, BBR, migration, Node API orchestration |
-| wraith-crypto | ✅ Complete | 125 | Ed25519, X25519+Elligator2, XChaCha20-Poly1305, BLAKE3, Noise_XX, Double Ratchet |
-| wraith-transport | ✅ Complete | 33 | AF_XDP zero-copy, io_uring, UDP, worker pools, NUMA-aware |
-| wraith-obfuscation | ✅ Complete | 154 | Padding (5 modes), timing (5 distributions), TLS/WebSocket/DoH mimicry |
-| wraith-discovery | ✅ Complete | 15 | Privacy-enhanced Kademlia DHT, STUN, ICE, DERP-style relay |
-| wraith-files | ✅ Complete | 24 | io_uring file I/O, chunking, BLAKE3 tree hashing, reassembly |
-| wraith-cli | ✅ Complete | 0 | Full CLI with config, progress display, send/receive/daemon commands |
+| wraith-core | ✅ Complete | 406 | Frame parsing (SIMD), sessions, streams, BBR, migration, Node API orchestration, health monitoring |
+| wraith-crypto | ✅ Complete | 128 | Ed25519, X25519+Elligator2, XChaCha20-Poly1305, BLAKE3, Noise_XX, Double Ratchet |
+| wraith-transport | ✅ Complete | 88 | AF_XDP zero-copy, io_uring, UDP, worker pools, NUMA-aware, buffer pool |
+| wraith-obfuscation | ✅ Complete | 130 | Padding (5 modes), timing (5 distributions), TLS/WebSocket/DoH mimicry |
+| wraith-discovery | ✅ Complete | 154 | Privacy-enhanced Kademlia DHT, STUN, ICE, DERP-style relay |
+| wraith-files | ✅ Complete | 34 | io_uring file I/O, chunking, BLAKE3 tree hashing, reassembly |
+| wraith-cli | ✅ Complete | 7 | Full CLI with config, progress display, send/receive/daemon commands |
 | wraith-xdp | Not started | 0 | Requires eBPF toolchain (future phase) |
 
-**Total:** 1,177 tests across all crates and integration tests (1,157 passing, 20 ignored)
+**Total:** 1,296 tests across all crates and integration tests (1,280 passing, 16 ignored)

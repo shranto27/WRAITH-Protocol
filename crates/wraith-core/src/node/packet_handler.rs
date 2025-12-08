@@ -440,13 +440,28 @@ impl Node {
     pub(crate) async fn handle_data_frame(&self, frame: Frame<'_>) -> Result<()> {
         let chunk_index = frame.sequence() as u64;
         let chunk_data = frame.payload();
+        let stream_id = frame.stream_id();
 
+        // Check if there's a pending chunk request waiting for this data
+        let chunk_key = (stream_id, chunk_index);
+        if let Some((_, sender)) = self.inner.pending_chunks.remove(&chunk_key) {
+            // Send chunk data to waiting request_chunk_from_peer()
+            let _ = sender.send(chunk_data.to_vec());
+            tracing::trace!(
+                "Chunk {} (stream {}) routed to pending request",
+                chunk_index,
+                stream_id
+            );
+            return Ok(());
+        }
+
+        // No pending request - handle as async chunk push (e.g., from seeder)
         // Find matching transfer by stream ID
         let mut matched_context = None;
         for entry in self.inner.transfers.iter() {
             let tid = entry.key();
-            let stream_id = ((tid[0] as u16) << 8) | (tid[1] as u16);
-            if stream_id == frame.stream_id() {
+            let tid_stream_id = ((tid[0] as u16) << 8) | (tid[1] as u16);
+            if tid_stream_id == stream_id {
                 matched_context = Some(entry.value().clone());
                 break;
             }
@@ -454,7 +469,7 @@ impl Node {
 
         let context = matched_context.ok_or_else(|| {
             NodeError::InvalidState(
-                format!("No transfer for stream_id {}", frame.stream_id()).into(),
+                format!("No transfer for stream_id {}", stream_id).into(),
             )
         })?;
         let transfer_id = context.transfer_id;

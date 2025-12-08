@@ -278,6 +278,11 @@ impl Node {
         context: &Arc<crate::node::file_transfer::FileTransferContext>,
     ) -> Result<Vec<u8>, NodeError> {
         use crate::frame::FrameBuilder;
+        use std::time::Duration;
+
+        // Compute stream_id from transfer_id (matches handle_data_frame logic)
+        let stream_id = ((context.transfer_id[0] as u16) << 8) | (context.transfer_id[1] as u16);
+        let chunk_key = (stream_id, chunk_idx as u64);
 
         // Build chunk request Control frame
         // Payload format: request_type(1) + transfer_id(32) + chunk_index(8)
@@ -288,7 +293,7 @@ impl Node {
 
         let frame = FrameBuilder::new()
             .frame_type(crate::frame::FrameType::Control)
-            .stream_id(0)
+            .stream_id(stream_id)
             .sequence(chunk_idx as u32)
             .payload(&payload)
             .build(crate::FRAME_HEADER_SIZE + payload.len())
@@ -296,21 +301,42 @@ impl Node {
                 NodeError::InvalidState(format!("Failed to build chunk request: {}", e).into())
             })?;
 
-        // Send chunk request
-        self.send_encrypted_frame(session, &frame).await?;
+        // Create oneshot channel for chunk response
+        let (tx, rx) = tokio::sync::oneshot::channel();
 
-        // For now, return placeholder data
-        // Production implementation would wait for peer's Data frame response via a channel
-        let chunk_size = context.transfer_session.read().await.chunk_size;
+        // Register pending chunk before sending
+        self.inner.pending_chunks.insert(chunk_key, tx);
+
+        // Send chunk request
+        self.send_encrypted_frame(session, &frame).await.inspect_err(|_| {
+            self.inner.pending_chunks.remove(&chunk_key);
+        })?;
 
         tracing::debug!(
-            "Chunk request sent for chunk {}, awaiting response (using placeholder)",
+            "Chunk request sent for chunk {}, awaiting response",
             chunk_idx
         );
 
-        // Return placeholder chunk data
-        // TODO: Implement response handling via pending_chunks DashMap
-        Ok(vec![0u8; chunk_size])
+        // Wait for chunk data with timeout
+        let chunk_timeout = Duration::from_secs(30);
+        match tokio::time::timeout(chunk_timeout, rx).await {
+            Ok(Ok(chunk_data)) => {
+                tracing::trace!("Chunk {} received ({} bytes)", chunk_idx, chunk_data.len());
+                Ok(chunk_data)
+            }
+            Ok(Err(_)) => {
+                self.inner.pending_chunks.remove(&chunk_key);
+                Err(NodeError::Other(
+                    format!("Chunk {} request failed: channel closed", chunk_idx).into(),
+                ))
+            }
+            Err(_) => {
+                self.inner.pending_chunks.remove(&chunk_key);
+                Err(NodeError::Timeout(
+                    format!("Chunk {} request timed out", chunk_idx).into(),
+                ))
+            }
+        }
     }
 
     /// Download chunks from a specific peer
@@ -517,8 +543,28 @@ impl Node {
             &root_hash[..8]
         );
 
-        // TODO: Announce to DHT if discovery is enabled
-        // This would involve calling discovery.announce(root_hash, self.node_id)
+        // Announce to DHT if discovery is enabled
+        if self.inner.config.discovery.enable_dht {
+            let discovery_guard = self.inner.discovery.lock().await;
+            if let Some(discovery) = discovery_guard.as_ref() {
+                // Store file hash -> node address mapping in DHT
+                // Value format: node_id (32 bytes) + listen_addr as string
+                let mut value = Vec::with_capacity(64);
+                value.extend_from_slice(self.node_id());
+                value.extend_from_slice(
+                    self.inner.config.listen_addr.to_string().as_bytes(),
+                );
+
+                let ttl = self.inner.config.discovery.announcement_interval * 3;
+                discovery.dht().write().await.store(root_hash, value, ttl);
+
+                tracing::debug!(
+                    "File {:?} announced to DHT with TTL {:?}",
+                    &root_hash[..8],
+                    ttl
+                );
+            }
+        }
 
         Ok(root_hash)
     }
@@ -544,8 +590,17 @@ impl Node {
                     &file_hash[..8]
                 );
 
-                // TODO: Remove from DHT if discovery is enabled
-                // This would involve calling discovery.unannounce(file_hash, self.node_id)
+                // Remove from DHT if discovery is enabled
+                if self.inner.config.discovery.enable_dht {
+                    let discovery_guard = self.inner.discovery.lock().await;
+                    if let Some(discovery) = discovery_guard.as_ref() {
+                        discovery.dht().write().await.remove(file_hash);
+                        tracing::debug!(
+                            "File {:?} removed from DHT",
+                            &file_hash[..8]
+                        );
+                    }
+                }
 
                 Ok(())
             }

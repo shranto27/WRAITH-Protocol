@@ -47,6 +47,9 @@ use wraith_obfuscation::{DohTunnel, TlsRecordWrapper, WebSocketFrameWrapper};
 use wraith_transport::transport::Transport;
 use wraith_transport::udp_async::AsyncUdpTransport;
 
+/// Type alias for pending chunk request map: (stream_id, chunk_index) -> data sender
+type PendingChunkMap = DashMap<(u16, u64), oneshot::Sender<Vec<u8>>>;
+
 /// Migration state for tracking PATH_CHALLENGE/RESPONSE
 #[allow(dead_code)]
 pub(crate) struct MigrationState {
@@ -80,6 +83,8 @@ pub(crate) struct NodeInner {
     pub(crate) pending_pings: Arc<DashMap<(PeerId, u32), oneshot::Sender<Instant>>>,
     /// Pending migrations (path_id -> migration state)
     pub(crate) pending_migrations: Arc<DashMap<u64, MigrationState>>,
+    /// Pending chunk requests ((stream_id, chunk_idx) -> data sender)
+    pub(crate) pending_chunks: Arc<PendingChunkMap>,
     /// Node running state
     pub(crate) running: Arc<AtomicBool>,
     /// Transport layer
@@ -170,6 +175,7 @@ impl Node {
             pending_handshakes: Arc::new(DashMap::new()),
             pending_pings: Arc::new(DashMap::new()),
             pending_migrations: Arc::new(DashMap::new()),
+            pending_chunks: Arc::new(DashMap::new()),
             running: Arc::new(AtomicBool::new(false)),
             transport: Arc::new(Mutex::new(None)),
             discovery: Arc::new(Mutex::new(None)),

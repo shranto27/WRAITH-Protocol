@@ -1,10 +1,10 @@
 # WRAITH Protocol - Development History
 
-**Development Timeline:** Phase 1 (2024) through Phase 15 (2025-12-08)
+**Development Timeline:** Phase 1 (2024) through Phase 15 (2025-12-09)
 
-This document captures the complete development journey of WRAITH Protocol from inception through version 1.5.6, including detailed phase accomplishments, sprint summaries, and implementation milestones.
+This document captures the complete development journey of WRAITH Protocol from inception through version 1.5.7, including detailed phase accomplishments, sprint summaries, and implementation milestones.
 
-[![Version](https://img.shields.io/badge/version-1.5.6-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Version](https://img.shields.io/badge/version-1.5.7-blue.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
 [![Security](https://img.shields.io/badge/security-audited-green.svg)](../security/DPI_EVASION_REPORT.md)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
@@ -22,26 +22,26 @@ For the current production README, see [../../README.md](../../README.md).
 
 **Total Development Effort:** 1,635 story points delivered across 15 phases
 
-**Project Metrics (2025-12-08):**
-- **Code Volume:** ~49,586 lines of Rust code (~37,027 LOC + 3,514 comments + 9,045 blanks) across 126 source files
-- **Test Coverage:** 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
+**Project Metrics (2025-12-09):**
+- **Code Volume:** ~47,617 lines of Rust code (~35,979 LOC + 2,999 comments + 8,639 blanks) across 125 source files
+- **Test Coverage:** 1,382 total tests (1,367 passing, 16 ignored) - 100% pass rate on active tests
 - **Documentation:** 100+ markdown files, ~63,000+ lines of comprehensive documentation
 - **Dependencies:** 286 audited packages (zero vulnerabilities via cargo-audit)
 - **Security:** Grade A+ (EXCELLENT) - zero vulnerabilities, 100% unsafe documentation, comprehensive audits
 
 **Quality Metrics:**
 - **Quality Grade:** 98/100 (Production-ready)
-- **Test Coverage:** 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
-  - 263 wraith-core (6 ignored) - frame parsing, sessions, streams, BBR, migration, ring buffers, Node API
-  - 125 wraith-crypto - Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet
-  - 24 wraith-files - chunking, reassembly, tree hashing
-  - 154 wraith-obfuscation - padding modes, timing distributions, protocol mimicry
-  - 15 wraith-discovery - DHT, NAT traversal, relay
-  - 33 wraith-transport - AF_XDP, io_uring, UDP, buffer pools
-  - 7 wraith-cli - CLI interface
-  - 7 wraith-ffi - Foreign function interface for C/C++ integration
-  - 419 integration tests (17 ignored) - end-to-end flows, multi-peer transfers
-  - 0 wraith-transfer - Desktop application (frontend requires separate test setup)
+- **Test Coverage:** 1,382 total tests (1,367 passing, 16 ignored) - 100% pass rate on active tests
+  - 406 wraith-core - frame parsing, sessions, streams, BBR, migration, ring buffers, Node API
+  - 128 wraith-crypto (1 ignored) - Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet
+  - 34 wraith-files - chunking, reassembly, tree hashing
+  - 130 wraith-obfuscation - padding modes, timing distributions, protocol mimicry
+  - 215 wraith-discovery - DHT, NAT traversal, relay
+  - 140 wraith-transport (1 ignored) - AF_XDP, io_uring, UDP, buffer pools
+  - 72 wraith-cli - CLI interface
+  - 111 wraith-ffi - Foreign function interface for C/C++ integration
+  - 140 integration tests (3 ignored) - end-to-end flows, multi-peer transfers
+  - 6 wraith-transfer - Desktop application (Tauri IPC commands)
 - **Security Vulnerabilities:** Zero (286 dependencies scanned with cargo-audit, CodeQL verified)
 - **Clippy Warnings:** Zero (strict `-D warnings` enforcement)
 - **Compiler Warnings:** Zero
@@ -722,18 +722,18 @@ For the current production README, see [../../README.md](../../README.md).
 
 | Crate | Status | LOC | Code | Comments | Tests | Completion Details |
 |-------|--------|-----|------|----------|-------|-------------------|
-| **wraith-core** | ✅ Phase 13 Complete | 17,081 | 12,841 | 1,124 | 400 (6 ignored) | Frame parsing (SIMD AVX2/SSE4.2/NEON, 172M frames/sec), **lock-free ring buffers** (SPSC 100M ops/sec, MPSC 20M ops/sec), session state machine (7 states), stream multiplexing, BBR congestion control, **connection health monitoring** (failed ping detection, migration), **Node API orchestration layer** (9 modules, lifecycle, session, file transfer, DHT/NAT/obfuscation integration), rate limiting (token bucket), circuit breakers, multi-peer (4 strategies) |
-| **wraith-crypto** | ✅ Phase 2 Complete | 4,435 | 3,249 | 306 | 127 (1 ignored) | Ed25519 signatures, X25519 + Elligator2 encoding, XChaCha20-Poly1305 AEAD (3.2 GB/s), BLAKE3 hashing (8.5 GB/s), Noise_XX handshake, Double Ratchet, replay protection (64-bit window), key encryption at rest (Argon2id + XChaCha20-Poly1305) |
-| **wraith-files** | ✅ Phase 3-6 Complete | 1,680 | 1,257 | 102 | 15 | io_uring async file I/O, file chunking (14.85 GiB/s), reassembly (5.42 GiB/s, O(m) algorithm), BLAKE3 tree hashing (4.71 GiB/s), chunk verification (4.78 GiB/s) |
-| **wraith-obfuscation** | ✅ Phase 4 Complete | 2,789 | 2,096 | 156 | 154 | **DPI-validated** - Padding (5 modes), timing (5 distributions), protocol mimicry (TLS/WebSocket/DoH), adaptive threat-level profiles (Low/Medium/High/Paranoid) - See [DPI Evasion Report](../security/DPI_EVASION_REPORT.md) |
-| **wraith-discovery** | ✅ Phase 5 Complete | 5,971 | 4,634 | 292 | 15 | Kademlia DHT (BLAKE3 NodeIds, S/Kademlia Sybil resistance), STUN client (RFC 5389), ICE candidate gathering, DERP-style relay (4 strategies), unified DiscoveryManager |
-| **wraith-transport** | ✅ Phase 3-4 Complete | 4,050 | 2,999 | 330 | 24 | AF_XDP zero-copy sockets, worker pools (CPU pinning), UDP transport (SO_REUSEPORT), MTU discovery, NUMA-aware allocation, io_uring integration |
-| **wraith-cli** | ✅ Phase 6 Complete | ~1,100 | - | - | 0 | CLI interface (send, receive, daemon, status, peers, keygen), progress display (indicatif), TOML configuration (6 sections) |
-| **wraith-ffi** | ✅ Phase 15 Complete | ~1,200 | - | - | 7 | C-compatible FFI API, Node lifecycle, session management, file transfer, automatic C header generation (cbindgen), FFI-safe error handling, 7 tests validating boundary safety |
-| **wraith-transfer** | ✅ Phase 15 Complete | ~12,500 | - | - | 0 | Tauri 2.0 desktop application, React 18 + TypeScript frontend, 10 IPC commands, 5 React components, 3 Zustand stores, cross-platform (Windows/macOS/Linux) |
+| **wraith-core** | ✅ Phase 13 Complete | 17,081 | 12,841 | 1,124 | 406 | Frame parsing (SIMD AVX2/SSE4.2/NEON, 172M frames/sec), **lock-free ring buffers** (SPSC 100M ops/sec, MPSC 20M ops/sec), session state machine (7 states), stream multiplexing, BBR congestion control, **connection health monitoring** (failed ping detection, migration), **Node API orchestration layer** (9 modules, lifecycle, session, file transfer, DHT/NAT/obfuscation integration), rate limiting (token bucket), circuit breakers, multi-peer (4 strategies) |
+| **wraith-crypto** | ✅ Phase 2 Complete | 4,435 | 3,249 | 306 | 128 (1 ignored) | Ed25519 signatures, X25519 + Elligator2 encoding, XChaCha20-Poly1305 AEAD (3.2 GB/s), BLAKE3 hashing (8.5 GB/s), Noise_XX handshake, Double Ratchet, replay protection (64-bit window), key encryption at rest (Argon2id + XChaCha20-Poly1305) |
+| **wraith-files** | ✅ Phase 3-6 Complete | 1,680 | 1,257 | 102 | 34 | io_uring async file I/O, file chunking (14.85 GiB/s), reassembly (5.42 GiB/s, O(m) algorithm), BLAKE3 tree hashing (4.71 GiB/s), chunk verification (4.78 GiB/s) |
+| **wraith-obfuscation** | ✅ Phase 4 Complete | 2,789 | 2,096 | 156 | 130 | **DPI-validated** - Padding (5 modes), timing (5 distributions), protocol mimicry (TLS/WebSocket/DoH), adaptive threat-level profiles (Low/Medium/High/Paranoid) - See [DPI Evasion Report](../security/DPI_EVASION_REPORT.md) |
+| **wraith-discovery** | ✅ Phase 5 Complete | 5,971 | 4,634 | 292 | 215 | Kademlia DHT (BLAKE3 NodeIds, S/Kademlia Sybil resistance), STUN client (RFC 5389), ICE candidate gathering, DERP-style relay (4 strategies), unified DiscoveryManager |
+| **wraith-transport** | ✅ Phase 3-4 Complete | 4,050 | 2,999 | 330 | 140 (1 ignored) | AF_XDP zero-copy sockets, worker pools (CPU pinning), UDP transport (SO_REUSEPORT), MTU discovery, NUMA-aware allocation, io_uring integration |
+| **wraith-cli** | ✅ Phase 6 Complete | ~1,100 | - | - | 72 | CLI interface (send, receive, daemon, status, peers, keygen), progress display (indicatif), TOML configuration (6 sections) |
+| **wraith-ffi** | ✅ Phase 15 Complete | ~1,200 | - | - | 111 | C-compatible FFI API, Node lifecycle, session management, file transfer, automatic C header generation (cbindgen), FFI-safe error handling, comprehensive tests validating boundary safety |
+| **wraith-transfer** | ✅ Phase 15 Complete | ~12,500 | - | - | 6 | Tauri 2.0 desktop application, React 18 + TypeScript frontend, 10 IPC commands, 5 React components, 3 Zustand stores, cross-platform (Windows/macOS/Linux) |
 | **wraith-xdp** | Not started | 0 | 0 | 0 | 0 | eBPF/XDP programs for in-kernel packet filtering (excluded from default build) |
 
-**Total Protocol:** ~49,586 lines (~37,027 LOC + 3,514 comments + 9,045 blanks) across 126 Rust source files in 9 crates (7 protocol + 1 FFI + 1 desktop app)
+**Total Protocol:** ~47,617 lines (~35,979 LOC + 2,999 comments + 8,639 blanks) across 125 Rust source files in 9 crates (7 protocol + 1 FFI + 1 desktop app)
 
 ---
 
@@ -860,9 +860,9 @@ For the current production README, see [../../README.md](../../README.md).
 
 ## Current Status & Next Steps
 
-**Version 1.5.5 Status (2025-12-08):**
+**Version 1.5.7 Status (2025-12-09):**
 - ✅ All 15 protocol development phases complete (1,635 SP delivered)
-- ✅ 1,303 tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
+- ✅ 1,382 tests (1,367 passing, 16 ignored) - 100% pass rate on active tests (+269 tests from v1.5.6)
 - ✅ Zero vulnerabilities, zero warnings
 - ✅ Code quality: 98/100 (production-ready)
 - ✅ Technical debt ratio: 3.8% (healthy range)
@@ -875,6 +875,8 @@ For the current production README, see [../../README.md](../../README.md).
 - ✅ WRAITH Transfer desktop application (Tauri 2.0 + React 18)
 - ✅ FFI bindings for C/C++ integration (wraith-ffi crate)
 - ✅ Clippy pedantic compliance (104 auto-fixes applied)
+- ✅ Windows compatibility (io_uring fallback test fixed)
+- ✅ Comprehensive test coverage expansion (+65 CLI, +61 discovery, +92 FFI, +51 transport)
 
 **Upcoming Work:**
 
@@ -914,4 +916,4 @@ See [../../to-dos/ROADMAP.md](../../to-dos/ROADMAP.md) for detailed future plann
 
 **WRAITH Protocol Development History** - *From Foundation to Production (Phases 1-15)*
 
-**Development Period:** 2024 - 2025-12-08 | **Total Effort:** 1,635 story points delivered across 15 phases | **Quality:** Production-ready (98/100), 1,303 tests (100% pass rate), 0 vulnerabilities, Grade A+ security
+**Development Period:** 2024 - 2025-12-09 | **Total Effort:** 1,635 story points delivered across 15 phases | **Quality:** Production-ready (98/100), 1,382 tests (100% pass rate), 0 vulnerabilities, Grade A+ security

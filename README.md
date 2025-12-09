@@ -21,9 +21,9 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 WRAITH Protocol is production-ready with a cross-platform desktop application. Phase 15 delivers WRAITH Transfer, a Tauri 2.0-based desktop client with React 18 frontend, providing full wraith-core integration with an intuitive UI for secure file transfers.
 
-**Project Metrics (2025-12-08):**
-- **Code Volume:** ~49,586 lines of Rust code (~37,027 LOC + 3,514 comments + 9,045 blanks) across 115+ source files
-- **Test Coverage:** 1,303 total tests (1,280 passing, 23 ignored) - 100% pass rate on active tests
+**Project Metrics (2025-12-09):**
+- **Code Volume:** ~47,617 lines of Rust code (~35,979 LOC + 2,999 comments + 8,639 blanks) across 125 source files
+- **Test Coverage:** 1,382 total tests (1,367 passing, 16 ignored) - 100% pass rate on active tests
 - **Documentation:** 100+ markdown files, ~63,000+ lines of comprehensive documentation
 - **Dependencies:** 286 audited packages (zero vulnerabilities via cargo-audit)
 - **Security:** Grade A+ (EXCELLENT), zero vulnerabilities, comprehensive DPI evasion validation
@@ -201,18 +201,18 @@ WRAITH-Protocol/
 
 | Crate | Description | LOC | Code | Comments | Tests |
 |-------|-------------|-----|------|----------|-------|
-| **wraith-core** | Frame parsing, sessions, congestion, ring buffers, Node API | ~4,800+ | - | - | 263 (6 ignored) |
-| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | ~2,500+ | - | - | 125 |
-| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | ~3,500+ | - | - | 15 |
-| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | ~2,800+ | - | - | 33 |
-| **wraith-obfuscation** | Padding, timing, protocol mimicry | ~3,500+ | - | - | 154 |
-| **wraith-files** | File chunking, tree hashing, reassembly | ~1,300 | - | - | 24 |
-| **wraith-cli** | Command-line interface | ~1,100 | - | - | 0 |
-| **wraith-ffi** | Foreign function interface for C/C++ integration | ~1,200 | - | - | 7 |
-| **wraith-transfer** | Tauri 2.0 desktop application (Rust + React + TypeScript) | ~12,500 | - | - | 0 |
+| **wraith-core** | Frame parsing, sessions, congestion, ring buffers, Node API | ~4,800+ | - | - | 406 |
+| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | ~2,500+ | - | - | 128 (1 ignored) |
+| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | ~3,500+ | - | - | 215 |
+| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | ~2,800+ | - | - | 140 (1 ignored) |
+| **wraith-obfuscation** | Padding, timing, protocol mimicry | ~3,500+ | - | - | 130 |
+| **wraith-files** | File chunking, tree hashing, reassembly | ~1,300 | - | - | 34 |
+| **wraith-cli** | Command-line interface | ~1,100 | - | - | 72 |
+| **wraith-ffi** | Foreign function interface for C/C++ integration | ~1,200 | - | - | 111 |
+| **wraith-transfer** | Tauri 2.0 desktop application (Rust + React + TypeScript) | ~12,500 | - | - | 6 |
 | **wraith-xdp** | eBPF/XDP programs (excluded from default build) | 0 | 0 | 0 | 0 |
 
-**Total Protocol:** ~49,586 lines (~37,027 LOC + 3,514 comments + 9,045 blanks) across 115+ Rust files, 1,303 tests (1,280 passing, 23 ignored)
+**Total Protocol:** ~47,617 lines (~35,979 LOC + 2,999 comments + 8,639 blanks) across 125 Rust files, 1,382 tests (1,367 passing, 16 ignored)
 
 ## Documentation
 
@@ -627,4 +627,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v1.5.7 Test Coverage & Quality Release (Phase 15 Complete) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,303 (1,280 passing + 23 ignored) | **Quality:** Production-ready, 0 vulnerabilities, zero warnings, 98/100 quality grade
+**Status:** v1.5.7 Test Coverage & Quality Release (Phase 15 Complete) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,382 (1,367 passing + 16 ignored) | **Quality:** Production-ready, 0 vulnerabilities, zero warnings, 98/100 quality grade

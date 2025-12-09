@@ -260,7 +260,8 @@ pub unsafe extern "C" fn wraith_config_set_download_dir(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::CString;
+    use std::ffi::{CStr, CString};
+    use std::os::raw::c_char;
     use std::ptr;
 
     #[test]
@@ -269,6 +270,14 @@ mod tests {
             let config = wraith_config_new(ptr::null_mut());
             assert!(!config.is_null());
             wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_free_null() {
+        unsafe {
+            // Should not panic with null pointer
+            wraith_config_free(ptr::null_mut());
         }
     }
 
@@ -284,6 +293,60 @@ mod tests {
     }
 
     #[test]
+    fn test_config_set_bind_address_null_config() {
+        unsafe {
+            let addr = CString::new("127.0.0.1:8080").unwrap();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result =
+                wraith_config_set_bind_address(ptr::null_mut(), addr.as_ptr(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_set_bind_address_null_address() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_bind_address(config, ptr::null(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("address is null"));
+            crate::wraith_free_string(error_ptr);
+
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_set_bind_address_invalid_format() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let addr = CString::new("not a valid address").unwrap();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_bind_address(config, addr.as_ptr(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("invalid address format"));
+            crate::wraith_free_string(error_ptr);
+
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
     fn test_config_set_padding_mode() {
         unsafe {
             let config = wraith_config_new(ptr::null_mut());
@@ -293,6 +356,227 @@ mod tests {
                 ptr::null_mut(),
             );
             assert_eq!(result, WraithErrorCode::Success as c_int);
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_set_padding_mode_null_config() {
+        unsafe {
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_padding_mode(
+                ptr::null_mut(),
+                WraithPaddingMode::PowerOfTwo,
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_set_timing_mode() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let result = wraith_config_set_timing_mode(
+                config,
+                WraithTimingMode::Uniform,
+                ptr::null_mut(),
+            );
+            assert_eq!(result, WraithErrorCode::Success as c_int);
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_set_timing_mode_null_config() {
+        unsafe {
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_timing_mode(
+                ptr::null_mut(),
+                WraithTimingMode::Uniform,
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_set_mimicry_mode() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let result =
+                wraith_config_set_mimicry_mode(config, WraithMimicryMode::Tls, ptr::null_mut());
+            assert_eq!(result, WraithErrorCode::Success as c_int);
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_set_mimicry_mode_null_config() {
+        unsafe {
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_mimicry_mode(
+                ptr::null_mut(),
+                WraithMimicryMode::Tls,
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_enable_af_xdp() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let result = wraith_config_enable_af_xdp(config, true, ptr::null_mut());
+            assert_eq!(result, WraithErrorCode::Success as c_int);
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_enable_af_xdp_null_config() {
+        unsafe {
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_enable_af_xdp(ptr::null_mut(), true, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_enable_io_uring() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let result = wraith_config_enable_io_uring(config, true, ptr::null_mut());
+            assert_eq!(result, WraithErrorCode::Success as c_int);
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_enable_io_uring_null_config() {
+        unsafe {
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_enable_io_uring(ptr::null_mut(), true, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_set_worker_threads() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let result = wraith_config_set_worker_threads(config, 4, ptr::null_mut());
+            assert_eq!(result, WraithErrorCode::Success as c_int);
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_set_worker_threads_null_config() {
+        unsafe {
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_worker_threads(ptr::null_mut(), 4, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_set_worker_threads_zero() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_worker_threads(config, 0, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("num_threads must be > 0"));
+            crate::wraith_free_string(error_ptr);
+
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_set_download_dir() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let path = CString::new("/tmp/downloads").unwrap();
+            let result = wraith_config_set_download_dir(config, path.as_ptr(), ptr::null_mut());
+            assert_eq!(result, WraithErrorCode::Success as c_int);
+            wraith_config_free(config);
+        }
+    }
+
+    #[test]
+    fn test_config_set_download_dir_null_config() {
+        unsafe {
+            let path = CString::new("/tmp/downloads").unwrap();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result =
+                wraith_config_set_download_dir(ptr::null_mut(), path.as_ptr(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("config is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_config_set_download_dir_null_path() {
+        unsafe {
+            let config = wraith_config_new(ptr::null_mut());
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+            let result = wraith_config_set_download_dir(config, ptr::null(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("path is null"));
+            crate::wraith_free_string(error_ptr);
+
             wraith_config_free(config);
         }
     }

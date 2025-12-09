@@ -593,4 +593,160 @@ mod tests {
             let _ctx = IoUringContext::new(64).unwrap();
         }
     }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_multiple_pending_operations() {
+        let mut ctx = IoUringContext::new(128).unwrap();
+
+        // Submit many operations
+        let mut op_ids = Vec::new();
+        for i in 0..50 {
+            let id = ctx.submit_read(1, i * 4096, 4096).unwrap();
+            op_ids.push(id);
+        }
+
+        assert_eq!(ctx.pending_count(), 50);
+
+        // Complete all operations
+        let completions = ctx.wait_completions(50).unwrap();
+        assert_eq!(completions.len(), 50);
+        assert_eq!(ctx.pending_count(), 0);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_operation_id_increment() {
+        let mut ctx = IoUringContext::new(64).unwrap();
+
+        let id1 = ctx.submit_read(1, 0, 1024).unwrap();
+        let id2 = ctx.submit_read(1, 1024, 1024).unwrap();
+        let id3 = ctx.submit_write(2, 0, &[0u8; 512]).unwrap();
+
+        assert_eq!(id1, 0);
+        assert_eq!(id2, 1);
+        assert_eq!(id3, 2);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_mixed_operations() {
+        let mut ctx = IoUringContext::new(64).unwrap();
+
+        // Mix different operation types
+        ctx.submit_read(1, 0, 1024).unwrap();
+        ctx.submit_write(2, 0, &[0u8; 2048]).unwrap();
+        ctx.submit_fsync(3).unwrap();
+        ctx.submit_read(1, 1024, 512).unwrap();
+
+        assert_eq!(ctx.pending_count(), 4);
+
+        let completions = ctx.wait_completions(4).unwrap();
+        assert_eq!(completions.len(), 4);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_poll_completions_empty() {
+        let mut ctx = IoUringContext::new(64).unwrap();
+
+        // No pending operations
+        let completions = ctx.poll_completions().unwrap();
+        assert_eq!(completions.len(), 0);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_poll_completions_batching() {
+        let mut ctx = IoUringContext::new(64).unwrap();
+
+        // Submit 20 operations
+        for i in 0..20 {
+            ctx.submit_read(1, i * 1024, 1024).unwrap();
+        }
+
+        // Poll should return up to 16 (batch limit)
+        let completions = ctx.poll_completions().unwrap();
+        assert!(completions.len() <= 16);
+        assert!(completions.len() > 0);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_buffer_registration_multiple() {
+        let mut ctx = IoUringContext::new(64).unwrap();
+
+        let buffers = vec![
+            vec![0u8; 4096],
+            vec![0u8; 8192],
+            vec![0u8; 2048],
+        ];
+
+        assert!(ctx.register_buffers(buffers).is_ok());
+        assert_eq!(ctx.buffer_count(), 3);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_pending_op_structure() {
+        let op = PendingOp {
+            id: 42,
+            op_type: OpType::Read,
+            fd: 10,
+            offset: 4096,
+            len: 1024,
+        };
+
+        assert_eq!(op.id, 42);
+        assert_eq!(op.op_type, OpType::Read);
+        assert_eq!(op.fd, 10);
+        assert_eq!(op.offset, 4096);
+        assert_eq!(op.len, 1024);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_completion_structure() {
+        let completion = Completion {
+            id: 123,
+            result: 1024,
+            op_type: OpType::Write,
+        };
+
+        assert_eq!(completion.id, 123);
+        assert_eq!(completion.result, 1024);
+        assert_eq!(completion.op_type, OpType::Write);
+    }
+
+    #[test]
+    fn test_op_type_equality() {
+        assert_eq!(OpType::Read, OpType::Read);
+        assert_eq!(OpType::Write, OpType::Write);
+        assert_eq!(OpType::Fsync, OpType::Fsync);
+
+        assert_ne!(OpType::Read, OpType::Write);
+        assert_ne!(OpType::Write, OpType::Fsync);
+    }
+
+    #[test]
+    #[cfg(not(target_os = "linux"))]
+    fn test_non_linux_fallback() {
+        let mut ctx = IoUringContext::new(64).unwrap();
+
+        // All operations should succeed but do nothing
+        let _id1 = ctx.submit_read(1, 0, 1024).unwrap();
+        let _id2 = ctx.submit_write(2, 0, &[0u8; 1024]).unwrap();
+        let _id3 = ctx.submit_fsync(3).unwrap();
+
+        // No pending operations on non-Linux
+        assert_eq!(ctx.pending_count(), 0);
+
+        // Completions should be empty
+        let completions = ctx.wait_completions(1).unwrap();
+        assert_eq!(completions.len(), 0);
+
+        // Buffer registration should succeed
+        assert!(ctx.register_buffers(vec![vec![0u8; 1024]]).is_ok());
+        assert_eq!(ctx.buffer_count(), 0);
+    }
 }

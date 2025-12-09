@@ -250,6 +250,7 @@ impl From<std::io::Error> for PunchError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
 
     #[test]
     fn test_probe_markers() {
@@ -315,5 +316,88 @@ mod tests {
         // Should not error (even if peer doesn't exist)
         let result = puncher.maintain_hole(peer_addr).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_into_socket() {
+        let puncher = HolePuncher::new("127.0.0.1:0".parse().unwrap())
+            .await
+            .unwrap();
+
+        let original_addr = puncher.local_addr().unwrap();
+        let socket = puncher.into_socket();
+
+        // Socket should have same address
+        assert_eq!(socket.local_addr().unwrap(), original_addr);
+    }
+
+    #[test]
+    fn test_punch_error_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::TimedOut, "timeout");
+        let punch_err: PunchError = io_err.into();
+        assert!(matches!(punch_err, PunchError::Io(_)));
+    }
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(MAX_PROBE_ATTEMPTS, 20);
+        assert!(MAX_PROBE_ATTEMPTS > 0);
+
+        assert_eq!(MAX_PORT_RANGE, 10);
+        assert!(MAX_PORT_RANGE > 0);
+
+        assert_eq!(PROBE_INTERVAL, Duration::from_millis(100));
+        assert_eq!(PROBE_TIMEOUT, Duration::from_millis(50));
+    }
+
+    #[test]
+    fn test_probe_marker_lengths() {
+        assert!(PROBE_MARKER.len() > 0);
+        assert!(RESPONSE_MARKER.len() > 0);
+        assert_ne!(PROBE_MARKER, RESPONSE_MARKER);
+    }
+
+    #[tokio::test]
+    async fn test_punch_with_no_internal_address() {
+        let puncher = HolePuncher::new("127.0.0.1:0".parse().unwrap())
+            .await
+            .unwrap();
+
+        let external_addr = "203.0.113.1:12345".parse().unwrap();
+
+        // With very short timeout, should timeout trying all strategies
+        let result = tokio::time::timeout(
+            Duration::from_millis(500),
+            puncher.punch(external_addr, None),
+        )
+        .await;
+
+        // Either timeout or punch error expected
+        assert!(result.is_err() || matches!(result, Ok(Err(_))));
+    }
+
+    #[test]
+    fn test_punch_error_source() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let punch_err = PunchError::Io(io_err);
+
+        assert!(punch_err.source().is_some());
+
+        let timeout_err = PunchError::Timeout;
+        assert!(timeout_err.source().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_multiple_maintain_hole_calls() {
+        let puncher = HolePuncher::new("127.0.0.1:0".parse().unwrap())
+            .await
+            .unwrap();
+
+        let peer_addr = "127.0.0.1:12345".parse().unwrap();
+
+        // Multiple calls should succeed
+        for _ in 0..5 {
+            assert!(puncher.maintain_hole(peer_addr).await.is_ok());
+        }
     }
 }

@@ -197,6 +197,7 @@ pub unsafe extern "C" fn wraith_session_count(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CStr;
     use std::ptr;
 
     #[test]
@@ -209,6 +210,244 @@ mod tests {
             assert_eq!(result, WraithErrorCode::Success as c_int);
             assert_eq!(count, 0);
 
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_session_count_null_node() {
+        unsafe {
+            let mut count: u32 = 0;
+            let result = wraith_session_count(ptr::null(), &mut count);
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+        }
+    }
+
+    #[test]
+    fn test_session_count_null_count_out() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let result = wraith_session_count(node, ptr::null_mut());
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_session_establish_null_node() {
+        unsafe {
+            let peer_id = WraithNodeId { bytes: [1u8; 32] };
+            let mut session_ptr: *mut WraithSession = ptr::null_mut();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_session_establish(
+                ptr::null_mut(),
+                &peer_id,
+                &mut session_ptr,
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("node is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_session_establish_null_peer_id() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let mut session_ptr: *mut WraithSession = ptr::null_mut();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_session_establish(node, ptr::null(), &mut session_ptr, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("peer_id is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_session_establish_null_session_out() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let peer_id = WraithNodeId { bytes: [1u8; 32] };
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_session_establish(node, &peer_id, ptr::null_mut(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("session_out is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_session_close_null_node() {
+        unsafe {
+            let peer_id = [1u8; 32];
+            let session = Box::into_raw(Box::new(peer_id)) as *mut WraithSession;
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_session_close(ptr::null_mut(), session, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("node is null"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up session handle
+            drop(Box::from_raw(session as *mut [u8; 32]));
+        }
+    }
+
+    #[test]
+    fn test_session_close_null_session() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_session_close(node, ptr::null_mut(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("session is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_session_get_stats_null_node() {
+        unsafe {
+            let peer_id = [1u8; 32];
+            let session = Box::into_raw(Box::new(peer_id)) as *mut WraithSession;
+            let mut stats = WraithConnectionStats {
+                bytes_sent: 0,
+                bytes_received: 0,
+                packets_sent: 0,
+                packets_received: 0,
+                rtt_us: 0,
+                loss_rate: 0.0,
+            };
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_session_get_stats(ptr::null(), session, &mut stats, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("node is null"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up session handle
+            drop(Box::from_raw(session as *mut [u8; 32]));
+        }
+    }
+
+    #[test]
+    fn test_session_get_stats_null_session() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let mut stats = WraithConnectionStats {
+                bytes_sent: 0,
+                bytes_received: 0,
+                packets_sent: 0,
+                packets_received: 0,
+                rtt_us: 0,
+                loss_rate: 0.0,
+            };
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_session_get_stats(node, ptr::null(), &mut stats, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("session is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_session_get_stats_null_stats_out() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let peer_id = [1u8; 32];
+            let session = Box::into_raw(Box::new(peer_id)) as *mut WraithSession;
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_session_get_stats(node, session, ptr::null_mut(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("stats_out is null"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up
+            drop(Box::from_raw(session as *mut [u8; 32]));
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_session_get_stats_session_not_found() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let peer_id = [1u8; 32];
+            let session = Box::into_raw(Box::new(peer_id)) as *mut WraithSession;
+            let mut stats = WraithConnectionStats {
+                bytes_sent: 0,
+                bytes_received: 0,
+                packets_sent: 0,
+                packets_received: 0,
+                rtt_us: 0,
+                loss_rate: 0.0,
+            };
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_session_get_stats(node, session, &mut stats, &mut error_ptr);
+
+            // Should return SessionNotFound since session doesn't exist
+            assert_eq!(result, WraithErrorCode::SessionNotFound as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("Session not found"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up
+            drop(Box::from_raw(session as *mut [u8; 32]));
             crate::node::wraith_node_free(node);
         }
     }

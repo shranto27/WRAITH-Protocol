@@ -561,4 +561,161 @@ mod tests {
         *manager.nat_type.write().await = Some(NatType::FullCone);
         assert_eq!(manager.nat_type().await, Some(NatType::FullCone));
     }
+
+    #[tokio::test]
+    async fn test_discovery_manager_shutdown() {
+        let node_id = NodeId::random();
+        let addr = "127.0.0.1:8003".parse().unwrap();
+        let config = DiscoveryConfig::new(node_id, addr);
+
+        let manager = DiscoveryManager::new(config).await.unwrap();
+
+        assert_eq!(manager.state().await, DiscoveryState::Stopped);
+
+        let result = manager.shutdown().await;
+        assert!(result.is_ok());
+        assert_eq!(manager.state().await, DiscoveryState::Stopped);
+    }
+
+    #[test]
+    fn test_relay_info_creation() {
+        let addr = "127.0.0.1:443".parse().unwrap();
+        let node_id = NodeId::random();
+        let public_key = [42u8; 32];
+
+        let relay_info = RelayInfo {
+            addr,
+            node_id,
+            public_key,
+        };
+
+        assert_eq!(relay_info.addr, addr);
+        assert_eq!(relay_info.node_id, node_id);
+        assert_eq!(relay_info.public_key, public_key);
+    }
+
+    #[test]
+    fn test_discovery_error_display() {
+        let err = DiscoveryError::DhtFailed("test error".to_string());
+        assert!(err.to_string().contains("DHT operation failed"));
+
+        let err = DiscoveryError::NatTraversalFailed("test".to_string());
+        assert!(err.to_string().contains("NAT traversal failed"));
+
+        let err = DiscoveryError::RelayFailed("test".to_string());
+        assert!(err.to_string().contains("Relay connection failed"));
+
+        let err = DiscoveryError::ConnectionFailed;
+        assert_eq!(err.to_string(), "Connection failed: all methods exhausted");
+
+        let err = DiscoveryError::PeerNotFound;
+        assert_eq!(err.to_string(), "Peer not found in DHT");
+    }
+
+    #[test]
+    fn test_discovery_error_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let discovery_err: DiscoveryError = io_err.into();
+        assert!(matches!(discovery_err, DiscoveryError::Io(_)));
+    }
+
+    #[test]
+    fn test_discovery_state_all_variants() {
+        let states = vec![
+            DiscoveryState::Stopped,
+            DiscoveryState::Starting,
+            DiscoveryState::Running,
+            DiscoveryState::Stopping,
+        ];
+
+        for state in states {
+            // Ensure all states can be created and compared
+            assert_eq!(state, state);
+        }
+    }
+
+    #[test]
+    fn test_connection_type_all_variants() {
+        let relay_id = NodeId::from_bytes([1u8; 32]);
+
+        assert_eq!(ConnectionType::Direct, ConnectionType::Direct);
+        assert_eq!(ConnectionType::HolePunched, ConnectionType::HolePunched);
+        assert_eq!(ConnectionType::Relayed(relay_id), ConnectionType::Relayed(relay_id));
+
+        assert_ne!(ConnectionType::Direct, ConnectionType::HolePunched);
+        assert_ne!(ConnectionType::Direct, ConnectionType::Relayed(relay_id));
+    }
+
+    #[test]
+    fn test_peer_connection_creation() {
+        let peer_id = NodeId::random();
+        let addr = "127.0.0.1:8000".parse().unwrap();
+
+        let conn = PeerConnection {
+            peer_id,
+            addr,
+            connection_type: ConnectionType::Direct,
+        };
+
+        assert_eq!(conn.peer_id, peer_id);
+        assert_eq!(conn.addr, addr);
+        assert_eq!(conn.connection_type, ConnectionType::Direct);
+    }
+
+    #[tokio::test]
+    async fn test_discovery_manager_dht_access() {
+        let node_id = NodeId::random();
+        let addr = "127.0.0.1:8004".parse().unwrap();
+        let config = DiscoveryConfig::new(node_id, addr);
+
+        let manager = DiscoveryManager::new(config).await.unwrap();
+        let dht = manager.dht();
+
+        // Verify DHT is accessible
+        let dht_lock = dht.read().await;
+        assert_eq!(*dht_lock.id(), node_id);
+    }
+
+    #[test]
+    fn test_discovery_config_multiple_additions() {
+        let node_id = NodeId::random();
+        let addr = "127.0.0.1:8000".parse().unwrap();
+        let mut config = DiscoveryConfig::new(node_id, addr);
+
+        // Add multiple bootstrap nodes
+        for i in 0..5 {
+            config.add_bootstrap_node(format!("127.0.0.1:{}", 9000 + i).parse().unwrap());
+        }
+        assert_eq!(config.bootstrap_nodes.len(), 5);
+
+        // Add multiple STUN servers
+        for i in 0..3 {
+            config.add_stun_server(format!("10.0.0.{}:3478", i + 1).parse().unwrap());
+        }
+        assert_eq!(config.stun_servers.len(), 5); // 2 default + 3 added
+
+        // Add multiple relay servers
+        for i in 0..3 {
+            let relay = RelayInfo {
+                addr: format!("203.0.113.{}:443", i + 1).parse().unwrap(),
+                node_id: NodeId::random(),
+                public_key: [i; 32],
+            };
+            config.add_relay_server(relay);
+        }
+        assert_eq!(config.relay_servers.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_discovery_manager_creation_with_custom_config() {
+        let node_id = NodeId::random();
+        let addr = "127.0.0.1:8005".parse().unwrap();
+        let mut config = DiscoveryConfig::new(node_id, addr);
+
+        config.nat_detection_enabled = false;
+        config.relay_enabled = false;
+
+        let manager = DiscoveryManager::new(config).await;
+        assert!(manager.is_ok());
+    }
 }

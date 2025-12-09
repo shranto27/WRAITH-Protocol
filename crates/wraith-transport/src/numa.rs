@@ -403,4 +403,114 @@ mod tests {
         assert!(allocator1.node.is_none() || allocator1.node.unwrap() < 8);
         assert!(allocator2.node.is_none() || allocator2.node.unwrap() < 8);
     }
+
+    #[test]
+    #[cfg(not(target_os = "linux"))]
+    fn test_non_linux_numa_functions() {
+        // On non-Linux, these should always return None/1
+        assert_eq!(get_numa_node_for_cpu(0), None);
+        assert_eq!(get_numa_node_for_cpu(100), None);
+        assert_eq!(get_numa_node_count(), 1);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_numa_node_count_bounds() {
+        let count = get_numa_node_count();
+        assert!(count >= 1);
+        assert!(count <= 8);
+    }
+
+    #[test]
+    fn test_numa_allocator_multiple_nodes() {
+        let alloc0 = NumaAllocator::for_node(0);
+        let alloc1 = NumaAllocator::for_node(1);
+        let alloc7 = NumaAllocator::for_node(7);
+
+        assert_eq!(alloc0.node, Some(0));
+        assert_eq!(alloc1.node, Some(1));
+        assert_eq!(alloc7.node, Some(7));
+    }
+
+    #[test]
+    fn test_numa_allocator_large_allocation() {
+        let allocator = NumaAllocator::new();
+
+        // SAFETY: Test allocates and deallocates memory properly
+        // - Allocation size is reasonable (1MB)
+        // - Deallocation uses same size as allocation
+        // - Memory is not accessed after deallocation
+        unsafe {
+            let size = 1024 * 1024; // 1 MB
+            if let Some(ptr) = allocator.allocate(size) {
+                // Write some data
+                std::ptr::write_bytes(ptr, 0x42, size);
+
+                // Verify write
+                assert_eq!(*ptr, 0x42);
+
+                allocator.deallocate(ptr, size);
+            }
+        }
+    }
+
+    #[test]
+    fn test_numa_allocator_multiple_allocations() {
+        let allocator = NumaAllocator::for_node(0);
+
+        // SAFETY: Test allocates and deallocates multiple buffers
+        // - Each allocation has proper size
+        // - Each deallocation matches its allocation
+        // - No use-after-free (buffers not accessed after dealloc)
+        unsafe {
+            let mut ptrs = Vec::new();
+
+            // Allocate multiple buffers
+            for _ in 0..10 {
+                if let Some(ptr) = allocator.allocate(4096) {
+                    ptrs.push(ptr);
+                }
+            }
+
+            // Deallocate all
+            for ptr in ptrs {
+                allocator.deallocate(ptr, 4096);
+            }
+        }
+    }
+
+    #[test]
+    fn test_allocate_deallocate_zero_size() {
+        // SAFETY: Zero-size allocations are safe
+        // - allocate_on_node handles zero size gracefully
+        // - deallocate_on_node handles zero size gracefully
+        // - No memory is actually allocated or accessed
+        unsafe {
+            if let Some(ptr) = allocate_on_node(0, 0) {
+                deallocate_on_node(ptr, 0);
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_numa_node_for_multiple_cpus() {
+        // Test multiple CPU IDs
+        for cpu in 0..8 {
+            let node = get_numa_node_for_cpu(cpu);
+            if let Some(n) = node {
+                assert!(n < 8);
+            }
+        }
+    }
+
+    #[test]
+    fn test_numa_allocator_null_handling() {
+        let allocator = NumaAllocator::new();
+
+        // SAFETY: Deallocating null is safe and should be a no-op
+        unsafe {
+            allocator.deallocate(std::ptr::null_mut(), 1024);
+        }
+    }
 }

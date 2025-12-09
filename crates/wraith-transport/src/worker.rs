@@ -841,4 +841,152 @@ mod tests {
         assert_eq!(pool_stats.total_packets(), 50);
         assert_eq!(pool_stats.total_bytes(), 1250);
     }
+
+    #[test]
+    fn test_pool_stats_throughput() {
+        let worker = Arc::new(WorkerStats::default());
+        worker.packets_processed.store(1000, Ordering::Relaxed);
+        worker.bytes_processed.store(1024000, Ordering::Relaxed);
+
+        let pool_stats = PoolStats {
+            workers: vec![worker],
+            start_time: Some(Instant::now() - Duration::from_secs(1)),
+        };
+
+        // After 1 second
+        std::thread::sleep(Duration::from_millis(10));
+
+        let pps = pool_stats.packets_per_second();
+        let bps = pool_stats.bytes_per_second();
+
+        // Should be roughly 1000 packets/sec and 1024000 bytes/sec
+        assert!(pps > 0.0);
+        assert!(bps > 0.0);
+    }
+
+    #[test]
+    fn test_pool_stats_no_start_time() {
+        let pool_stats = PoolStats {
+            workers: vec![],
+            start_time: None,
+        };
+
+        assert_eq!(pool_stats.packets_per_second(), 0.0);
+        assert_eq!(pool_stats.bytes_per_second(), 0.0);
+    }
+
+    #[test]
+    fn test_worker_error_display() {
+        let err = WorkerError::QueueFull;
+        assert_eq!(err.to_string(), "Task queue is full");
+
+        let err = WorkerError::ShuttingDown;
+        assert_eq!(err.to_string(), "Worker pool is shutting down");
+    }
+
+    #[test]
+    fn test_task_enum_variants() {
+        let task1 = Task::ProcessPacket {
+            data: vec![1, 2, 3],
+            source: 0,
+        };
+
+        let task2 = Task::SendPacket {
+            data: vec![4, 5, 6],
+            destination: 1,
+        };
+
+        let task3 = Task::Shutdown;
+
+        match task1 {
+            Task::ProcessPacket { data, source } => {
+                assert_eq!(data, vec![1, 2, 3]);
+                assert_eq!(source, 0);
+            }
+            _ => panic!("Wrong task type"),
+        }
+
+        match task2 {
+            Task::SendPacket {
+                data,
+                destination,
+            } => {
+                assert_eq!(data, vec![4, 5, 6]);
+                assert_eq!(destination, 1);
+            }
+            _ => panic!("Wrong task type"),
+        }
+
+        assert!(matches!(task3, Task::Shutdown));
+    }
+
+    #[test]
+    fn test_worker_config_defaults() {
+        let config = WorkerConfig::default();
+
+        assert_eq!(config.num_workers, 0); // Auto-detect
+        assert_eq!(config.queue_capacity, 10000);
+        assert!(config.buffer_pool.is_none());
+
+        #[cfg(target_os = "linux")]
+        {
+            assert!(config.pin_to_cpu);
+            assert!(config.numa_aware);
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            assert!(!config.pin_to_cpu);
+            assert!(!config.numa_aware);
+        }
+    }
+
+    #[test]
+    fn test_worker_pool_submit_after_shutdown() {
+        let config = WorkerConfig {
+            num_workers: 1,
+            queue_capacity: 10,
+            pin_to_cpu: false,
+            numa_aware: false,
+            buffer_pool: None,
+        };
+
+        let pool = WorkerPool::new(config);
+        pool.shutdown.store(true, Ordering::Release);
+
+        let task = Task::ProcessPacket {
+            data: vec![1, 2, 3],
+            source: 0,
+        };
+
+        let result = pool.submit(task);
+        assert!(matches!(result, Err(WorkerError::ShuttingDown)));
+    }
+
+    #[test]
+    fn test_worker_stats_errors_tracking() {
+        let stats = WorkerStats::default();
+
+        for _ in 0..5 {
+            stats.errors.fetch_add(1, Ordering::Relaxed);
+        }
+
+        assert_eq!(stats.errors.load(Ordering::Relaxed), 5);
+    }
+
+    #[test]
+    fn test_pool_stats_total_errors() {
+        let worker1 = Arc::new(WorkerStats::default());
+        let worker2 = Arc::new(WorkerStats::default());
+
+        worker1.errors.store(5, Ordering::Relaxed);
+        worker2.errors.store(3, Ordering::Relaxed);
+
+        let pool_stats = PoolStats {
+            workers: vec![worker1, worker2],
+            start_time: Some(Instant::now()),
+        };
+
+        assert_eq!(pool_stats.total_errors(), 8);
+    }
 }

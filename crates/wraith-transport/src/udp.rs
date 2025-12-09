@@ -321,4 +321,108 @@ mod tests {
         // Should receive all 10 packets (or close to it, UDP is lossy on localhost usually reliable)
         assert!(count >= 8, "Received only {} packets out of 10", count);
     }
+
+    #[test]
+    fn test_udp_ipv6() {
+        let addr: SocketAddr = "[::1]:0".parse().unwrap();
+        let transport = UdpTransport::bind(addr).unwrap();
+        let bound_addr = transport.local_addr().unwrap();
+
+        assert!(bound_addr.is_ipv6());
+        assert_ne!(bound_addr.port(), 0);
+    }
+
+    #[test]
+    fn test_udp_ipv6_send_recv() {
+        let addr: SocketAddr = "[::1]:0".parse().unwrap();
+        let mut server = UdpTransport::bind(addr).unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let addr: SocketAddr = "[::1]:0".parse().unwrap();
+        let client = UdpTransport::bind(addr).unwrap();
+
+        client.send_to(b"IPv6 test", server_addr).unwrap();
+        std::thread::sleep(Duration::from_millis(10));
+
+        let (size, _) = server.recv_from().unwrap();
+        assert_eq!(size, 9);
+        assert_eq!(&server.recv_buffer()[..size], b"IPv6 test");
+    }
+
+    #[test]
+    fn test_udp_recv_buffer_reuse() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let mut transport = UdpTransport::bind(addr).unwrap();
+
+        // Verify buffer is reused across receives
+        let buf_ptr1 = transport.recv_buffer().as_ptr();
+        let buf_ptr2 = transport.recv_buffer_mut().as_ptr();
+
+        assert_eq!(buf_ptr1, buf_ptr2);
+    }
+
+    #[test]
+    fn test_udp_blocking_mode() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let transport = UdpTransport::bind(addr).unwrap();
+
+        // Switch to blocking mode
+        transport.set_nonblocking(false).unwrap();
+
+        // Switch back to non-blocking
+        transport.set_nonblocking(true).unwrap();
+    }
+
+    #[test]
+    fn test_udp_empty_packet() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let mut server = UdpTransport::bind(addr).unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let client = UdpTransport::bind(addr).unwrap();
+
+        // Send empty packet
+        let sent = client.send_to(&[], server_addr).unwrap();
+        assert_eq!(sent, 0);
+
+        std::thread::sleep(Duration::from_millis(10));
+
+        // Receive empty packet
+        let (size, _) = server.recv_from().unwrap();
+        assert_eq!(size, 0);
+    }
+
+    #[test]
+    fn test_udp_maximum_packet_size() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let mut server = UdpTransport::bind(addr).unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let client = UdpTransport::bind(addr).unwrap();
+
+        // Test with 64KB packet (max UDP size)
+        let large_data = vec![0xBB; 65000];
+        let sent = client.send_to(&large_data, server_addr).unwrap();
+        assert_eq!(sent, 65000);
+
+        std::thread::sleep(Duration::from_millis(10));
+
+        let (recv_size, _) = server.recv_from().unwrap();
+        assert_eq!(recv_size, 65000);
+    }
+
+    #[test]
+    fn test_udp_buffer_size_boundaries() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let transport = UdpTransport::bind(addr).unwrap();
+
+        let recv_size = transport.recv_buffer_size().unwrap();
+        let send_size = transport.send_buffer_size().unwrap();
+
+        // Verify sizes are reasonable (kernel may adjust requested values)
+        assert!(recv_size > 0);
+        assert!(send_size > 0);
+    }
 }

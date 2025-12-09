@@ -245,4 +245,88 @@ mod tests {
         let err = NatError::NoServers;
         assert_eq!(err.to_string(), "No STUN servers available");
     }
+
+    #[test]
+    fn test_nat_error_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::TimedOut, "timeout");
+        let nat_err: NatError = io_err.into();
+        assert!(matches!(nat_err, NatError::Io(_)));
+    }
+
+    #[test]
+    fn test_nat_error_from_stun_error() {
+        use super::super::stun::StunError;
+
+        let stun_timeout: NatError = StunError::Timeout.into();
+        assert!(matches!(stun_timeout, NatError::Timeout));
+
+        let stun_invalid: NatError = StunError::InvalidMagicCookie.into();
+        assert!(matches!(stun_invalid, NatError::InvalidResponse));
+    }
+
+    #[test]
+    fn test_nat_type_equality() {
+        assert_eq!(NatType::Open, NatType::Open);
+        assert_ne!(NatType::Open, NatType::Symmetric);
+        assert_ne!(NatType::FullCone, NatType::RestrictedCone);
+    }
+
+    #[test]
+    fn test_is_public_ip_ipv6() {
+        // IPv6 loopback
+        assert!(!NatDetector::is_public_ip(&"::1".parse().unwrap()));
+
+        // IPv6 multicast
+        assert!(!NatDetector::is_public_ip(&"ff02::1".parse().unwrap()));
+
+        // IPv6 public (Google DNS)
+        assert!(NatDetector::is_public_ip(&"2001:4860:4860::8888".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_public_ip_edge_cases() {
+        // Class E (reserved)
+        assert!(NatDetector::is_public_ip(&"240.0.0.1".parse().unwrap())); // Technically reserved but not checked
+
+        // Documentation ranges
+        assert!(NatDetector::is_public_ip(&"203.0.113.1".parse().unwrap()));
+        assert!(NatDetector::is_public_ip(&"198.51.100.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_nat_detector_default() {
+        let detector = NatDetector::default();
+        assert_eq!(detector.stun_servers.len(), 2);
+    }
+
+    #[test]
+    fn test_nat_detector_empty_servers() {
+        let detector = NatDetector::with_servers(vec![]);
+        assert_eq!(detector.stun_servers.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_nat_detect_no_servers() {
+        let detector = NatDetector::with_servers(vec![]);
+        let result = detector.detect().await;
+        assert!(matches!(result, Err(NatError::NoServers)));
+    }
+
+    #[test]
+    fn test_nat_type_all_variants() {
+        // Ensure all NAT types can be created and compared
+        let types = vec![
+            NatType::Open,
+            NatType::FullCone,
+            NatType::RestrictedCone,
+            NatType::PortRestrictedCone,
+            NatType::Symmetric,
+            NatType::Unknown,
+        ];
+
+        for typ in types {
+            let display = typ.to_string();
+            assert!(!display.is_empty());
+        }
+    }
 }

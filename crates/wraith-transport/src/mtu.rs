@@ -490,4 +490,153 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_mtu_cache_multiple_destinations() {
+        let mut discovery = MtuDiscovery::new();
+
+        let addr1: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let addr2: SocketAddr = "127.0.0.1:8081".parse().unwrap();
+
+        // Insert entries for different destinations
+        discovery.cache.insert(
+            addr1,
+            CachedMtu {
+                mtu: 1500,
+                discovered_at: Instant::now(),
+            },
+        );
+
+        discovery.cache.insert(
+            addr2,
+            CachedMtu {
+                mtu: 1400,
+                discovered_at: Instant::now(),
+            },
+        );
+
+        assert_eq!(discovery.get_cached(&addr1), Some(1500));
+        assert_eq!(discovery.get_cached(&addr2), Some(1400));
+    }
+
+    #[test]
+    fn test_mtu_error_display() {
+        let err = MtuError::InvalidMtu(100);
+        assert!(err.to_string().contains("Invalid MTU: 100"));
+
+        let err = MtuError::Timeout;
+        assert_eq!(err.to_string(), "Probe timeout");
+
+        let err = MtuError::NoRoute;
+        assert_eq!(err.to_string(), "No route to destination");
+    }
+
+    #[test]
+    fn test_mtu_error_from_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
+        let mtu_err = MtuError::from(io_err);
+
+        assert!(matches!(mtu_err, MtuError::Io(_)));
+    }
+
+    #[test]
+    fn test_mtu_cache_clear_expired_multiple() {
+        let mut discovery = MtuDiscovery::new();
+        discovery.set_cache_ttl(Duration::from_millis(10));
+
+        // Insert multiple entries with different timestamps
+        let addr1: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let addr2: SocketAddr = "127.0.0.1:8081".parse().unwrap();
+        let addr3: SocketAddr = "127.0.0.1:8082".parse().unwrap();
+
+        discovery.cache.insert(
+            addr1,
+            CachedMtu {
+                mtu: 1500,
+                discovered_at: Instant::now(),
+            },
+        );
+
+        std::thread::sleep(Duration::from_millis(15));
+
+        discovery.cache.insert(
+            addr2,
+            CachedMtu {
+                mtu: 1400,
+                discovered_at: Instant::now(),
+            },
+        );
+
+        discovery.cache.insert(
+            addr3,
+            CachedMtu {
+                mtu: 1300,
+                discovered_at: Instant::now(),
+            },
+        );
+
+        // Clear expired - addr1 should be removed
+        discovery.clear_expired();
+
+        assert!(discovery.get_cached(&addr1).is_none());
+        assert!(discovery.get_cached(&addr2).is_some());
+        assert!(discovery.get_cached(&addr3).is_some());
+    }
+
+    #[test]
+    fn test_mtu_limits_validation() {
+        let discovery = MtuDiscovery::with_limits(1000, 5000);
+
+        assert_eq!(discovery.min_mtu, 1000);
+        assert_eq!(discovery.max_mtu, 5000);
+    }
+
+    #[test]
+    fn test_mtu_discovery_ipv6() {
+        let discovery = MtuDiscovery::new();
+
+        // IPv6 minimum MTU should be 1280
+        assert_eq!(discovery.min_mtu, MIN_MTU);
+        assert_eq!(MIN_MTU, 1280);
+    }
+
+    #[test]
+    fn test_mtu_constants_relationships() {
+        assert!(MIN_MTU <= ETHERNET_MTU);
+        assert!(ETHERNET_MTU <= MAX_MTU);
+        assert_eq!(DEFAULT_MTU, MIN_MTU);
+    }
+
+    #[test]
+    fn test_cached_mtu_clone() {
+        let cached = CachedMtu {
+            mtu: 1500,
+            discovered_at: Instant::now(),
+        };
+
+        let cloned = cached.clone();
+        assert_eq!(cached.mtu, cloned.mtu);
+    }
+
+    #[test]
+    fn test_mtu_discovery_cache_size() {
+        let mut discovery = MtuDiscovery::new();
+
+        // Add many entries
+        for i in 0..100 {
+            let addr: SocketAddr = format!("127.0.0.1:{}", 8000 + i).parse().unwrap();
+            discovery.cache.insert(
+                addr,
+                CachedMtu {
+                    mtu: 1500,
+                    discovered_at: Instant::now(),
+                },
+            );
+        }
+
+        assert_eq!(discovery.cache.len(), 100);
+
+        discovery.clear_cache();
+        assert_eq!(discovery.cache.len(), 0);
+    }
 }

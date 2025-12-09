@@ -277,6 +277,7 @@ pub unsafe extern "C" fn wraith_transfer_cancel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::{CStr, CString};
     use std::ptr;
 
     #[test]
@@ -288,6 +289,345 @@ mod tests {
             let result = wraith_transfer_count(node, &mut count);
             assert_eq!(result, WraithErrorCode::Success as c_int);
             assert_eq!(count, 0);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_count_null_node() {
+        unsafe {
+            let mut count: u32 = 0;
+            let result = wraith_transfer_count(ptr::null(), &mut count);
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+        }
+    }
+
+    #[test]
+    fn test_transfer_count_null_count_out() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let result = wraith_transfer_count(node, ptr::null_mut());
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_send_file_null_node() {
+        unsafe {
+            let peer_id = WraithNodeId { bytes: [1u8; 32] };
+            let file_path = CString::new("/tmp/test.txt").unwrap();
+            let mut transfer_ptr: *mut WraithTransfer = ptr::null_mut();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_send_file(
+                ptr::null_mut(),
+                &peer_id,
+                file_path.as_ptr(),
+                &mut transfer_ptr,
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("node is null"));
+            crate::wraith_free_string(error_ptr);
+        }
+    }
+
+    #[test]
+    fn test_transfer_send_file_null_peer_id() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let file_path = CString::new("/tmp/test.txt").unwrap();
+            let mut transfer_ptr: *mut WraithTransfer = ptr::null_mut();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_send_file(
+                node,
+                ptr::null(),
+                file_path.as_ptr(),
+                &mut transfer_ptr,
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("peer_id is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_send_file_null_transfer_out() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let peer_id = WraithNodeId { bytes: [1u8; 32] };
+            let file_path = CString::new("/tmp/test.txt").unwrap();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_send_file(
+                node,
+                &peer_id,
+                file_path.as_ptr(),
+                ptr::null_mut(),
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("transfer_out is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_send_file_null_file_path() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let peer_id = WraithNodeId { bytes: [1u8; 32] };
+            let mut transfer_ptr: *mut WraithTransfer = ptr::null_mut();
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_send_file(
+                node,
+                &peer_id,
+                ptr::null(),
+                &mut transfer_ptr,
+                &mut error_ptr,
+            );
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("file_path is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_wait_null_node() {
+        unsafe {
+            let transfer_id = [1u8; 32];
+            let transfer = Box::into_raw(Box::new(transfer_id)) as *mut WraithTransfer;
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_wait(ptr::null_mut(), transfer, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("node is null"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up transfer handle
+            drop(Box::from_raw(transfer as *mut [u8; 32]));
+        }
+    }
+
+    #[test]
+    fn test_transfer_wait_null_transfer() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_wait(node, ptr::null(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("transfer is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_get_progress_null_node() {
+        unsafe {
+            let transfer_id = [1u8; 32];
+            let transfer = Box::into_raw(Box::new(transfer_id)) as *mut WraithTransfer;
+            let mut progress = WraithTransferProgress {
+                total_bytes: 0,
+                transferred_bytes: 0,
+                progress: 0.0,
+                eta_seconds: 0,
+                rate_bytes_per_sec: 0,
+                is_complete: false,
+            };
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_transfer_get_progress(ptr::null(), transfer, &mut progress, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("node is null"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up transfer handle
+            drop(Box::from_raw(transfer as *mut [u8; 32]));
+        }
+    }
+
+    #[test]
+    fn test_transfer_get_progress_null_transfer() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let mut progress = WraithTransferProgress {
+                total_bytes: 0,
+                transferred_bytes: 0,
+                progress: 0.0,
+                eta_seconds: 0,
+                rate_bytes_per_sec: 0,
+                is_complete: false,
+            };
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_transfer_get_progress(node, ptr::null(), &mut progress, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("transfer is null"));
+            crate::wraith_free_string(error_ptr);
+
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_get_progress_null_progress_out() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let transfer_id = [1u8; 32];
+            let transfer = Box::into_raw(Box::new(transfer_id)) as *mut WraithTransfer;
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_transfer_get_progress(node, transfer, ptr::null_mut(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("progress_out is null"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up
+            drop(Box::from_raw(transfer as *mut [u8; 32]));
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_get_progress_transfer_not_found() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let transfer_id = [1u8; 32];
+            let transfer = Box::into_raw(Box::new(transfer_id)) as *mut WraithTransfer;
+            let mut progress = WraithTransferProgress {
+                total_bytes: 0,
+                transferred_bytes: 0,
+                progress: 0.0,
+                eta_seconds: 0,
+                rate_bytes_per_sec: 0,
+                is_complete: false,
+            };
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result =
+                wraith_transfer_get_progress(node, transfer, &mut progress, &mut error_ptr);
+
+            // Should return TransferNotFound since transfer doesn't exist
+            assert_eq!(result, WraithErrorCode::TransferNotFound as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("Transfer not found"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up
+            drop(Box::from_raw(transfer as *mut [u8; 32]));
+            crate::node::wraith_node_free(node);
+        }
+    }
+
+    #[test]
+    fn test_transfer_free_null() {
+        unsafe {
+            // Should not panic with null pointer
+            wraith_transfer_free(ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn test_transfer_free() {
+        unsafe {
+            let transfer_id = [1u8; 32];
+            let transfer = Box::into_raw(Box::new(transfer_id)) as *mut WraithTransfer;
+
+            // Should not panic
+            wraith_transfer_free(transfer);
+        }
+    }
+
+    #[test]
+    fn test_transfer_cancel_null_node() {
+        unsafe {
+            let transfer_id = [1u8; 32];
+            let transfer = Box::into_raw(Box::new(transfer_id)) as *mut WraithTransfer;
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_cancel(ptr::null_mut(), transfer, &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("node is null"));
+            crate::wraith_free_string(error_ptr);
+
+            // Clean up transfer handle
+            drop(Box::from_raw(transfer as *mut [u8; 32]));
+        }
+    }
+
+    #[test]
+    fn test_transfer_cancel_null_transfer() {
+        unsafe {
+            let node = crate::node::wraith_node_new(ptr::null(), ptr::null_mut());
+            let mut error_ptr: *mut c_char = ptr::null_mut();
+
+            let result = wraith_transfer_cancel(node, ptr::null(), &mut error_ptr);
+
+            assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
+            assert!(!error_ptr.is_null());
+
+            let error_msg = CStr::from_ptr(error_ptr).to_str().unwrap();
+            assert!(error_msg.contains("transfer is null"));
+            crate::wraith_free_string(error_ptr);
 
             crate::node::wraith_node_free(node);
         }

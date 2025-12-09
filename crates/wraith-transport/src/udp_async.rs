@@ -36,6 +36,7 @@ use tokio::net::UdpSocket;
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Clone)]
 pub struct AsyncUdpTransport {
     socket: Arc<UdpSocket>,
     closed: Arc<AtomicBool>,
@@ -347,5 +348,138 @@ mod tests {
 
         let server_stats = server.stats();
         assert_eq!(server_stats.packets_received, 10);
+    }
+
+    #[tokio::test]
+    async fn test_udp_ipv6() {
+        let addr: SocketAddr = "[::1]:0".parse().unwrap();
+        let transport = AsyncUdpTransport::bind(addr).await.unwrap();
+        let bound_addr = transport.local_addr().unwrap();
+
+        assert!(bound_addr.is_ipv6());
+        assert_ne!(bound_addr.port(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_udp_ipv6_send_recv() {
+        let addr: SocketAddr = "[::1]:0".parse().unwrap();
+        let server = AsyncUdpTransport::bind(addr).await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let addr: SocketAddr = "[::1]:0".parse().unwrap();
+        let client = AsyncUdpTransport::bind(addr).await.unwrap();
+
+        client.send_to(b"IPv6 test", server_addr).await.unwrap();
+
+        let mut buf = vec![0u8; 1500];
+        let (size, _) = timeout(Duration::from_secs(1), server.recv_from(&mut buf))
+            .await
+            .expect("Timeout")
+            .unwrap();
+
+        assert_eq!(size, 9);
+        assert_eq!(&buf[..size], b"IPv6 test");
+    }
+
+    #[tokio::test]
+    async fn test_udp_from_socket() {
+        let std_socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        std_socket.set_nonblocking(true).unwrap();
+
+        let tokio_socket = tokio::net::UdpSocket::from_std(std_socket).unwrap();
+        let transport = AsyncUdpTransport::from_socket(tokio_socket);
+
+        assert!(!transport.is_closed());
+        let addr = transport.local_addr().unwrap();
+        assert!(addr.is_ipv4());
+    }
+
+    #[tokio::test]
+    async fn test_udp_empty_packet() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let server = AsyncUdpTransport::bind(addr).await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let client = AsyncUdpTransport::bind(addr).await.unwrap();
+
+        // Send empty packet
+        let sent = client.send_to(&[], server_addr).await.unwrap();
+        assert_eq!(sent, 0);
+
+        // Receive empty packet
+        let mut buf = vec![0u8; 1500];
+        let (size, _) = timeout(Duration::from_secs(1), server.recv_from(&mut buf))
+            .await
+            .expect("Timeout")
+            .unwrap();
+        assert_eq!(size, 0);
+    }
+
+    #[tokio::test]
+    async fn test_udp_stats_errors() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let transport = AsyncUdpTransport::bind(addr).await.unwrap();
+
+        // Close transport
+        transport.close().await.unwrap();
+
+        // Attempt send after close - should increment error counter
+        let result = transport.send_to(b"test", "127.0.0.1:1234".parse().unwrap()).await;
+        assert!(matches!(result, Err(TransportError::Closed)));
+
+        // Note: We can't easily test recv errors in the same way since close
+        // is checked before the actual recv operation
+    }
+
+    #[tokio::test]
+    async fn test_udp_concurrent_operations() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let server = AsyncUdpTransport::bind(addr).await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let client = AsyncUdpTransport::bind(addr).await.unwrap();
+
+        // Spawn concurrent sends
+        let send_handles: Vec<_> = (0..5)
+            .map(|i| {
+                let client = client.clone();
+                tokio::spawn(async move {
+                    let data = format!("Concurrent {}", i);
+                    client.send_to(data.as_bytes(), server_addr).await
+                })
+            })
+            .collect();
+
+        // Wait for all sends
+        for handle in send_handles {
+            handle.await.unwrap().unwrap();
+        }
+
+        // Receive all packets
+        let mut buf = vec![0u8; 1500];
+        for _ in 0..5 {
+            timeout(Duration::from_secs(1), server.recv_from(&mut buf))
+                .await
+                .expect("Timeout")
+                .unwrap();
+        }
+
+        // Verify stats
+        let client_stats = client.stats();
+        assert_eq!(client_stats.packets_sent, 5);
+    }
+
+    #[tokio::test]
+    async fn test_udp_recv_after_close() {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let transport = AsyncUdpTransport::bind(addr).await.unwrap();
+
+        transport.close().await.unwrap();
+
+        let mut buf = vec![0u8; 1500];
+        let result = transport.recv_from(&mut buf).await;
+        assert!(matches!(result, Err(TransportError::Closed)));
     }
 }

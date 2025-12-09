@@ -206,6 +206,17 @@ mod tests {
     fn test_error_code_conversion() {
         assert_eq!(WraithErrorCode::from(0), WraithErrorCode::Success);
         assert_eq!(WraithErrorCode::from(1), WraithErrorCode::InvalidArgument);
+        assert_eq!(WraithErrorCode::from(2), WraithErrorCode::NotInitialized);
+        assert_eq!(WraithErrorCode::from(3), WraithErrorCode::AlreadyInitialized);
+        assert_eq!(WraithErrorCode::from(4), WraithErrorCode::SessionNotFound);
+        assert_eq!(WraithErrorCode::from(5), WraithErrorCode::TransferNotFound);
+        assert_eq!(WraithErrorCode::from(6), WraithErrorCode::IoError);
+        assert_eq!(WraithErrorCode::from(7), WraithErrorCode::CryptoError);
+        assert_eq!(WraithErrorCode::from(8), WraithErrorCode::TransportError);
+        assert_eq!(WraithErrorCode::from(9), WraithErrorCode::DiscoveryError);
+        assert_eq!(WraithErrorCode::from(10), WraithErrorCode::Timeout);
+        assert_eq!(WraithErrorCode::from(11), WraithErrorCode::OutOfMemory);
+        assert_eq!(WraithErrorCode::from(12), WraithErrorCode::InvalidState);
         assert_eq!(WraithErrorCode::from(99), WraithErrorCode::InternalError);
         assert_eq!(WraithErrorCode::from(999), WraithErrorCode::InternalError);
     }
@@ -215,6 +226,34 @@ mod tests {
         let err = WraithError::invalid_argument("test message");
         assert_eq!(err.code, WraithErrorCode::InvalidArgument);
         assert_eq!(err.message, "test message");
+    }
+
+    #[test]
+    fn test_error_not_initialized() {
+        let err = WraithError::not_initialized();
+        assert_eq!(err.code, WraithErrorCode::NotInitialized);
+        assert_eq!(err.message, "Node not initialized");
+    }
+
+    #[test]
+    fn test_error_session_not_found() {
+        let err = WraithError::session_not_found();
+        assert_eq!(err.code, WraithErrorCode::SessionNotFound);
+        assert_eq!(err.message, "Session not found");
+    }
+
+    #[test]
+    fn test_error_transfer_not_found() {
+        let err = WraithError::transfer_not_found();
+        assert_eq!(err.code, WraithErrorCode::TransferNotFound);
+        assert_eq!(err.message, "Transfer not found");
+    }
+
+    #[test]
+    fn test_error_internal_error() {
+        let err = WraithError::internal_error("internal error");
+        assert_eq!(err.code, WraithErrorCode::InternalError);
+        assert_eq!(err.message, "internal error");
     }
 
     #[test]
@@ -228,6 +267,115 @@ mod tests {
             let message = CStr::from_ptr(c_str).to_str().unwrap();
             assert_eq!(message, "test error");
             crate::wraith_free_string(c_str);
+        }
+    }
+
+    #[test]
+    fn test_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let wraith_err: WraithError = io_err.into();
+        assert_eq!(wraith_err.code, WraithErrorCode::IoError);
+        assert!(wraith_err.message.contains("file not found"));
+    }
+
+    #[test]
+    fn test_error_code_values() {
+        assert_eq!(WraithErrorCode::Success as i32, 0);
+        assert_eq!(WraithErrorCode::InvalidArgument as i32, 1);
+        assert_eq!(WraithErrorCode::NotInitialized as i32, 2);
+        assert_eq!(WraithErrorCode::AlreadyInitialized as i32, 3);
+        assert_eq!(WraithErrorCode::SessionNotFound as i32, 4);
+        assert_eq!(WraithErrorCode::TransferNotFound as i32, 5);
+        assert_eq!(WraithErrorCode::IoError as i32, 6);
+        assert_eq!(WraithErrorCode::CryptoError as i32, 7);
+        assert_eq!(WraithErrorCode::TransportError as i32, 8);
+        assert_eq!(WraithErrorCode::DiscoveryError as i32, 9);
+        assert_eq!(WraithErrorCode::Timeout as i32, 10);
+        assert_eq!(WraithErrorCode::OutOfMemory as i32, 11);
+        assert_eq!(WraithErrorCode::InvalidState as i32, 12);
+        assert_eq!(WraithErrorCode::InternalError as i32, 99);
+    }
+
+    #[test]
+    fn test_ffi_try_macro_success() {
+        fn test_function(error_out: *mut *mut std::os::raw::c_char) -> i32 {
+            let result: Result<i32, WraithError> = Ok(42);
+            let value = ffi_try!(result, error_out);
+            assert_eq!(value, 42);
+            0
+        }
+
+        let mut error_out: *mut std::os::raw::c_char = std::ptr::null_mut();
+        let result = test_function(&mut error_out);
+        assert_eq!(result, 0);
+        assert!(error_out.is_null());
+    }
+
+    #[test]
+    fn test_ffi_try_macro_error() {
+        unsafe {
+            let mut error_out: *mut std::os::raw::c_char = std::ptr::null_mut();
+
+            fn test_function(error_out: *mut *mut std::os::raw::c_char) -> i32 {
+                let result: Result<i32, WraithError> =
+                    Err(WraithError::invalid_argument("test error"));
+                ffi_try!(result, error_out);
+                #[allow(unreachable_code)]
+                0 // This should not be reached
+            }
+
+            let result = test_function(&mut error_out);
+            assert_eq!(result, WraithErrorCode::InvalidArgument as i32);
+            assert!(!error_out.is_null());
+
+            let error_msg = std::ffi::CStr::from_ptr(error_out).to_str().unwrap();
+            assert_eq!(error_msg, "test error");
+            crate::wraith_free_string(error_out);
+        }
+    }
+
+    #[test]
+    fn test_ffi_try_ptr_macro_success() {
+        unsafe {
+            let mut error_out: *mut std::os::raw::c_char = std::ptr::null_mut();
+
+            fn test_function(error_out: *mut *mut std::os::raw::c_char) -> *mut i32 {
+                let result: Result<i32, WraithError> = Ok(42);
+                let value = ffi_try_ptr!(result, error_out);
+                assert_eq!(value, 42);
+                Box::into_raw(Box::new(value))
+            }
+
+            let result = test_function(&mut error_out);
+            assert!(!result.is_null());
+            assert!(error_out.is_null());
+            assert_eq!(*result, 42);
+
+            // Clean up
+            drop(Box::from_raw(result));
+        }
+    }
+
+    #[test]
+    fn test_ffi_try_ptr_macro_error() {
+        unsafe {
+            let mut error_out: *mut std::os::raw::c_char = std::ptr::null_mut();
+
+            fn test_function(error_out: *mut *mut std::os::raw::c_char) -> *mut i32 {
+                let result: Result<i32, WraithError> =
+                    Err(WraithError::internal_error("test error"));
+                ffi_try_ptr!(result, error_out);
+                #[allow(unreachable_code)]
+                std::ptr::null_mut()
+            }
+
+            let result = test_function(&mut error_out);
+            assert!(result.is_null());
+            assert!(!error_out.is_null());
+
+            let error_msg = std::ffi::CStr::from_ptr(error_out).to_str().unwrap();
+            assert_eq!(error_msg, "test error");
+            crate::wraith_free_string(error_out);
         }
     }
 }

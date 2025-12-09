@@ -535,4 +535,120 @@ mod tests {
             assert!(dist1 <= dist2);
         }
     }
+
+    #[tokio::test]
+    async fn test_iterative_find_node_empty_routing_table() {
+        let mut node = DhtNode::new(NodeId::random(), "127.0.0.1:8000".parse().unwrap());
+
+        let target = NodeId::random();
+        let closest = node.iterative_find_node(&target).await;
+
+        // Should return empty vec when routing table is empty
+        assert!(closest.is_empty());
+    }
+
+    #[test]
+    fn test_handle_store_multiple_values() {
+        let mut node = DhtNode::new(NodeId::random(), "127.0.0.1:8000".parse().unwrap());
+
+        // Store multiple values
+        for i in 0..10 {
+            let mut key = [0u8; 32];
+            key[0] = i;
+            let value = vec![i, i + 1, i + 2];
+
+            let request = StoreRequest {
+                sender_id: NodeId::random(),
+                sender_addr: "127.0.0.1:9000".parse().unwrap(),
+                key,
+                value: value.clone(),
+                ttl: 3600,
+            };
+
+            let response = node.handle_store(request);
+            assert!(response.stored);
+
+            // Verify value was stored
+            assert_eq!(node.get(&key), Some(value));
+        }
+    }
+
+    #[test]
+    fn test_handle_find_node_empty_routing_table() {
+        let node = DhtNode::new(NodeId::random(), "127.0.0.1:8000".parse().unwrap());
+
+        let target = NodeId::random();
+        let request = FindNodeRequest {
+            sender_id: NodeId::random(),
+            sender_addr: "127.0.0.1:9000".parse().unwrap(),
+            target_id: target,
+        };
+
+        let response = node.handle_find_node(request);
+        assert!(response.peers.is_empty());
+    }
+
+    #[test]
+    fn test_operation_error_display() {
+        let err = OperationError::StoreFailed;
+        assert!(err.to_string().contains("no nodes stored"));
+
+        let err = OperationError::ValueNotFound;
+        assert!(err.to_string().contains("not found"));
+
+        let err = OperationError::Timeout;
+        assert_eq!(err.to_string(), "Network timeout");
+    }
+
+    #[test]
+    fn test_handle_message_all_types() {
+        let mut node = DhtNode::new(NodeId::random(), "127.0.0.1:8000".parse().unwrap());
+        let sender_addr = "127.0.0.1:9000".parse().unwrap();
+
+        // Test FindNode
+        let msg = DhtMessage::FindNode(FindNodeRequest {
+            sender_id: NodeId::random(),
+            sender_addr,
+            target_id: NodeId::random(),
+        });
+        let response = node.handle_message(msg, sender_addr);
+        assert!(response.is_some());
+        assert!(matches!(response.unwrap(), DhtMessage::FoundNodes(_)));
+
+        // Test Store
+        let msg = DhtMessage::Store(StoreRequest {
+            sender_id: NodeId::random(),
+            sender_addr,
+            key: [1u8; 32],
+            value: vec![1, 2, 3],
+            ttl: 3600,
+        });
+        let response = node.handle_message(msg, sender_addr);
+        assert!(response.is_some());
+        assert!(matches!(response.unwrap(), DhtMessage::StoreAck(_)));
+
+        // Test FindValue
+        let msg = DhtMessage::FindValue(FindValueRequest {
+            sender_id: NodeId::random(),
+            sender_addr,
+            key: [99u8; 32], // Non-existent key
+        });
+        let response = node.handle_message(msg, sender_addr);
+        assert!(response.is_some());
+        assert!(matches!(response.unwrap(), DhtMessage::FoundValue(_)));
+    }
+
+    #[test]
+    fn test_alpha_constant() {
+        // Verify alpha parallelism constant is reasonable
+        assert_eq!(ALPHA, 3);
+        assert!(ALPHA > 0 && ALPHA <= K);
+    }
+
+    #[test]
+    fn test_max_iterations_constant() {
+        // Verify max iterations prevents infinite loops
+        assert_eq!(MAX_ITERATIONS, 20);
+        assert!(MAX_ITERATIONS > 0);
+    }
 }

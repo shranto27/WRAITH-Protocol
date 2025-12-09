@@ -997,3 +997,363 @@ async fn generate_keypair(output: Option<String>, _config: &Config) -> anyhow::R
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_sanitize_path_no_traversal() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        fs::write(&file_path, "test").unwrap();
+
+        let sanitized = sanitize_path(&file_path).unwrap();
+        assert!(sanitized.exists());
+        assert!(sanitized.is_absolute());
+    }
+
+    #[test]
+    fn test_sanitize_path_rejects_dot_dot() {
+        let path = PathBuf::from("../etc/passwd");
+        let result = sanitize_path(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("traversal"));
+    }
+
+    #[test]
+    fn test_sanitize_path_rejects_embedded_dot_dot() {
+        let path = PathBuf::from("/home/user/../root/file.txt");
+        let result = sanitize_path(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sanitize_path_nonexistent_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("nonexistent.txt");
+
+        // Should succeed for nonexistent files in existing parent
+        let sanitized = sanitize_path(&file_path).unwrap();
+        assert_eq!(sanitized.file_name(), file_path.file_name());
+    }
+
+    #[test]
+    fn test_sanitize_path_nonexistent_parent() {
+        let path = PathBuf::from("/nonexistent/directory/file.txt");
+        let sanitized = sanitize_path(&path).unwrap();
+
+        // Should return original path when parent doesn't exist
+        assert_eq!(sanitized, path);
+    }
+
+    #[test]
+    fn test_sanitize_path_symlink_resolution() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let temp_dir = TempDir::new().unwrap();
+            let real_file = temp_dir.path().join("real.txt");
+            let symlink_file = temp_dir.path().join("link.txt");
+
+            fs::write(&real_file, "test").unwrap();
+            symlink(&real_file, &symlink_file).unwrap();
+
+            let sanitized = sanitize_path(&symlink_file).unwrap();
+
+            // Should resolve to the real file
+            assert!(sanitized.is_absolute());
+            assert!(sanitized.exists());
+        }
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_private_key_roundtrip() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+        let passphrase = "test_passphrase_12345";
+
+        // Encrypt
+        let encrypted = encrypt_private_key(&private_bytes, passphrase).unwrap();
+
+        // Verify format
+        assert!(encrypted.len() > ENCRYPTED_KEY_MAGIC.len() + ARGON2_SALT_SIZE + ARGON2_NONCE_SIZE);
+        assert_eq!(&encrypted[..8], ENCRYPTED_KEY_MAGIC);
+
+        // Decrypt
+        let decrypted = decrypt_private_key(&encrypted, passphrase).unwrap();
+
+        // Verify roundtrip
+        assert_eq!(private_bytes, decrypted);
+    }
+
+    #[test]
+    fn test_decrypt_private_key_wrong_passphrase() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+
+        let encrypted = encrypt_private_key(&private_bytes, "correct_password").unwrap();
+
+        // Should fail with wrong passphrase
+        let result = decrypt_private_key(&encrypted, "wrong_password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Decryption failed"));
+    }
+
+    #[test]
+    fn test_decrypt_private_key_invalid_magic() {
+        let mut invalid_data = vec![0u8; 100];
+        invalid_data[..8].copy_from_slice(b"INVALID!");
+
+        let result = decrypt_private_key(&invalid_data, "password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("wrong format"));
+    }
+
+    #[test]
+    fn test_decrypt_private_key_too_short() {
+        let short_data = vec![0u8; 10];
+        let result = decrypt_private_key(&short_data, "password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too short"));
+    }
+
+    #[test]
+    fn test_decrypt_private_key_corrupted_data() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+
+        let mut encrypted = encrypt_private_key(&private_bytes, "password").unwrap();
+
+        // Corrupt the ciphertext
+        let len = encrypted.len();
+        encrypted[len - 10] ^= 0xFF;
+
+        let result = decrypt_private_key(&encrypted, "password");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_encrypted_key_format() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+
+        let encrypted = encrypt_private_key(&private_bytes, "test_password").unwrap();
+
+        // Verify structure
+        assert_eq!(&encrypted[..8], ENCRYPTED_KEY_MAGIC);
+
+        let salt_start = 8;
+        let salt_end = salt_start + ARGON2_SALT_SIZE;
+        let nonce_end = salt_end + ARGON2_NONCE_SIZE;
+        let ciphertext_start = nonce_end;
+
+        // Verify lengths
+        assert!(encrypted.len() >= ciphertext_start + 32 + ARGON2_TAG_SIZE);
+
+        // Verify salt and nonce are not all zeros (should be random)
+        let salt = &encrypted[salt_start..salt_end];
+        let nonce = &encrypted[salt_end..nonce_end];
+
+        assert!(!salt.iter().all(|&b| b == 0));
+        assert!(!nonce.iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn test_encrypted_key_uniqueness() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+        let passphrase = "same_passphrase";
+
+        // Encrypt same key twice
+        let encrypted1 = encrypt_private_key(&private_bytes, passphrase).unwrap();
+        let encrypted2 = encrypt_private_key(&private_bytes, passphrase).unwrap();
+
+        // Should be different due to random salt/nonce
+        assert_ne!(encrypted1, encrypted2);
+
+        // But both should decrypt to same value
+        let decrypted1 = decrypt_private_key(&encrypted1, passphrase).unwrap();
+        let decrypted2 = decrypt_private_key(&encrypted2, passphrase).unwrap();
+        assert_eq!(decrypted1, decrypted2);
+        assert_eq!(decrypted1, private_bytes);
+    }
+
+    #[test]
+    fn test_display_metrics_does_not_panic() {
+        let config = Config::default();
+        display_metrics(&config);
+        // If we get here without panicking, test passes
+    }
+
+    #[test]
+    fn test_display_metrics_with_custom_config() {
+        let config = Config {
+            network: config::NetworkConfig {
+                listen_addr: "127.0.0.1:8080".to_string(),
+                enable_xdp: true,
+                xdp_interface: Some("eth0".to_string()),
+                udp_fallback: false,
+            },
+            discovery: config::DiscoveryConfig {
+                bootstrap_nodes: vec![
+                    "node1.example.com:8080".to_string(),
+                    "node2.example.com:8080".to_string(),
+                ],
+                relay_servers: vec![
+                    "relay1.example.com:8080".to_string(),
+                ],
+            },
+            ..Default::default()
+        };
+
+        display_metrics(&config);
+        // Should not panic with custom config
+    }
+
+    #[test]
+    fn test_constants() {
+        // Verify crypto constants are reasonable
+        assert_eq!(ENCRYPTED_KEY_MAGIC, b"WRAITH01");
+        assert_eq!(ARGON2_MEMORY_COST, 65536); // 64 MiB
+        assert_eq!(ARGON2_TIME_COST, 3);
+        assert_eq!(ARGON2_PARALLELISM, 4);
+        assert_eq!(ARGON2_SALT_SIZE, 16);
+        assert_eq!(ARGON2_NONCE_SIZE, 24); // XChaCha20
+        assert_eq!(ARGON2_TAG_SIZE, 16);
+    }
+
+    #[test]
+    fn test_sanitize_path_absolute_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        fs::write(&file_path, "test").unwrap();
+
+        let sanitized = sanitize_path(&file_path).unwrap();
+        assert!(sanitized.is_absolute());
+    }
+
+    #[test]
+    fn test_sanitize_path_relative_to_absolute() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        fs::write(&file_path, "test").unwrap();
+
+        // Create a relative path by stripping the prefix
+        let current_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&temp_dir).unwrap();
+
+        let relative_path = PathBuf::from("test.txt");
+        let sanitized = sanitize_path(&relative_path).unwrap();
+
+        // Should be absolute
+        assert!(sanitized.is_absolute());
+
+        // Restore original directory
+        std::env::set_current_dir(current_dir).unwrap();
+    }
+
+    #[test]
+    fn test_sanitize_path_preserves_filename() {
+        let temp_dir = TempDir::new().unwrap();
+        let filename = "myfile.txt";
+        let file_path = temp_dir.path().join(filename);
+        fs::write(&file_path, "test").unwrap();
+
+        let sanitized = sanitize_path(&file_path).unwrap();
+        assert_eq!(sanitized.file_name().unwrap(), filename);
+    }
+
+    #[test]
+    fn test_encrypt_private_key_different_passphrases() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+
+        let encrypted1 = encrypt_private_key(&private_bytes, "password1").unwrap();
+        let encrypted2 = encrypt_private_key(&private_bytes, "password2").unwrap();
+
+        // Different passphrases should produce different ciphertexts
+        assert_ne!(encrypted1, encrypted2);
+
+        // Each should only decrypt with its own passphrase
+        assert!(decrypt_private_key(&encrypted1, "password1").is_ok());
+        assert!(decrypt_private_key(&encrypted1, "password2").is_err());
+        assert!(decrypt_private_key(&encrypted2, "password2").is_ok());
+        assert!(decrypt_private_key(&encrypted2, "password1").is_err());
+    }
+
+    #[test]
+    fn test_encrypt_private_key_long_passphrase() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+
+        // Very long passphrase
+        let long_passphrase = "a".repeat(1000);
+        let encrypted = encrypt_private_key(&private_bytes, &long_passphrase).unwrap();
+        let decrypted = decrypt_private_key(&encrypted, &long_passphrase).unwrap();
+
+        assert_eq!(private_bytes, decrypted);
+    }
+
+    #[test]
+    fn test_encrypt_private_key_unicode_passphrase() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+
+        let unicode_passphrase = "パスワード🔐密码";
+        let encrypted = encrypt_private_key(&private_bytes, unicode_passphrase).unwrap();
+        let decrypted = decrypt_private_key(&encrypted, unicode_passphrase).unwrap();
+
+        assert_eq!(private_bytes, decrypted);
+    }
+
+    #[test]
+    fn test_decrypt_private_key_invalid_length() {
+        let mut rng = rand_core::OsRng;
+        let signing_key = wraith_crypto::signatures::SigningKey::generate(&mut rng);
+        let private_bytes = signing_key.to_bytes();
+
+        let mut encrypted = encrypt_private_key(&private_bytes, "password").unwrap();
+
+        // Truncate the encrypted data
+        encrypted.truncate(encrypted.len() - 10);
+
+        let result = decrypt_private_key(&encrypted, "password");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sanitize_path_hidden_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let hidden_file = temp_dir.path().join(".hidden");
+        fs::write(&hidden_file, "test").unwrap();
+
+        let sanitized = sanitize_path(&hidden_file).unwrap();
+        assert!(sanitized.exists());
+        assert_eq!(sanitized.file_name().unwrap(), ".hidden");
+    }
+
+    #[test]
+    fn test_sanitize_path_nested_directories() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_path = temp_dir.path().join("a/b/c/file.txt");
+        fs::create_dir_all(nested_path.parent().unwrap()).unwrap();
+        fs::write(&nested_path, "test").unwrap();
+
+        let sanitized = sanitize_path(&nested_path).unwrap();
+        assert!(sanitized.exists());
+        assert!(sanitized.is_absolute());
+    }
+}
+

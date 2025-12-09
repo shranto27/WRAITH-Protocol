@@ -381,4 +381,144 @@ mod tests {
         let gatherer = IceGatherer::with_stun_servers(custom_servers);
         assert_eq!(gatherer.stun_servers.len(), 1);
     }
+
+    #[test]
+    fn test_relay_candidate() {
+        let relay_addr: SocketAddr = "203.0.113.100:443".parse().unwrap();
+        let base_addr: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+
+        let cand = IceCandidate::relay(relay_addr, base_addr);
+
+        assert_eq!(cand.candidate_type, CandidateType::Relay);
+        assert_eq!(cand.address, relay_addr);
+        assert_eq!(cand.related_address, Some(base_addr));
+    }
+
+    #[test]
+    fn test_candidate_foundation_uniqueness() {
+        let addr1: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+        let addr2: SocketAddr = "192.168.1.100:5001".parse().unwrap();
+
+        let cand1 = IceCandidate::host(addr1);
+        let cand2 = IceCandidate::host(addr2);
+
+        // Different addresses should produce different foundations
+        assert_ne!(cand1.foundation, cand2.foundation);
+    }
+
+    #[test]
+    fn test_candidate_foundation_consistency() {
+        let addr: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+
+        let cand1 = IceCandidate::host(addr);
+        let cand2 = IceCandidate::host(addr);
+
+        // Same address should produce same foundation
+        assert_eq!(cand1.foundation, cand2.foundation);
+    }
+
+    #[test]
+    fn test_priority_component_id() {
+        // Component ID should affect priority (256 - component_id)
+        let prio1 = IceCandidate::compute_priority(CandidateType::Host, 65535, 1);
+        let prio2 = IceCandidate::compute_priority(CandidateType::Host, 65535, 2);
+
+        assert!(prio1 > prio2);
+    }
+
+    #[test]
+    fn test_priority_local_preference() {
+        let prio1 = IceCandidate::compute_priority(CandidateType::Host, 65535, 1);
+        let prio2 = IceCandidate::compute_priority(CandidateType::Host, 32000, 1);
+
+        assert!(prio1 > prio2);
+    }
+
+    #[test]
+    fn test_peer_reflexive_priority() {
+        let prflx_priority = IceCandidate::compute_priority(CandidateType::PeerReflexive, 65535, 1);
+        let srflx_priority = IceCandidate::compute_priority(CandidateType::ServerReflexive, 65535, 1);
+        let relay_priority = IceCandidate::compute_priority(CandidateType::Relay, 65535, 1);
+
+        // PeerReflexive should have priority between ServerReflexive and Relay
+        assert!(prflx_priority > relay_priority);
+        assert!(prflx_priority > srflx_priority); // prflx has type_pref 110 > srflx 100
+    }
+
+    #[test]
+    fn test_candidate_conversion() {
+        let addr: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+        let ice_cand = IceCandidate::host(addr);
+
+        let cand: Candidate = ice_cand.clone().into();
+
+        assert_eq!(cand.address, ice_cand.address);
+        assert_eq!(cand.candidate_type, ice_cand.candidate_type);
+        assert_eq!(cand.priority, ice_cand.priority);
+    }
+
+    #[test]
+    fn test_ice_gatherer_default() {
+        let gatherer = IceGatherer::default();
+        assert_eq!(gatherer.stun_servers.len(), 2);
+    }
+
+    #[test]
+    fn test_candidate_type_equality() {
+        assert_eq!(CandidateType::Host, CandidateType::Host);
+        assert_ne!(CandidateType::Host, CandidateType::Relay);
+    }
+
+    #[test]
+    fn test_candidate_sorting_empty() {
+        let mut candidates: Vec<Candidate> = vec![];
+        IceGatherer::sort_by_priority(&mut candidates);
+        assert_eq!(candidates.len(), 0);
+    }
+
+    #[test]
+    fn test_candidate_sorting_multiple() {
+        let addr1: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+        let addr2: SocketAddr = "203.0.113.1:12345".parse().unwrap();
+        let addr3: SocketAddr = "203.0.113.2:443".parse().unwrap();
+
+        let host = IceCandidate::host(addr1);
+        let srflx = IceCandidate::server_reflexive(addr2, addr1);
+        let relay = IceCandidate::relay(addr3, addr1);
+
+        let mut candidates = vec![
+            Candidate::from(relay),
+            Candidate::from(host),
+            Candidate::from(srflx),
+        ];
+
+        IceGatherer::sort_by_priority(&mut candidates);
+
+        // Should be sorted: host, srflx, relay
+        assert_eq!(candidates[0].candidate_type, CandidateType::Host);
+        assert_eq!(candidates[1].candidate_type, CandidateType::ServerReflexive);
+        assert_eq!(candidates[2].candidate_type, CandidateType::Relay);
+    }
+
+    #[test]
+    fn test_sdp_string_ipv6() {
+        let addr: SocketAddr = "[2001:db8::1]:5000".parse().unwrap();
+        let cand = IceCandidate::host(addr);
+
+        let sdp = cand.to_sdp_string();
+
+        assert!(sdp.contains("candidate:"));
+        assert!(sdp.contains("2001:db8::1"));
+        assert!(sdp.contains("5000"));
+    }
+
+    #[test]
+    fn test_foundation_length() {
+        let addr: SocketAddr = "192.168.1.100:5000".parse().unwrap();
+        let cand = IceCandidate::host(addr);
+
+        // Foundation should be 8 hex characters
+        assert_eq!(cand.foundation.len(), 8);
+        assert!(cand.foundation.chars().all(|c| c.is_ascii_hexdigit()));
+    }
 }

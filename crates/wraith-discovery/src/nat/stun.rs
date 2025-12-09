@@ -1201,4 +1201,156 @@ mod tests {
         // Should be 24 bytes: 4 byte header + 20 byte HMAC
         assert_eq!(encoded.len(), 24);
     }
+
+    #[test]
+    fn test_stun_message_decode_error_too_short() {
+        let short_msg = [0u8; 10]; // Less than HEADER_SIZE (20 bytes)
+        let result = StunMessage::decode(&short_msg);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), StunError::MessageTooShort));
+    }
+
+    #[test]
+    fn test_stun_message_decode_error_invalid_magic_cookie() {
+        let mut msg = vec![0u8; 20];
+        // Set invalid magic cookie
+        msg[4..8].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF]);
+        let result = StunMessage::decode(&msg);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), StunError::InvalidMagicCookie));
+    }
+
+    #[test]
+    fn test_stun_error_display() {
+        let errors = vec![
+            (StunError::Timeout, "STUN query timeout"),
+            (StunError::MessageTooShort, "STUN message too short"),
+            (StunError::InvalidMagicCookie, "Invalid STUN magic cookie"),
+            (StunError::InvalidMessageType, "Invalid STUN message type"),
+            (StunError::InvalidAttribute, "Invalid STUN attribute"),
+            (StunError::TransactionMismatch, "Transaction ID mismatch"),
+            (StunError::ErrorResponse, "STUN error response"),
+            (StunError::MissingAttribute, "Missing required STUN attribute"),
+            (StunError::AuthenticationFailed, "MESSAGE-INTEGRITY authentication failed"),
+            (StunError::FingerprintMismatch, "FINGERPRINT verification failed"),
+            (StunError::RateLimitExceeded, "Rate limit exceeded"),
+        ];
+
+        for (err, expected_msg) in errors {
+            assert_eq!(err.to_string(), expected_msg);
+        }
+    }
+
+    #[test]
+    fn test_stun_error_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "reset");
+        let stun_err: StunError = io_err.into();
+        assert!(matches!(stun_err, StunError::Io(_)));
+    }
+
+    #[test]
+    fn test_stun_message_class_all_variants() {
+        let classes = vec![
+            StunMessageClass::Request,
+            StunMessageClass::SuccessResponse,
+            StunMessageClass::ErrorResponse,
+            StunMessageClass::Indication,
+        ];
+
+        for class in classes {
+            assert_eq!(class, class);
+        }
+    }
+
+    #[test]
+    fn test_fingerprint_attribute_encoding() {
+        let fingerprint = StunAttribute::Fingerprint(0x12345678);
+        let transaction_id = [0u8; 12];
+        let encoded = fingerprint.encode(&transaction_id);
+
+        // Should be 8 bytes: 4 byte header + 4 byte CRC
+        assert_eq!(encoded.len(), 8);
+    }
+
+    #[test]
+    fn test_software_attribute_encoding() {
+        let software = StunAttribute::Software("WRAITH/1.0".to_string());
+        let transaction_id = [0u8; 12];
+        let encoded = software.encode(&transaction_id);
+
+        // Should include header, value, and padding
+        assert!(encoded.len() >= 4 + 10); // 4 byte header + 10 byte value
+        assert_eq!(encoded.len() % 4, 0); // Should be 4-byte aligned
+    }
+
+    #[test]
+    fn test_mapped_address_attribute() {
+        let addr: SocketAddr = "192.0.2.1:32853".parse().unwrap();
+        let transaction_id = [0u8; 12];
+
+        let attr = StunAttribute::MappedAddress(addr);
+        let encoded = attr.encode(&transaction_id);
+
+        assert!(encoded.len() >= 4); // At least header size
+    }
+
+    #[test]
+    fn test_unknown_attribute() {
+        let unknown = StunAttribute::Unknown(0x9999, vec![1, 2, 3, 4]);
+        assert_eq!(unknown.attr_type(), 0x9999);
+    }
+
+    #[test]
+    fn test_crc32_different_data() {
+        let data1 = b"hello";
+        let data2 = b"world";
+        let crc1 = StunMessage::crc32(data1);
+        let crc2 = StunMessage::crc32(data2);
+
+        // Different data should produce different CRCs
+        assert_ne!(crc1, crc2);
+    }
+
+    #[test]
+    fn test_crc32_empty_data() {
+        let data = b"";
+        let crc = StunMessage::crc32(data);
+        // CRC of empty data should be deterministic
+        assert_eq!(crc, StunMessage::crc32(data));
+    }
+
+    #[test]
+    fn test_rate_limiter_default() {
+        let limiter = StunRateLimiter::default();
+        let ip = "192.168.1.1".parse().unwrap();
+
+        // Default should allow 10 requests per second
+        for _ in 0..10 {
+            assert!(limiter.allow_request(ip));
+        }
+        assert!(!limiter.allow_request(ip));
+    }
+
+    #[test]
+    fn test_authentication_zeroization() {
+        let auth = StunAuthentication::new("user", "password", None);
+        // Password should be zeroized on drop (can't test directly, but ensure no panics)
+        drop(auth);
+    }
+
+    #[test]
+    fn test_authentication_key_derivation_short_term() {
+        let auth = StunAuthentication::new("user", "pass", None);
+        let key = auth.derive_key();
+        // Short-term credentials use password directly
+        assert_eq!(&*key, b"pass");
+    }
+
+    #[test]
+    fn test_authentication_key_derivation_long_term() {
+        let auth = StunAuthentication::new("user", "pass", Some("realm".to_string()));
+        let key = auth.derive_key();
+        // Long-term credentials use MD5(username:realm:password)
+        assert_eq!(key.len(), 16); // MD5 produces 16 bytes
+    }
 }

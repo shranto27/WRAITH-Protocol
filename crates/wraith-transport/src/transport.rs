@@ -194,4 +194,69 @@ mod tests {
         stats.record_recv_error();
         assert_eq!(stats.recv_errors, 1);
     }
+
+    #[test]
+    fn test_transport_stats_multiple_operations() {
+        let mut stats = TransportStats::new();
+
+        // Multiple sends
+        for i in 1..=10 {
+            stats.record_send(100);
+            assert_eq!(stats.packets_sent, i);
+            assert_eq!(stats.bytes_sent, i * 100);
+        }
+
+        // Multiple receives
+        for i in 1..=5 {
+            stats.record_recv(50);
+            assert_eq!(stats.packets_received, i);
+            assert_eq!(stats.bytes_received, i * 50);
+        }
+    }
+
+    #[test]
+    fn test_transport_stats_default() {
+        let stats1 = TransportStats::new();
+        let stats2 = TransportStats::default();
+
+        assert_eq!(stats1.bytes_sent, stats2.bytes_sent);
+        assert_eq!(stats1.packets_sent, stats2.packets_sent);
+    }
+
+    #[test]
+    fn test_transport_error_display() {
+        let err = TransportError::Closed;
+        assert_eq!(err.to_string(), "Transport is closed");
+
+        let err = TransportError::BindFailed("test".to_string());
+        assert!(err.to_string().contains("Failed to bind"));
+
+        let err = TransportError::ConnectionFailed("test".to_string());
+        assert!(err.to_string().contains("Connection failed"));
+
+        let err = TransportError::InvalidConfig("test".to_string());
+        assert!(err.to_string().contains("Invalid configuration"));
+
+        let err = TransportError::Other("test error".to_string());
+        assert_eq!(err.to_string(), "Transport error: test error");
+    }
+
+    #[test]
+    fn test_transport_error_from_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
+        let transport_err = TransportError::from(io_err);
+
+        assert!(matches!(transport_err, TransportError::Io(_)));
+    }
+
+    #[test]
+    fn test_transport_stats_clone() {
+        let mut stats1 = TransportStats::new();
+        stats1.record_send(100);
+        stats1.record_recv(200);
+
+        let stats2 = stats1.clone();
+        assert_eq!(stats1.bytes_sent, stats2.bytes_sent);
+        assert_eq!(stats1.bytes_received, stats2.bytes_received);
+    }
 }

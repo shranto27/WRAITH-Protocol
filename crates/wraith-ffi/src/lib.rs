@@ -155,6 +155,13 @@ mod tests {
     }
 
     #[test]
+    fn test_init_idempotent() {
+        // Should be safe to call multiple times
+        assert_eq!(wraith_init(), 0);
+        assert_eq!(wraith_init(), 0);
+    }
+
+    #[test]
     fn test_version() {
         let version_ptr = wraith_version();
         assert!(!version_ptr.is_null());
@@ -167,6 +174,14 @@ mod tests {
     }
 
     #[test]
+    fn test_version_static_lifetime() {
+        // Version string should remain valid across calls
+        let v1 = wraith_version();
+        let v2 = wraith_version();
+        assert_eq!(v1, v2);
+    }
+
+    #[test]
     fn test_string_conversion() {
         let rust_str = "test string".to_string();
         let c_str = to_c_string(rust_str.clone());
@@ -174,6 +189,60 @@ mod tests {
         unsafe {
             let converted = from_c_string(c_str);
             assert_eq!(converted, Some(rust_str));
+            wraith_free_string(c_str);
+        }
+    }
+
+    #[test]
+    fn test_string_conversion_empty() {
+        let rust_str = String::new();
+        let c_str = to_c_string(rust_str.clone());
+
+        unsafe {
+            let converted = from_c_string(c_str);
+            assert_eq!(converted, Some(rust_str));
+            wraith_free_string(c_str);
+        }
+    }
+
+    #[test]
+    fn test_string_conversion_unicode() {
+        let rust_str = "Hello 世界 🌍".to_string();
+        let c_str = to_c_string(rust_str.clone());
+
+        unsafe {
+            let converted = from_c_string(c_str);
+            assert_eq!(converted, Some(rust_str));
+            wraith_free_string(c_str);
+        }
+    }
+
+    #[test]
+    fn test_from_c_string_null() {
+        unsafe {
+            let result = from_c_string(std::ptr::null());
+            assert_eq!(result, None);
+        }
+    }
+
+    #[test]
+    fn test_wraith_free_string_null() {
+        unsafe {
+            // Should not panic with null pointer
+            wraith_free_string(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn test_to_c_string_with_embedded_null() {
+        // String with embedded null bytes should be handled gracefully
+        let s = String::from("test\0string");
+        let c_str = to_c_string(s);
+
+        unsafe {
+            // Should get fallback error message
+            let converted = from_c_string(c_str);
+            assert_eq!(converted, Some("Invalid UTF-8".to_string()));
             wraith_free_string(c_str);
         }
     }

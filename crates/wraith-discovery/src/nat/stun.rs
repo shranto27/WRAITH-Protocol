@@ -25,7 +25,7 @@
 //!
 //! **DO NOT** use MD5 or SHA1 from this module for any other cryptographic
 //! operations. For general cryptography in WRAITH, use the strong algorithms
-//! provided in the `wraith-crypto` crate (e.g., BLAKE3, SHA-256, ChaCha20-Poly1305).
+//! provided in the `wraith-crypto` crate (e.g., BLAKE3, ChaCha20-Poly1305, X25519, Ed25519).
 
 use hmac::{Hmac, Mac};
 // These imports are required by RFC 5389 for STUN protocol compliance.

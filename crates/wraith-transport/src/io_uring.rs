@@ -730,9 +730,10 @@ mod tests {
         let mut ctx = IoUringContext::new(64).unwrap();
 
         // All operations should succeed but do nothing
-        let _id1 = ctx.submit_read(1, 0, 1024).unwrap();
-        let _id2 = ctx.submit_write(2, 0, &[0u8; 1024]).unwrap();
-        let _id3 = ctx.submit_fsync(3).unwrap();
+        // On Windows, RawFd is a pointer type, so we cast integers to it
+        let _id1 = ctx.submit_read(1 as RawFd, 0, 1024).unwrap();
+        let _id2 = ctx.submit_write(2 as RawFd, 0, &[0u8; 1024]).unwrap();
+        let _id3 = ctx.submit_fsync(3 as RawFd).unwrap();
 
         // No pending operations on non-Linux
         assert_eq!(ctx.pending_count(), 0);

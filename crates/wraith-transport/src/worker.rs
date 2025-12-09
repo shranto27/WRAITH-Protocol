@@ -907,10 +907,7 @@ mod tests {
         }
 
         match task2 {
-            Task::SendPacket {
-                data,
-                destination,
-            } => {
+            Task::SendPacket { data, destination } => {
                 assert_eq!(data, vec![4, 5, 6]);
                 assert_eq!(destination, 1);
             }

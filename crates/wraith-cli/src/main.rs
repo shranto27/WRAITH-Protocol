@@ -1102,7 +1102,12 @@ mod tests {
         // Should fail with wrong passphrase
         let result = decrypt_private_key(&encrypted, "wrong_password");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Decryption failed"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Decryption failed")
+        );
     }
 
     #[test]
@@ -1208,9 +1213,7 @@ mod tests {
                     "node1.example.com:8080".to_string(),
                     "node2.example.com:8080".to_string(),
                 ],
-                relay_servers: vec![
-                    "relay1.example.com:8080".to_string(),
-                ],
+                relay_servers: vec!["relay1.example.com:8080".to_string()],
             },
             ..Default::default()
         };
@@ -1356,4 +1359,3 @@ mod tests {
         assert!(sanitized.is_absolute());
     }
 }
-

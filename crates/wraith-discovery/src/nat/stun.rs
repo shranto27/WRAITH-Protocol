@@ -1230,9 +1230,18 @@ mod tests {
             (StunError::InvalidAttribute, "Invalid STUN attribute"),
             (StunError::TransactionMismatch, "Transaction ID mismatch"),
             (StunError::ErrorResponse, "STUN error response"),
-            (StunError::MissingAttribute, "Missing required STUN attribute"),
-            (StunError::AuthenticationFailed, "MESSAGE-INTEGRITY authentication failed"),
-            (StunError::FingerprintMismatch, "FINGERPRINT verification failed"),
+            (
+                StunError::MissingAttribute,
+                "Missing required STUN attribute",
+            ),
+            (
+                StunError::AuthenticationFailed,
+                "MESSAGE-INTEGRITY authentication failed",
+            ),
+            (
+                StunError::FingerprintMismatch,
+                "FINGERPRINT verification failed",
+            ),
             (StunError::RateLimitExceeded, "Rate limit exceeded"),
         ];
 

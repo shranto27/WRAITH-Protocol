@@ -296,9 +296,9 @@ mod tests {
         let progress = TransferProgress::new(1024 * 1024, "test.txt");
 
         // Simulate a complete transfer workflow
-        progress.update(256 * 1024);  // 25%
-        progress.update(512 * 1024);  // 50%
-        progress.update(768 * 1024);  // 75%
+        progress.update(256 * 1024); // 25%
+        progress.update(512 * 1024); // 50%
+        progress.update(768 * 1024); // 75%
         progress.update(1024 * 1024); // 100%
         progress.finish();
     }

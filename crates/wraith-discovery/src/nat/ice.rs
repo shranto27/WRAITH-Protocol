@@ -437,7 +437,8 @@ mod tests {
     #[test]
     fn test_peer_reflexive_priority() {
         let prflx_priority = IceCandidate::compute_priority(CandidateType::PeerReflexive, 65535, 1);
-        let srflx_priority = IceCandidate::compute_priority(CandidateType::ServerReflexive, 65535, 1);
+        let srflx_priority =
+            IceCandidate::compute_priority(CandidateType::ServerReflexive, 65535, 1);
         let relay_priority = IceCandidate::compute_priority(CandidateType::Relay, 65535, 1);
 
         // PeerReflexive should have priority between ServerReflexive and Relay

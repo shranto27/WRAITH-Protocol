@@ -381,7 +381,7 @@ mod tests {
             if result == WraithErrorCode::Success as c_int {
                 // Start again - may succeed (idempotent) or return error
                 let mut error_ptr2: *mut c_char = ptr::null_mut();
-                let result2 = wraith_node_start(node, &mut error_ptr2);
+                let _result2 = wraith_node_start(node, &mut error_ptr2);
 
                 // Should not crash - either succeeds or returns an error code
                 // Don't assert specific error codes as they may vary by environment

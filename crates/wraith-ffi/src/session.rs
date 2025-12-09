@@ -284,8 +284,7 @@ mod tests {
             let peer_id = WraithNodeId { bytes: [1u8; 32] };
             let mut error_ptr: *mut c_char = ptr::null_mut();
 
-            let result =
-                wraith_session_establish(node, &peer_id, ptr::null_mut(), &mut error_ptr);
+            let result = wraith_session_establish(node, &peer_id, ptr::null_mut(), &mut error_ptr);
 
             assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
             assert!(!error_ptr.is_null());
@@ -353,8 +352,7 @@ mod tests {
             };
             let mut error_ptr: *mut c_char = ptr::null_mut();
 
-            let result =
-                wraith_session_get_stats(ptr::null(), session, &mut stats, &mut error_ptr);
+            let result = wraith_session_get_stats(ptr::null(), session, &mut stats, &mut error_ptr);
 
             assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
             assert!(!error_ptr.is_null());
@@ -382,8 +380,7 @@ mod tests {
             };
             let mut error_ptr: *mut c_char = ptr::null_mut();
 
-            let result =
-                wraith_session_get_stats(node, ptr::null(), &mut stats, &mut error_ptr);
+            let result = wraith_session_get_stats(node, ptr::null(), &mut stats, &mut error_ptr);
 
             assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
             assert!(!error_ptr.is_null());
@@ -404,8 +401,7 @@ mod tests {
             let session = Box::into_raw(Box::new(peer_id)) as *mut WraithSession;
             let mut error_ptr: *mut c_char = ptr::null_mut();
 
-            let result =
-                wraith_session_get_stats(node, session, ptr::null_mut(), &mut error_ptr);
+            let result = wraith_session_get_stats(node, session, ptr::null_mut(), &mut error_ptr);
 
             assert_eq!(result, WraithErrorCode::InvalidArgument as c_int);
             assert!(!error_ptr.is_null());

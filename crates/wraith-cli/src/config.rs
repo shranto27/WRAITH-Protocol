@@ -362,7 +362,12 @@ mod tests {
     fn test_node_config_default() {
         let node_config = NodeConfig::default();
         assert!(node_config.public_key.is_none());
-        assert!(node_config.private_key_file.to_string_lossy().contains(".wraith/private_key"));
+        assert!(
+            node_config
+                .private_key_file
+                .to_string_lossy()
+                .contains(".wraith/private_key")
+        );
     }
 
     #[test]
@@ -432,7 +437,10 @@ mod tests {
         // Invalid levels
         for level in ["invalid", "extreme", "MEDIUM", ""] {
             config.obfuscation.default_level = level.to_string();
-            assert!(config.validate().is_err(), "Level {level} should be invalid");
+            assert!(
+                config.validate().is_err(),
+                "Level {level} should be invalid"
+            );
         }
     }
 
@@ -441,15 +449,23 @@ mod tests {
         let mut config = Config::default();
 
         // Valid log levels
-        for level in ["trace", "debug", "info", "warn", "error", "TRACE", "DEBUG", "INFO"] {
+        for level in [
+            "trace", "debug", "info", "warn", "error", "TRACE", "DEBUG", "INFO",
+        ] {
             config.logging.level = level.to_string();
-            assert!(config.validate().is_ok(), "Log level {level} should be valid");
+            assert!(
+                config.validate().is_ok(),
+                "Log level {level} should be valid"
+            );
         }
 
         // Invalid log levels
         for level in ["invalid", "fatal", "critical", ""] {
             config.logging.level = level.to_string();
-            assert!(config.validate().is_err(), "Log level {level} should be invalid");
+            assert!(
+                config.validate().is_err(),
+                "Log level {level} should be invalid"
+            );
         }
     }
 
@@ -546,27 +562,55 @@ mod tests {
         let config = Config::default();
 
         // Valid host:port combinations
-        assert!(config.validate_host_port("example.com:8080", "Test").is_ok());
-        assert!(config.validate_host_port("192.168.1.1:40000", "Test").is_ok());
+        assert!(
+            config
+                .validate_host_port("example.com:8080", "Test")
+                .is_ok()
+        );
+        assert!(
+            config
+                .validate_host_port("192.168.1.1:40000", "Test")
+                .is_ok()
+        );
         assert!(config.validate_host_port("localhost:3000", "Test").is_ok());
-        assert!(config.validate_host_port("host.example.com:65535", "Test").is_ok());
+        assert!(
+            config
+                .validate_host_port("host.example.com:65535", "Test")
+                .is_ok()
+        );
 
         // Invalid - missing port
         assert!(config.validate_host_port("example.com", "Test").is_err());
 
         // Invalid - invalid port
         assert!(config.validate_host_port("example.com:0", "Test").is_err());
-        assert!(config.validate_host_port("example.com:99999", "Test").is_err());
-        assert!(config.validate_host_port("example.com:abc", "Test").is_err());
+        assert!(
+            config
+                .validate_host_port("example.com:99999", "Test")
+                .is_err()
+        );
+        assert!(
+            config
+                .validate_host_port("example.com:abc", "Test")
+                .is_err()
+        );
 
         // Invalid - empty hostname
         assert!(config.validate_host_port(":8080", "Test").is_err());
 
         // Invalid - path traversal attempts
-        assert!(config.validate_host_port("../etc/passwd:8080", "Test").is_err());
+        assert!(
+            config
+                .validate_host_port("../etc/passwd:8080", "Test")
+                .is_err()
+        );
         assert!(config.validate_host_port("host..com:8080", "Test").is_err());
         assert!(config.validate_host_port("host/path:8080", "Test").is_err());
-        assert!(config.validate_host_port("host\\path:8080", "Test").is_err());
+        assert!(
+            config
+                .validate_host_port("host\\path:8080", "Test")
+                .is_err()
+        );
     }
 
     #[test]
@@ -581,16 +625,12 @@ mod tests {
         assert!(config.validate().is_ok());
 
         // Invalid bootstrap node
-        config.discovery.bootstrap_nodes = vec![
-            "invalid_node".to_string(),
-        ];
+        config.discovery.bootstrap_nodes = vec!["invalid_node".to_string()];
         assert!(config.validate().is_err());
 
         // Mixed valid and invalid
-        config.discovery.bootstrap_nodes = vec![
-            "valid.example.com:8080".to_string(),
-            "invalid".to_string(),
-        ];
+        config.discovery.bootstrap_nodes =
+            vec!["valid.example.com:8080".to_string(), "invalid".to_string()];
         assert!(config.validate().is_err());
     }
 
@@ -606,9 +646,7 @@ mod tests {
         assert!(config.validate().is_ok());
 
         // Invalid relay server
-        config.discovery.relay_servers = vec![
-            "invalid:0".to_string(),
-        ];
+        config.discovery.relay_servers = vec!["invalid:0".to_string()];
         assert!(config.validate().is_err());
     }
 
@@ -655,9 +693,18 @@ mod tests {
         // Load config
         let loaded_config = Config::load(&temp_path).unwrap();
 
-        assert_eq!(config.network.listen_addr, loaded_config.network.listen_addr);
-        assert_eq!(config.transfer.chunk_size, loaded_config.transfer.chunk_size);
-        assert_eq!(config.obfuscation.default_level, loaded_config.obfuscation.default_level);
+        assert_eq!(
+            config.network.listen_addr,
+            loaded_config.network.listen_addr
+        );
+        assert_eq!(
+            config.transfer.chunk_size,
+            loaded_config.transfer.chunk_size
+        );
+        assert_eq!(
+            config.obfuscation.default_level,
+            loaded_config.obfuscation.default_level
+        );
     }
 
     #[test]
@@ -746,7 +793,11 @@ mod tests {
         assert!(default_relay_servers().is_empty());
 
         let private_key_path = default_private_key_path();
-        assert!(private_key_path.to_string_lossy().contains(".wraith/private_key"));
+        assert!(
+            private_key_path
+                .to_string_lossy()
+                .contains(".wraith/private_key")
+        );
     }
 
     #[test]

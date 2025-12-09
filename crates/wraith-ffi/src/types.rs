@@ -343,10 +343,7 @@ mod tests {
     fn test_timing_mode_conversion_fixed() {
         let mode = WraithTimingMode::Fixed;
         let core_mode: wraith_core::node::TimingMode = mode.into();
-        assert!(matches!(
-            core_mode,
-            wraith_core::node::TimingMode::Fixed(_)
-        ));
+        assert!(matches!(core_mode, wraith_core::node::TimingMode::Fixed(_)));
     }
 
     #[test]

@@ -425,7 +425,9 @@ mod tests {
         transport.close().await.unwrap();
 
         // Attempt send after close - should increment error counter
-        let result = transport.send_to(b"test", "127.0.0.1:1234".parse().unwrap()).await;
+        let result = transport
+            .send_to(b"test", "127.0.0.1:1234".parse().unwrap())
+            .await;
         assert!(matches!(result, Err(TransportError::Closed)));
 
         // Note: We can't easily test recv errors in the same way since close

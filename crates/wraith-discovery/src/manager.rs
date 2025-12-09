@@ -640,7 +640,10 @@ mod tests {
 
         assert_eq!(ConnectionType::Direct, ConnectionType::Direct);
         assert_eq!(ConnectionType::HolePunched, ConnectionType::HolePunched);
-        assert_eq!(ConnectionType::Relayed(relay_id), ConnectionType::Relayed(relay_id));
+        assert_eq!(
+            ConnectionType::Relayed(relay_id),
+            ConnectionType::Relayed(relay_id)
+        );
 
         assert_ne!(ConnectionType::Direct, ConnectionType::HolePunched);
         assert_ne!(ConnectionType::Direct, ConnectionType::Relayed(relay_id));

@@ -280,7 +280,9 @@ mod tests {
         assert!(!NatDetector::is_public_ip(&"ff02::1".parse().unwrap()));
 
         // IPv6 public (Google DNS)
-        assert!(NatDetector::is_public_ip(&"2001:4860:4860::8888".parse().unwrap()));
+        assert!(NatDetector::is_public_ip(
+            &"2001:4860:4860::8888".parse().unwrap()
+        ));
     }
 
     #[test]

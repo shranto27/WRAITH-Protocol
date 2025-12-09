@@ -383,11 +383,8 @@ mod tests {
     fn test_config_set_timing_mode() {
         unsafe {
             let config = wraith_config_new(ptr::null_mut());
-            let result = wraith_config_set_timing_mode(
-                config,
-                WraithTimingMode::Uniform,
-                ptr::null_mut(),
-            );
+            let result =
+                wraith_config_set_timing_mode(config, WraithTimingMode::Uniform, ptr::null_mut());
             assert_eq!(result, WraithErrorCode::Success as c_int);
             wraith_config_free(config);
         }

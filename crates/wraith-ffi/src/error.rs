@@ -207,7 +207,10 @@ mod tests {
         assert_eq!(WraithErrorCode::from(0), WraithErrorCode::Success);
         assert_eq!(WraithErrorCode::from(1), WraithErrorCode::InvalidArgument);
         assert_eq!(WraithErrorCode::from(2), WraithErrorCode::NotInitialized);
-        assert_eq!(WraithErrorCode::from(3), WraithErrorCode::AlreadyInitialized);
+        assert_eq!(
+            WraithErrorCode::from(3),
+            WraithErrorCode::AlreadyInitialized
+        );
         assert_eq!(WraithErrorCode::from(4), WraithErrorCode::SessionNotFound);
         assert_eq!(WraithErrorCode::from(5), WraithErrorCode::TransferNotFound);
         assert_eq!(WraithErrorCode::from(6), WraithErrorCode::IoError);

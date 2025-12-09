@@ -676,11 +676,7 @@ mod tests {
     fn test_buffer_registration_multiple() {
         let mut ctx = IoUringContext::new(64).unwrap();
 
-        let buffers = vec![
-            vec![0u8; 4096],
-            vec![0u8; 8192],
-            vec![0u8; 2048],
-        ];
+        let buffers = vec![vec![0u8; 4096], vec![0u8; 8192], vec![0u8; 2048]];
 
         assert!(ctx.register_buffers(buffers).is_ok());
         assert_eq!(ctx.buffer_count(), 3);

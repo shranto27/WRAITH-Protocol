@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+*No unreleased changes*
+
+---
+
+## [1.6.0] - 2025-12-11 - Mobile Clients & WRAITH-Chat
+
 ### Phase 16 - Mobile Clients Foundation & WRAITH-Chat
 
 **Phase 16 Implementation Complete - Mobile Apps + Secure Messaging (2025-12-11)**

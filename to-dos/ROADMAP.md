@@ -1,8 +1,8 @@
 # WRAITH Protocol Development Roadmap
 
-**Version:** 1.5.9
+**Version:** 1.6.0
 **Last Updated:** 2025-12-11
-**Status:** Protocol Complete, Client Development Ongoing
+**Status:** Protocol Complete, Core Clients Complete, Extended Client Development Ongoing
 
 ---
 
@@ -12,7 +12,8 @@ This roadmap documents the development of WRAITH Protocol and its ecosystem. The
 
 1. **Protocol Track:** ✅ COMPLETE - Phases 1-13 (Foundation through Optimization)
 2. **Client Track:** ✅ WRAITH Transfer (Tauri Desktop) - Phase 15 Complete
-3. **Ongoing:** Additional client applications, performance optimization, post-quantum crypto
+3. **Client Track:** ✅ Mobile Clients & WRAITH-Chat - Phase 16 Complete
+4. **Ongoing:** Additional client applications, performance optimization, post-quantum crypto
 
 ---
 
@@ -32,8 +33,9 @@ This roadmap documents the development of WRAITH Protocol and its ecosystem. The
 | **Phase 9** | Node API | 3-4 weeks | 85 | ✅ COMPLETE | 2025-12 |
 | **Phase 10** | Documentation & Integration | 4-5 weeks | 130 | ✅ COMPLETE | 2025-12 |
 | **Phase 13** | Connection Management & Performance | 3-4 weeks | 67 | ✅ COMPLETE | 2025-12-07 |
-| **Phase 15** | Desktop Client (WRAITH Transfer) | 4-5 weeks | TBD | ✅ COMPLETE | 2025-12-07 |
-| **Total** | | **41-52 weeks** | **1,203+ points** | **COMPLETE** | |
+| **Phase 15** | Desktop Client (WRAITH Transfer) | 4-5 weeks | 102 | ✅ COMPLETE | 2025-12-07 |
+| **Phase 16** | Mobile Clients & WRAITH-Chat | 3-4 weeks | 302 | ✅ COMPLETE | 2025-12-11 |
+| **Total** | | **44-56 weeks** | **1,607+ points** | **COMPLETE** | |
 
 ### Dependency Chart
 

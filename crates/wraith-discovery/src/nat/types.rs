@@ -102,18 +102,38 @@ pub struct NatDetector {
 impl NatDetector {
     /// Create a new NAT detector with default STUN servers
     ///
-    /// Uses Google's public STUN servers. Note that these IPs are hardcoded
-    /// and may change. In production, implement DNS resolution for:
-    /// - stun.l.google.com:19302
-    /// - stun1.l.google.com:19302
-    /// - stun2.l.google.com:19302
+    /// Uses multiple public STUN servers from different providers for redundancy.
+    /// IPs are hardcoded for reliability (DNS may be blocked/filtered).
     ///
-    /// TODO: Implement DNS-based STUN server resolution
+    /// Providers included:
+    /// - Cloudflare (stun.cloudflare.com:3478)
+    /// - Twilio (global.stun.twilio.com:3478)
+    /// - Nextcloud (stun.nextcloud.com:443)
+    /// - Google (stun.l.google.com:19302)
+    ///
+    /// Different ports (3478, 443, 19302) increase chance of bypassing firewalls.
+    ///
+    /// TODO: Implement DNS-based STUN server resolution as fallback
     #[must_use]
     pub fn new() -> Self {
         Self {
             stun_servers: vec![
-                // Google Public STUN servers (hardcoded IPs)
+                // Cloudflare STUN (port 3478 - standard STUN port)
+                // stun.cloudflare.com:3478
+                "162.159.207.0:3478"
+                    .parse()
+                    .expect("valid STUN server address"),
+                // Twilio STUN (port 3478)
+                // global.stun.twilio.com:3478
+                "34.203.251.210:3478"
+                    .parse()
+                    .expect("valid STUN server address"),
+                // Nextcloud STUN (port 443 - HTTPS port, often allowed through firewalls)
+                // stun.nextcloud.com:443
+                "159.69.191.124:443"
+                    .parse()
+                    .expect("valid STUN server address"),
+                // Google Public STUN servers (port 19302)
                 // stun.l.google.com:19302
                 "74.125.250.129:19302"
                     .parse()

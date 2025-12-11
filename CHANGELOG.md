@@ -99,8 +99,14 @@ This release delivers significant CLI enhancements including new commands, multi
 
 ### Quality Assurance
 
-- **Tests:** 1,390+ tests passing (100% pass rate)
-- **CLI Tests:** 87 tests in wraith-cli (increased from 70)
+- **Tests:** 1,613 tests passing (100% pass rate)
+- **Test Coverage Expansion:** +217 tests from v1.5.8 (1,396 → 1,613)
+  - wraith-cli: 72 → 87 tests (+15 for new commands)
+  - wraith-core: 406 → 420 tests (+14)
+  - wraith-crypto: 128 → 179 tests (+51)
+  - wraith-transport: 140 → 174 tests (+34)
+  - wraith-obfuscation: 130 → 167 tests (+37)
+  - wraith-discovery: 215 → 292 tests (+77, including NAT detector updates)
 - **Clippy:** Zero warnings with `-D warnings` flag
 - **Security:** Zero vulnerabilities (cargo audit clean)
 - **Build:** Release build verified on all platforms

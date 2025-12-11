@@ -1,11 +1,11 @@
 # WRAITH Protocol - Client Applications Development History
 
-**Development Timeline:** Phase 15 (2025-12-09) - WRAITH Transfer Desktop Application Complete
+**Development Timeline:** Phase 15 (2025-12-11) - WRAITH Transfer Desktop Application Complete
 
-This document tracks the development journey of WRAITH Protocol client applications, from planning through implementation and release. The first client (WRAITH Transfer) was delivered in Phase 15 (v1.5.8).
+This document tracks the development journey of WRAITH Protocol client applications, from planning through implementation and release. The first client (WRAITH Transfer) was delivered in Phase 15 and enhanced in v1.5.9.
 
 [![Version](https://img.shields.io/badge/clients-1%20complete-green.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
-[![Protocol](https://img.shields.io/badge/protocol-v1.5.8-blue.svg)](../../README.md)
+[![Protocol](https://img.shields.io/badge/protocol-v1.5.9-blue.svg)](../../README.md)
 [![Clients](https://img.shields.io/badge/clients-9%20planned-orange.svg)](../../to-dos/ROADMAP-clients.md)
 
 ---
@@ -33,14 +33,15 @@ For protocol development history, see [README_Protocol-DEV.md](README_Protocol-D
 - **Tier 3:** Advanced use cases (Stream, Mesh, Publish, Vault)
 - **Security Testing:** Authorized assessment tools (Recon, RedOps)
 
-**Current Status (2025-12-09):**
-- Protocol v1.5.8 complete (all prerequisites available)
-- **WRAITH Transfer v1.5.8:** ✅ **COMPLETE** (102 SP delivered)
+**Current Status (2025-12-11):**
+- Protocol v1.5.9 complete (all prerequisites available)
+- **WRAITH Transfer v1.5.9:** ✅ **COMPLETE** (102 SP delivered)
   - Cross-platform desktop application (Windows, macOS, Linux with X11/Wayland)
   - Tauri 2.0 backend with full wraith-core integration
   - React 18 + TypeScript frontend with Vite
   - 10 IPC commands, 5 React components, 3 Zustand stores
   - v1.5.8: Wayland compatibility fix (KDE Plasma 6 crash resolved)
+  - v1.5.9: Tauri 2.0 capability-based permissions (plugin initialization fix)
 - **Development Status:** 1 of 10 clients complete (10% delivered, 926 SP remaining)
 
 ---
@@ -54,7 +55,7 @@ For protocol development history, see [README_Protocol-DEV.md](README_Protocol-D
 | 1 | **WRAITH-Transfer** | Direct P2P file transfer with drag-and-drop GUI | Desktop (Linux/macOS/Windows) | 102 | ✅ **Complete (v1.5.8)** |
 | 2 | **WRAITH-Chat** | E2EE messaging with Double Ratchet algorithm | Desktop + Mobile | 162 | Planned |
 
-**WRAITH Transfer Delivered (2025-12-09):**
+**WRAITH Transfer Delivered (2025-12-11):**
 - Tauri 2.0 desktop application with full wraith-core integration
 - React 18 + TypeScript frontend with Vite bundling
 - Tailwind CSS v4 with WRAITH brand colors (#FF5722, #4A148C)
@@ -64,6 +65,7 @@ For protocol development history, see [README_Protocol-DEV.md](README_Protocol-D
 - Cross-platform builds for Windows, macOS, Linux (X11/Wayland)
 - FFI layer (wraith-ffi crate) for C-compatible API
 - v1.5.8: Wayland compatibility fix (resolves KDE Plasma 6 crashes)
+- v1.5.9: Tauri 2.0 capability-based permissions (dialog, fs, shell plugins working)
 
 **WRAITH Chat Timeline:** Planned Q2-Q3 2026 (12 weeks development)
 **Prerequisites:** Protocol Phase 6 (Integration) - ✅ Complete
@@ -179,6 +181,45 @@ For protocol development history, see [README_Protocol-DEV.md](README_Protocol-D
 - ✅ 1,382 total tests passing (1,367 active, 16 ignored)
 - ✅ Zero clippy warnings, zero TypeScript errors
 - ✅ CI/CD pipeline with Tauri system dependencies
+
+---
+
+### v1.5.9: Tauri 2.0 Configuration Fix & Protocol Enhancements (2025-12-11)
+
+**Focus:** Tauri 2.0 capability-based permissions, protocol enhancements for client applications
+
+**Key Accomplishments:**
+
+**WRAITH Transfer Tauri 2.0 Fix:**
+- **Capability-Based Permissions:** Updated to Tauri 2.0 permission model
+  - Migrated plugin permissions from tauri.conf.json to capabilities/default.json
+  - Added dialog:default, dialog:allow-open, dialog:allow-save, dialog:allow-message
+  - Added fs:default, fs:allow-read-dir, fs:allow-read-file, fs:allow-write-file
+  - Added shell:default, shell:allow-open
+- **Plugin Initialization Error Resolved:**
+  - Fixed `PluginInitialization("dialog", "invalid type: map, expected unit")` panic
+  - All Tauri plugins (dialog, fs, shell, log) now functioning correctly
+- **Files Updated:** `clients/wraith-transfer/src-tauri/capabilities/default.json`, `tauri.conf.json`
+
+**Protocol Enhancements for Clients:**
+- **New CLI Commands Available for Integration:**
+  - `wraith ping` - Network connectivity testing (RTT statistics)
+  - `wraith config show/set` - Runtime configuration management
+- **Multi-Peer Transfer Support:**
+  - Protocol now supports parallel transfers to multiple recipients
+  - Enhanced for future multi-user client applications
+- **NAT Detection Reliability:**
+  - 5 STUN servers from 4 providers for improved connectivity
+  - Graceful degradation on individual server failures
+- **Enhanced Node API:**
+  - Improved session management for client applications
+  - Better error handling across FFI boundary
+
+**Quality Assurance:**
+- WRAITH Transfer: Production-ready with fixed Tauri 2.0 integration
+- Protocol: 1,613 total tests (+217 from v1.5.8)
+- Zero clippy warnings, zero TypeScript errors
+- Cross-platform compatibility verified
 
 ---
 
@@ -676,18 +717,19 @@ RedOps                                                          [=============]
 
 ## Current Status & Next Steps
 
-**Protocol Status (2025-12-09):**
+**Protocol Status (2025-12-11):**
 - ✅ All 15 protocol development phases complete (1,635 SP delivered)
-- ✅ 1,396 tests passing (1,380 active, 16 ignored) - 100% pass rate
+- ✅ 1,613 tests passing - 100% pass rate
 - ✅ Zero vulnerabilities, zero clippy warnings
 - ✅ Grade A+ quality (98/100)
-- ✅ Production-ready architecture with v1.5.8 release
+- ✅ Production-ready architecture with v1.5.9 release
 
 **Client Development Status:**
 - ✅ Comprehensive planning complete (roadmap, specifications)
 - ✅ All client specifications documented (10 clients × 3-6 docs each)
-- ✅ **WRAITH Transfer v1.5.8 complete** (102 SP delivered, Phase 15)
+- ✅ **WRAITH Transfer v1.5.9 complete** (102 SP delivered, Phase 15)
 - ✅ Wayland compatibility fix (KDE Plasma 6 crash resolved)
+- ✅ Tauri 2.0 capability-based permissions (plugin initialization fix)
 - ⬜ 9 remaining clients awaiting Phase 16+ development
 
 **Completed Work:**

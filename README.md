@@ -21,10 +21,10 @@ A decentralized secure file transfer protocol optimized for high-throughput, low
 
 WRAITH Protocol is production-ready with a cross-platform desktop application and fully integrated CLI. Phase 15 delivers WRAITH Transfer, a Tauri 2.0-based desktop client with React 18 frontend, providing full wraith-core integration with an intuitive UI for secure file transfers. v1.5.9 adds new CLI commands (`ping`, `config`), multi-peer transfer support, enhanced NAT detection with multiple STUN providers, and comprehensive documentation alignment.
 
-**Project Metrics (2025-12-09):**
-- **Code Volume:** ~53,777 lines of Rust code (~40,226 LOC + 3,764 comments + 9,787 blanks) across 145 source files
-- **Test Coverage:** 1,396 total tests (1,380 passing, 16 ignored) - 100% pass rate on active tests
-- **Documentation:** 100+ markdown files, ~63,000+ lines of comprehensive documentation
+**Project Metrics (2025-12-11):**
+- **Code Volume:** ~54,526 lines of Rust code (~40,844 LOC + 3,800 comments + 9,882 blanks) across 145 source files
+- **Test Coverage:** 1,613 total tests - 100% pass rate on active tests
+- **Documentation:** 111 markdown files, ~63,000+ lines of comprehensive documentation
 - **Dependencies:** 286 audited packages (zero vulnerabilities via cargo-audit)
 - **Security:** Grade A+ (EXCELLENT), zero vulnerabilities, comprehensive DPI evasion validation
 - **Quality:** Code quality 98/100, zero compiler/clippy warnings, 3.8% technical debt ratio, production-ready codebase
@@ -211,18 +211,18 @@ WRAITH-Protocol/
 
 | Crate | Description | LOC | Code | Comments | Tests |
 |-------|-------------|-----|------|----------|-------|
-| **wraith-core** | Frame parsing, sessions, congestion, ring buffers, Node API | ~4,800+ | - | - | 406 |
-| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | ~2,500+ | - | - | 128 (1 ignored) |
-| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | ~3,500+ | - | - | 215 |
-| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | ~2,800+ | - | - | 140 (1 ignored) |
-| **wraith-obfuscation** | Padding, timing, protocol mimicry | ~3,500+ | - | - | 130 |
-| **wraith-files** | File chunking, tree hashing, reassembly | ~1,300 | - | - | 34 |
-| **wraith-cli** | Command-line interface with Node API integration | ~1,100 | - | - | 72 |
+| **wraith-core** | Frame parsing, sessions, congestion, ring buffers, Node API | ~4,800+ | - | - | 420 |
+| **wraith-crypto** | Ed25519, X25519, Elligator2, AEAD, Noise_XX, Double Ratchet | ~2,500+ | - | - | 179 |
+| **wraith-discovery** | Kademlia DHT, STUN, ICE, relay | ~3,500+ | - | - | 292 |
+| **wraith-transport** | AF_XDP, io_uring, UDP, worker pools | ~2,800+ | - | - | 174 |
+| **wraith-obfuscation** | Padding, timing, protocol mimicry | ~3,500+ | - | - | 167 |
+| **wraith-files** | File chunking, tree hashing, reassembly | ~1,300 | - | - | 44 |
+| **wraith-cli** | Command-line interface with Node API integration | ~1,100 | - | - | 87 |
 | **wraith-ffi** | Foreign function interface for C/C++ integration | ~1,200 | - | - | 111 |
 | **wraith-transfer** | Tauri 2.0 desktop application (Rust + React + TypeScript) | ~12,500 | - | - | 6 |
 | **wraith-xdp** | eBPF/XDP programs (excluded from default build) | 0 | 0 | 0 | 0 |
 
-**Total Protocol:** ~53,777 lines (~40,226 LOC + 3,764 comments + 9,787 blanks) across 145 Rust files, 1,396 tests (1,380 passing, 16 ignored)
+**Total Protocol:** ~54,526 lines (~40,844 LOC + 3,800 comments + 9,882 blanks) across 145 Rust files, 1,613 tests
 
 ## Documentation
 
@@ -637,4 +637,4 @@ WRAITH Protocol builds on the work of many excellent projects and technologies:
 
 **WRAITH Protocol** - *Secure. Fast. Invisible.*
 
-**Status:** v1.5.9 CLI Enhancement & Multi-Peer Support (Phase 15 Complete) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,390+ (100% pass rate) | **Quality:** Production-ready, 0 vulnerabilities, zero warnings, 98/100 quality grade
+**Status:** v1.5.9 CLI Enhancement & Multi-Peer Support (Phase 15 Complete) | **License:** MIT | **Language:** Rust 2024 (MSRV 1.85) | **Tests:** 1,613 (100% pass rate) | **Quality:** Production-ready, 0 vulnerabilities, zero warnings, 98/100 quality grade

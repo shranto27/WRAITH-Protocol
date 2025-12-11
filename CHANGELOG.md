@@ -106,16 +106,29 @@ This major release introduces three production-ready client applications impleme
   - Push notifications not implemented
 
 #### Fixed
-- Clippy warnings in `wraith-discovery/src/nat/hole_punch.rs`:
-  - Replaced `len() > 0` with `!is_empty()` for const marker checks
-  - Removed redundant is_empty assertions for const values
-- Removed unused `Database` import in `wraith-chat/src-tauri/src/commands.rs`
-- Prefixed unused `_encrypted` variable in send_message command
-- Fixed serde serialization for `Option<Vec<u8>>` fields in Double Ratchet
-- Removed redundant `use hex;` import in integration tests
-- Fixed needless borrow in crypto.rs ratchet key generation
-- Fixed literal overflow in safety number generation (u16 to u32 cast)
-- Removed incompatible `macos-private-api` Tauri feature
+- **Double Ratchet Cryptography (ef18de7):**
+  - Corrected Double Ratchet initialization for responder role in WRAITH-Chat
+  - Fixed symmetric ratchet state handling to prevent decryption failures
+  - Ensures proper key derivation sequence for both initiator and responder
+- **Rust 1.92+ Compatibility (e02712a):**
+  - Suppressed false positive `clippy::manual_inspect` lint for ZeroizeOnDrop fields
+  - Added `#[allow(clippy::manual_inspect)]` annotations in wraith-crypto
+  - Prevents spurious warnings on legitimate zeroization patterns
+- **CI/CD Infrastructure (a7ee0d8):**
+  - Added SQLCipher system dependency installation for wraith-chat tests
+  - Added icon assets to wraith-chat packaging configuration
+  - Ensures successful CI builds with database encryption support
+- **Code Quality:**
+  - Clippy warnings in `wraith-discovery/src/nat/hole_punch.rs`:
+    - Replaced `len() > 0` with `!is_empty()` for const marker checks
+    - Removed redundant is_empty assertions for const values
+  - Removed unused `Database` import in `wraith-chat/src-tauri/src/commands.rs`
+  - Prefixed unused `_encrypted` variable in send_message command
+  - Fixed serde serialization for `Option<Vec<u8>>` fields in Double Ratchet
+  - Removed redundant `use hex;` import in integration tests
+  - Fixed needless borrow in crypto.rs ratchet key generation
+  - Fixed literal overflow in safety number generation (u16 to u32 cast)
+  - Removed incompatible `macos-private-api` Tauri feature
 
 #### Implementation Statistics
 - **Total Code Volume:** ~7,900 lines

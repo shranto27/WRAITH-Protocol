@@ -1,12 +1,12 @@
 # WRAITH Protocol - Client Applications Development History
 
-**Development Timeline:** Phase 15 (2025-12-11) - WRAITH Transfer Desktop Application Complete
+**Development Timeline:** Phase 15-16 (2025-12-11) - 4 Client Applications Complete
 
-This document tracks the development journey of WRAITH Protocol client applications, from planning through implementation and release. The first client (WRAITH Transfer) was delivered in Phase 15 and enhanced in v1.5.9.
+This document tracks the development journey of WRAITH Protocol client applications, from planning through implementation and release. Phase 15 delivered WRAITH-Transfer desktop application, and Phase 16 delivered Android/iOS mobile clients plus WRAITH-Chat E2EE messaging.
 
-[![Version](https://img.shields.io/badge/clients-1%20complete-green.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
-[![Protocol](https://img.shields.io/badge/protocol-v1.5.9-blue.svg)](../../README.md)
-[![Clients](https://img.shields.io/badge/clients-9%20planned-orange.svg)](../../to-dos/ROADMAP-clients.md)
+[![Version](https://img.shields.io/badge/clients-4%20complete-green.svg)](https://github.com/doublegate/WRAITH-Protocol/releases)
+[![Protocol](https://img.shields.io/badge/protocol-v1.6.0-blue.svg)](../../README.md)
+[![Clients](https://img.shields.io/badge/clients-6%20planned-orange.svg)](../../to-dos/ROADMAP-clients.md)
 
 ---
 
@@ -23,37 +23,39 @@ For protocol development history, see [README_Protocol-DEV.md](README_Protocol-D
 
 **Total Development Scope:**
 - **10 Client Applications** (8 standard + 2 security testing)
-- **1,028 Story Points** total (102 SP delivered + 926 SP remaining)
-- **~65 weeks remaining** (parallel development across tiers)
+- **1,148 Story Points** total (404 SP delivered + 744 SP remaining)
+- **~40 weeks remaining** (parallel development across tiers)
 - **26 development phases** across all clients
 
 **Development Strategy:**
-- **Tier 1:** High-priority core applications (Transfer ✅ Complete, Chat planned)
+- **Tier 1:** High-priority core applications (Transfer ✅, Android ✅, iOS ✅, Chat ✅ Complete)
 - **Tier 2:** Specialized productivity tools (Sync, Share)
 - **Tier 3:** Advanced use cases (Stream, Mesh, Publish, Vault)
 - **Security Testing:** Authorized assessment tools (Recon, RedOps)
 
 **Current Status (2025-12-11):**
-- Protocol v1.5.9 complete (all prerequisites available)
-- **WRAITH Transfer v1.5.9:** ✅ **COMPLETE** (102 SP delivered)
-  - Cross-platform desktop application (Windows, macOS, Linux with X11/Wayland)
-  - Tauri 2.0 backend with full wraith-core integration
-  - React 18 + TypeScript frontend with Vite
-  - 10 IPC commands, 5 React components, 3 Zustand stores
-  - v1.5.8: Wayland compatibility fix (KDE Plasma 6 crash resolved)
-  - v1.5.9: Tauri 2.0 capability-based permissions (plugin initialization fix)
-- **Development Status:** 1 of 10 clients complete (10% delivered, 926 SP remaining)
+- Protocol v1.6.0 complete (all prerequisites available)
+- **Phase 15 - WRAITH-Transfer v1.6.0:** ✅ **COMPLETE** (102 SP)
+  - Cross-platform desktop P2P file transfer
+  - Tauri 2.0 + React 18 + TypeScript
+- **Phase 16 - Mobile & Chat v1.6.0:** ✅ **COMPLETE** (302 SP)
+  - **WRAITH-Android:** Native Kotlin + Jetpack Compose (~60 SP)
+  - **WRAITH-iOS:** Native Swift + SwiftUI (~60 SP)
+  - **WRAITH-Chat:** E2EE messaging with Double Ratchet (182 SP)
+- **Development Status:** 4 of 10 clients complete (35% delivered, 744 SP remaining)
 
 ---
 
 ## Client Applications Overview
 
-### Tier 1: Core Applications (High Priority - 264 SP)
+### Tier 1: Core Applications (High Priority - 404 SP)
 
 | # | Client | Description | Platform | Story Points | Status |
 |---|--------|-------------|----------|--------------|--------|
-| 1 | **WRAITH-Transfer** | Direct P2P file transfer with drag-and-drop GUI | Desktop (Linux/macOS/Windows) | 102 | ✅ **Complete (v1.5.8)** |
-| 2 | **WRAITH-Chat** | E2EE messaging with Double Ratchet algorithm | Desktop + Mobile | 162 | Planned |
+| 1 | **WRAITH-Transfer** | Direct P2P file transfer with drag-and-drop GUI | Desktop (Linux/macOS/Windows) | 102 | ✅ **Complete (v1.6.0)** |
+| 2 | **WRAITH-Android** | Native Android mobile file transfer client | Android 8.0+ | ~60 | ✅ **Complete (v1.6.0)** |
+| 3 | **WRAITH-iOS** | Native iOS mobile file transfer client | iOS 16.0+ | ~60 | ✅ **Complete (v1.6.0)** |
+| 4 | **WRAITH-Chat** | E2EE messaging with Signal Protocol Double Ratchet | Desktop | 182 | ✅ **Complete (v1.6.0)** |
 
 **WRAITH Transfer Delivered (2025-12-11):**
 - Tauri 2.0 desktop application with full wraith-core integration

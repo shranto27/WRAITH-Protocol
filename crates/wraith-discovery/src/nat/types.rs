@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn test_nat_detector_creation() {
         let detector = NatDetector::new();
-        assert_eq!(detector.stun_servers.len(), 2);
+        assert_eq!(detector.stun_servers.len(), 5);
 
         let custom_servers = vec!["1.1.1.1:3478".parse().unwrap()];
         let detector = NatDetector::with_servers(custom_servers);
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn test_nat_detector_default() {
         let detector = NatDetector::default();
-        assert_eq!(detector.stun_servers.len(), 2);
+        assert_eq!(detector.stun_servers.len(), 5);
     }
 
     #[test]

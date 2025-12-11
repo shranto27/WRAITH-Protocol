@@ -9,6 +9,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.9] - 2025-12-11 - CLI Enhancement & Multi-Peer Support
+
+**WRAITH Protocol v1.5.9 - CLI Command Expansion and NAT Detection Reliability**
+
+This release delivers significant CLI enhancements including new commands, multi-peer transfer support, and improved NAT detection reliability through additional STUN server providers.
+
+### Added
+
+#### New CLI Commands
+- **`wraith ping <peer> [-c COUNT] [-i INTERVAL]`:** Network connectivity testing
+  - RTT statistics with min/avg/max/mdev latency measurements
+  - Configurable packet count (default: 4) and interval (default: 1000ms)
+  - Packet loss tracking and timeout handling
+  - Integration with Node API for session-based pings
+- **`wraith config show [KEY]`:** Display configuration values
+  - Show all configuration when no key specified
+  - Support for specific key lookup
+  - JSON-formatted output for scripting
+- **`wraith config set KEY VALUE`:** Modify configuration
+  - Supported keys: listen_port, data_dir, log_level, max_connections, enable_relay, obfuscation_mode
+  - Input validation with type checking and range verification
+  - Immediate persistence to configuration file
+- **Files:** `crates/wraith-cli/src/main.rs` (+784 lines)
+
+#### Enhanced CLI Features
+- **Multi-Peer Transfer Support (`send` command):**
+  - Accept multiple recipients via repeated `--recipient` flags
+  - Parallel transfer initiation to all specified peers
+  - Per-recipient progress tracking and status reporting
+  - Aggregated completion summary with success/failure counts
+- **Receive Command Enhancements:**
+  - `--auto-accept` flag for automated workflows (no interactive prompts)
+  - `--trusted-peers <IDS>` for peer whitelist filtering
+  - Automatic rejection of transfers from non-trusted peers when whitelist active
+- **Status Command (`--detailed`):**
+  - Complete implementation of detailed view
+  - Active session information (peer ID, state, packets, bytes, RTT)
+  - Transfer progress with ETA calculations
+  - Memory usage statistics
+- **Peers Command:**
+  - Improved formatted table output
+  - Columns: ID, Address, State, Latency, Last Seen
+  - Color-coded connection states
+
+#### NAT Detection Reliability
+- **Multiple STUN Server Providers:**
+  - Cloudflare STUN: `162.159.207.0:3478` (standard STUN port)
+  - Twilio STUN: `34.203.251.210:3478`
+  - Nextcloud STUN: `159.69.191.124:443` (HTTPS port for firewall bypass)
+  - Google STUN: `74.125.250.129:19302`, `74.125.250.130:19302`
+- **Improved Reliability:** 5 servers across 4 providers using 3 different ports
+- **Graceful Degradation:** Continues on individual server failures
+- **Files:** `crates/wraith-discovery/src/nat/types.rs`
+
+#### Tauri 2.0 Configuration Fix
+- **Capability-Based Permissions:** Updated to Tauri 2.0 permission model
+- **Permissions Added:**
+  - dialog:default, dialog:allow-open, dialog:allow-save, dialog:allow-message
+  - fs:default, fs:allow-read-dir, fs:allow-read-file, fs:allow-write-file
+  - shell:default, shell:allow-open
+- **Files:** `clients/wraith-transfer/src-tauri/capabilities/default.json`
+
+#### Documentation
+- **CLI Gap Analysis:** Comprehensive command-by-command documentation alignment
+  - Feature matrix with implementation status
+  - Identified and resolved 25+ documentation gaps
+- **CLI Verification Report:** Complete verification documentation
+  - Before/after comparison
+  - Test coverage analysis
+  - Quality metrics
+- **Files:** `docs/engineering/CLI-GAP-ANALYSIS.md`, `docs/engineering/CLI-VERIFICATION-REPORT.md`
+
+### Fixed
+
+#### Tauri Plugin Initialization Error
+- **Issue:** wraith-transfer panic on startup: `PluginInitialization("dialog", "invalid type: map, expected unit")`
+- **Root Cause:** Tauri 2.0 changed plugin configuration from tauri.conf.json to capabilities
+- **Fix:** Migrated plugin permissions to capabilities/default.json, removed old config
+- **Files:** `clients/wraith-transfer/src-tauri/tauri.conf.json`, `capabilities/default.json`
+
+### Changed
+
+#### Test Suite Updates
+- **NAT Detector Tests:** Updated assertions for 5-server configuration
+  - `test_nat_detector_creation`: 2 → 5 servers expected
+  - `test_nat_detector_default`: 2 → 5 servers expected
+- **Files:** `crates/wraith-discovery/src/nat/types.rs`
+
+### Quality Assurance
+
+- **Tests:** 1,390+ tests passing (100% pass rate)
+- **CLI Tests:** 87 tests in wraith-cli (increased from 70)
+- **Clippy:** Zero warnings with `-D warnings` flag
+- **Security:** Zero vulnerabilities (cargo audit clean)
+- **Build:** Release build verified on all platforms
+
+---
+
 ## [1.5.8] - 2025-12-09 - CLI Integration & Wayland Fix
 
 **WRAITH Protocol v1.5.8 - Complete CLI Node API Integration and Desktop Application Stability**

